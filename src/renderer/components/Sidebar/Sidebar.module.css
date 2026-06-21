@@ -2,7 +2,6 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-subtle);
   position: relative;
   flex-shrink: 0;
   overflow: hidden;
@@ -48,6 +47,22 @@
 }
 
 .newBtn:hover {
+  background: var(--bg-item-hover);
+  color: var(--text-primary);
+}
+
+.settingsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.settingsBtn:hover {
   background: var(--bg-item-hover);
   color: var(--text-primary);
 }

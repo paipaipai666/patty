@@ -1,7 +1,19 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { createPty, writeToPty, resizePty, killPty, detectAvailableShells } from './ptyManager'
+import { loadSettings, saveSettings } from './settingsHandler'
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
+  // Settings handlers
+  ipcMain.handle('settings:getAll', () => {
+    return loadSettings()
+  })
+
+  ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
+    const settings = loadSettings()
+    ;(settings as unknown as Record<string, unknown>)[key] = value
+    saveSettings(settings)
+    return settings
+  })
   // Directory picker
   ipcMain.handle('dialog:selectDirectory', async () => {
     try {

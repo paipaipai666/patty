@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
+import { useSettingsStore } from '../../store/settingsStore'
 import { SessionList } from './SessionList'
 import styles from './Sidebar.module.css'
 
@@ -12,6 +13,8 @@ export function Sidebar({ onNewTerminal, onCloseSession }: SidebarProps) {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const addCollection = useSessionStore((s) => s.addCollection)
+  const openSettings = useSettingsStore((s) => s.openSettings)
+  const sidebarPosition = useSettingsStore((s) => s.settings.sidebarPosition)
   const [searchQuery, setSearchQuery] = useState('')
   const [showMenu, setShowMenu] = useState(false)
   const [isCreatingCollection, setIsCreatingCollection] = useState(false)
@@ -37,7 +40,8 @@ export function Sidebar({ onNewTerminal, onCloseSession }: SidebarProps) {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current) return
       const delta = e.clientX - startX.current
-      setSidebarWidth(startWidth.current + delta)
+      const adjusted = sidebarPosition === 'right' ? -delta : delta
+      setSidebarWidth(startWidth.current + adjusted)
     }
 
     const handleMouseUp = () => {
@@ -124,6 +128,27 @@ export function Sidebar({ onNewTerminal, onCloseSession }: SidebarProps) {
               />
             </svg>
           </button>
+          <button
+            className={styles.settingsBtn}
+            onClick={openSettings}
+            aria-label="Settings"
+            title="Settings"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <path
+                d="M7 8.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
+                stroke="currentColor"
+                fill="none"
+                strokeWidth="0.8"
+              />
+              <path
+                d="M8.42 2.06l.36-.36a.5.5 0 01.71 0l.7.7a.5.5 0 00.45.14l.98-.22a.5.5 0 01.57.42l.12.99a.5.5 0 00.26.38l.85.5a.5.5 0 01.21.69l-.42.86a.5.5 0 000 .47l.42.86a.5.5 0 01-.21.69l-.85.5a.5.5 0 00-.26.38l-.12.99a.5.5 0 01-.57.42l-.98-.22a.5.5 0 00-.45.14l-.7.7a.5.5 0 01-.71 0l-.36-.36a.5.5 0 00-.47 0l-.36.36a.5.5 0 01-.71 0l-.7-.7a.5.5 0 00-.45-.14l-.98.22a.5.5 0 01-.57-.42l-.12-.99a.5.5 0 00-.26-.38l-.85-.5a.5.5 0 01-.21-.69l.42-.86a.5.5 0 000-.47l-.42-.86a.5.5 0 01.21-.69l.85-.5a.5.5 0 00.26-.38l.12-.99a.5.5 0 01.57-.42l.98.22a.5.5 0 00.45-.14l.7-.7a.5.5 0 01.71 0l.36.36a.5.5 0 00.47 0z"
+                stroke="currentColor"
+                fill="none"
+                strokeWidth="0.6"
+              />
+            </svg>
+          </button>
           {showMenu && (
             <div className={styles.dropdownMenu}>
               <button className={styles.menuItem} onClick={handleNewTerminalClick}>
@@ -169,8 +194,9 @@ export function Sidebar({ onNewTerminal, onCloseSession }: SidebarProps) {
           />
         </div>
       )}
+      {sidebarPosition === 'right' && <div className={styles.resizeHandle} onMouseDown={handleMouseDown} />}
       <SessionList onClose={onCloseSession} />
-      <div className={styles.resizeHandle} onMouseDown={handleMouseDown} />
+      {sidebarPosition !== 'right' && <div className={styles.resizeHandle} onMouseDown={handleMouseDown} />}
     </div>
   )
 }

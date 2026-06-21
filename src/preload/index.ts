@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { AppSettings } from '../shared/settingsTypes'
 
 const terminalAPI = {
   // Session management
@@ -50,7 +51,12 @@ const terminalAPI = {
   detectShells: () => ipcRenderer.invoke('shell:detect'),
 
   // Directory selection
-  selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory')
+  selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
+
+  // Settings
+  settingsGetAll: () => ipcRenderer.invoke('settings:getAll') as Promise<AppSettings>,
+  settingsSet: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
+    ipcRenderer.invoke('settings:set', key, value) as Promise<AppSettings>
 }
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI)

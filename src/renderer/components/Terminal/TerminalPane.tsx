@@ -6,35 +6,13 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
+import { useSettingsStore } from '../../store/settingsStore'
+import { XTERM_THEMES } from '../../styles/themes'
 import styles from './Terminal.module.css'
 
 interface TerminalPaneProps {
   session: TerminalSession
   isActive: boolean
-}
-
-const TERMINAL_THEME = {
-  background: '#0f0f12',
-  foreground: '#e8e8ec',
-  cursor: '#e8e8ec',
-  cursorAccent: '#0f0f12',
-  selectionBackground: 'rgba(108, 108, 255, 0.3)',
-  black: '#1a1a1f',
-  red: '#f26b5b',
-  green: '#4ec97c',
-  yellow: '#f5a623',
-  blue: '#4f8ef7',
-  magenta: '#a78bfa',
-  cyan: '#2dd4bf',
-  white: '#c8c8d8',
-  brightBlack: '#55556a',
-  brightRed: '#f26b5b',
-  brightGreen: '#4ec97c',
-  brightYellow: '#f5a623',
-  brightBlue: '#4f8ef7',
-  brightMagenta: '#a78bfa',
-  brightCyan: '#2dd4bf',
-  brightWhite: '#ffffff'
 }
 
 export function TerminalPane({ session, isActive }: TerminalPaneProps) {
@@ -50,6 +28,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
   const updatePid = useSessionStore((s) => s.updatePid)
+  const settings = useSettingsStore((s) => s.settings)
 
   const fitTerminal = useCallback(
     (skipResize = false) => {
@@ -74,16 +53,16 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     initializedRef.current = true
 
     const term = new Terminal({
-      fontFamily: '"Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace',
-      fontSize: 14,
+      fontFamily: `'${settings.fontFamily}', Consolas, 'Courier New', monospace`,
+      fontSize: settings.fontSize,
       lineHeight: 1.2,
       letterSpacing: 0,
       fontLigatures: true,
-      cursorBlink: true,
-      cursorStyle: 'bar',
-      allowTransparency: false,
+      cursorBlink: settings.cursorBlink,
+      cursorStyle: settings.cursorStyle,
+      allowTransparency: settings.opacity < 1,
       allowProposedApi: true,
-      theme: TERMINAL_THEME,
+      theme: XTERM_THEMES[settings.theme],
       scrollback: 10000,
       convertEol: false,
       rescaleOverlappingGlyphs: true
@@ -187,11 +166,26 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     }
   }, [isActive, fitTerminal])
 
+  // React to settings changes
+  useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+
+    term.options.fontFamily = `'${settings.fontFamily}', Consolas, 'Courier New', monospace`
+    term.options.fontSize = settings.fontSize
+    term.options.cursorBlink = settings.cursorBlink
+    term.options.cursorStyle = settings.cursorStyle
+    term.options.theme = XTERM_THEMES[settings.theme]
+
+    // Re-fit after font size change
+    setTimeout(() => fitTerminal(), 20)
+  }, [settings.fontFamily, settings.fontSize, settings.cursorBlink, settings.cursorStyle, settings.theme, fitTerminal])
+
   return (
     <div
       ref={containerRef}
       className={styles.pane}
-      style={{ display: isActive ? 'block' : 'none' }}
+      style={{ display: isActive ? 'block' : 'none', opacity: settings.opacity < 1 ? settings.opacity : undefined }}
     />
   )
 }

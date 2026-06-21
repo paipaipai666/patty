@@ -1,10 +1,12 @@
 import { useEffect, useCallback } from 'react'
 import { useSessionStore, type SessionColor } from './store/sessionStore'
+import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TerminalArea } from './components/Terminal/TerminalArea'
 import { StatusBar } from './components/StatusBar/StatusBar'
 import { ContextMenu, type MenuItem } from './components/common/ContextMenu'
+import { SettingsModal } from './components/Settings/SettingsModal'
 import { useState } from 'react'
 import styles from './App.module.css'
 
@@ -29,17 +31,26 @@ export default function App() {
   const navigateToIndex = useSessionStore((s) => s.navigateToIndex)
   const sessions = useSessionStore((s) => s.sessions)
 
+  const settingsInit = useSettingsStore((s) => s.init)
+  const settings = useSettingsStore((s) => s.settings)
+  const openSettings = useSettingsStore((s) => s.openSettings)
+
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+
+  // Initialize settings on mount
+  useEffect(() => {
+    settingsInit()
+  }, [settingsInit])
 
   const handleNewTerminal = useCallback(async () => {
     try {
       const result = await window.terminalAPI.selectDirectory()
       if (result.canceled) return
-      addSession({ cwd: result.directory || undefined })
+      addSession({ cwd: result.directory || undefined, shell: settings.defaultShell })
     } catch (err) {
       console.error('Failed to create terminal:', err)
     }
-  }, [addSession])
+  }, [addSession, settings.defaultShell])
 
   const handleCloseSession = useCallback(
     (id: string) => {
@@ -56,49 +67,49 @@ export default function App() {
 
   // Keyboard shortcuts
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!e.ctrlKey) return
+    const shortcuts = settings.shortcuts
 
-      switch (e.key) {
-        case 't':
-        case 'T':
-          e.preventDefault()
-          handleNewTerminal()
-          break
-        case 'w':
-        case 'W':
-          e.preventDefault()
-          {
-            const activeId = useSessionStore.getState().activeSessionId
-            if (activeId) handleCloseSession(activeId)
-          }
-          break
-        case ']':
-          e.preventDefault()
-          navigateNext()
-          break
-        case '[':
-          e.preventDefault()
-          navigatePrev()
-          break
-        case 'b':
-        case 'B':
-          e.preventDefault()
-          toggleSidebar()
-          break
-        default:
-          // Ctrl+1-9
-          if (e.key >= '1' && e.key <= '9') {
-            e.preventDefault()
-            navigateToIndex(parseInt(e.key) - 1)
-          }
-          break
+    const shortcutActions: Record<string, () => void> = {
+      [shortcuts.newTerminal.toLowerCase()]: handleNewTerminal,
+      [shortcuts.closeTerminal.toLowerCase()]: () => {
+        const activeId = useSessionStore.getState().activeSessionId
+        if (activeId) handleCloseSession(activeId)
+      },
+      [shortcuts.nextTab.toLowerCase()]: navigateNext,
+      [shortcuts.prevTab.toLowerCase()]: navigatePrev,
+      [shortcuts.toggleSidebar.toLowerCase()]: toggleSidebar,
+      [shortcuts.settings.toLowerCase()]: openSettings
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const parts: string[] = []
+      if (e.ctrlKey) parts.push('ctrl')
+      if (e.altKey) parts.push('alt')
+      if (e.shiftKey) parts.push('shift')
+      if (e.metaKey) parts.push('meta')
+      const key = e.key.toLowerCase()
+      if (!['control', 'alt', 'shift', 'meta'].includes(key)) {
+        parts.push(key)
+      }
+      const combo = parts.join('+')
+
+      const action = shortcutActions[combo]
+      if (action) {
+        e.preventDefault()
+        action()
+        return
+      }
+
+      // Ctrl+1-9 tab navigation
+      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault()
+        navigateToIndex(parseInt(e.key) - 1)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleNewTerminal, handleCloseSession, navigateNext, navigatePrev, toggleSidebar, navigateToIndex])
+  }, [handleNewTerminal, handleCloseSession, navigateNext, navigatePrev, toggleSidebar, navigateToIndex, settings.shortcuts, openSettings])
 
   const getContextMenuItems = (): MenuItem[] => {
     if (!contextMenu) return []
@@ -129,10 +140,12 @@ export default function App() {
     ]
   }
 
+  const sidebarOnRight = settings.sidebarPosition === 'right'
+
   return (
     <div className={styles.app}>
-      <TitleBar />
-      <div className={styles.main}>
+      <TitleBar onOpenSettings={openSettings} />
+      <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         {sidebarVisible && (
           <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} />
         )}
@@ -153,6 +166,7 @@ export default function App() {
           onClose={() => setContextMenu(null)}
         />
       )}
+      <SettingsModal />
     </div>
   )
 }
