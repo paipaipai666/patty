@@ -1,6 +1,43 @@
+# Dependencies
 node_modules/
+
+# Build output
 out/
 dist/
+
+# TypeScript
 *.tsbuildinfo
+
+# OS files
 .DS_Store
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Electron
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.snap
+*.exe
+*.msi
+
+# Temporary
+tmp/
+temp/
+*.tmp
+*.temp

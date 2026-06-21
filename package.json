@@ -1,6 +1,6 @@
 {
   "name": "patty",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Windows terminal manager with sidebar layout",
   "main": "./out/main/index.js",
   "scripts": {
@@ -8,7 +8,10 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "package": "electron-builder --win --config",
-    "package:nsis": "electron-builder --win nsis --config"
+    "package:nsis": "electron-builder --win nsis --config",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",
