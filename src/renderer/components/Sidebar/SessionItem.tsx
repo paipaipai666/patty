@@ -6,6 +6,7 @@ interface SessionItemProps {
   session: TerminalSession
   isActive: boolean
   onClose: (id: string) => void
+  depth?: number
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -17,7 +18,7 @@ const COLOR_MAP: Record<string, string> = {
   gray: 'var(--color-gray)'
 }
 
-export function SessionItem({ session, isActive, onClose }: SessionItemProps) {
+export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionItemProps) {
   const setActive = useSessionStore((s) => s.setActive)
   const renameSession = useSessionStore((s) => s.renameSession)
   const [isEditing, setIsEditing] = useState(false)
@@ -47,11 +48,23 @@ export function SessionItem({ session, isActive, onClose }: SessionItemProps) {
     }
   }
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.stopPropagation()
+    e.dataTransfer.setData('application/json', JSON.stringify({
+      type: 'session',
+      id: session.id
+    }))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
   return (
     <div
       className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
       onClick={() => setActive(session.id)}
       onDoubleClick={handleDoubleClick}
+      draggable
+      onDragStart={handleDragStart}
     >
       <span
         className={styles.colorDot}

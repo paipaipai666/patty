@@ -3,6 +3,14 @@ import { create } from 'zustand'
 export type SessionColor = 'blue' | 'green' | 'amber' | 'coral' | 'purple' | 'gray'
 export type ShellType = 'powershell' | 'pwsh' | 'cmd' | 'gitbash' | 'wsl'
 
+export interface Collection {
+  id: string
+  name: string
+  parentId: string | null
+  collapsed: boolean
+  createdAt: number
+}
+
 export interface TerminalSession {
   id: string
   title: string
@@ -11,6 +19,7 @@ export interface TerminalSession {
   shell: ShellType
   pid: number
   createdAt: number
+  collectionId: string | null
 }
 
 const COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
@@ -21,16 +30,25 @@ function getNextColor(index: number): SessionColor {
 
 interface SessionStore {
   sessions: TerminalSession[]
+  collections: Collection[]
   activeSessionId: string | null
   sidebarVisible: boolean
   sidebarWidth: number
 
-  addSession: (opts?: { cwd?: string; shell?: string }) => string
+  addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null }) => string
   removeSession: (id: string) => void
   setActive: (id: string) => void
   renameSession: (id: string, title: string) => void
   setColor: (id: string, color: SessionColor) => void
   updatePid: (id: string, pid: number) => void
+  moveSessionToCollection: (sessionId: string, collectionId: string | null) => void
+
+  addCollection: (name: string, parentId?: string | null) => string
+  removeCollection: (id: string) => void
+  renameCollection: (id: string, name: string) => void
+  toggleCollectionCollapse: (id: string) => void
+  moveCollection: (collectionId: string, newParentId: string | null) => void
+
   toggleSidebar: () => void
   setSidebarWidth: (width: number) => void
   navigateNext: () => void
@@ -40,6 +58,7 @@ interface SessionStore {
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
+  collections: [],
   activeSessionId: null,
   sidebarVisible: true,
   sidebarWidth: 220,
@@ -55,7 +74,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       cwd: opts.cwd || '',
       shell: shellName,
       pid: 0,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      collectionId: opts.collectionId ?? null
     }
     set((state) => ({
       sessions: [...state.sessions, newSession],
@@ -107,6 +127,85 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, pid } : s))
     }))
+  },
+
+  moveSessionToCollection: (sessionId: string, collectionId: string | null) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === sessionId ? { ...s, collectionId } : s
+      )
+    }))
+  },
+
+  addCollection: (name: string, parentId: string | null = null) => {
+    const id = crypto.randomUUID()
+    const newCollection: Collection = {
+      id,
+      name,
+      parentId,
+      collapsed: false,
+      createdAt: Date.now()
+    }
+    set((state) => ({
+      collections: [...state.collections, newCollection]
+    }))
+    return id
+  },
+
+  removeCollection: (id: string) => {
+    set((state) => {
+      const collectionIdsToRemove = new Set<string>()
+      const findDescendants = (collId: string) => {
+        collectionIdsToRemove.add(collId)
+        state.collections
+          .filter((c) => c.parentId === collId)
+          .forEach((c) => findDescendants(c.id))
+      }
+      findDescendants(id)
+
+      return {
+        collections: state.collections.filter((c) => !collectionIdsToRemove.has(c.id)),
+        sessions: state.sessions.map((s) =>
+          collectionIdsToRemove.has(s.collectionId ?? '') ? { ...s, collectionId: null } : s
+        )
+      }
+    })
+  },
+
+  renameCollection: (id: string, name: string) => {
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === id ? { ...c, name } : c
+      )
+    }))
+  },
+
+  toggleCollectionCollapse: (id: string) => {
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === id ? { ...c, collapsed: !c.collapsed } : c
+      )
+    }))
+  },
+
+  moveCollection: (collectionId: string, newParentId: string | null) => {
+    set((state) => {
+      const isDescendant = (parentId: string, childId: string): boolean => {
+        if (parentId === childId) return true
+        const children = state.collections.filter((c) => c.parentId === parentId)
+        return children.some((c) => isDescendant(c.id, childId))
+      }
+
+      if (newParentId && isDescendant(collectionId, newParentId)) {
+        return state
+      }
+
+      return {
+        collections: state.collections.map((c) =>
+          c.id === collectionId ? { ...c, parentId: newParentId } : c
+        )
+      }
+    })
   },
 
   toggleSidebar: () => {

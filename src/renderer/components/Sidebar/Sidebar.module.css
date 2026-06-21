@@ -173,3 +173,134 @@
 .resizeHandle:active {
   background: var(--accent);
 }
+
+.menuContainer {
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-dropdown);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  min-width: 150px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: background var(--transition-fast);
+}
+
+.menuItem:hover {
+  background: var(--bg-item-hover);
+}
+
+.collectionGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.collectionItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-right: 10px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  position: relative;
+}
+
+.collectionItem:hover {
+  background: var(--bg-item-hover);
+}
+
+.collapseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  color: var(--text-muted);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.collapseBtn:hover {
+  background: var(--bg-item-hover);
+  color: var(--text-primary);
+}
+
+.collapseBtn svg {
+  transition: transform var(--transition-fast);
+}
+
+.folderIcon {
+  color: var(--color-amber);
+  flex-shrink: 0;
+}
+
+.collectionName {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collectionChildren {
+  display: flex;
+  flex-direction: column;
+}
+
+.dragOver {
+  background: var(--bg-item-active) !important;
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+
+.item[draggable="true"] {
+  cursor: grab;
+}
+
+.item[draggable="true"]:active {
+  cursor: grabbing;
+  opacity: 0.7;
+}
+
+.collectionItem[draggable="true"] {
+  cursor: grab;
+}
+
+.collectionItem[draggable="true"]:active {
+  cursor: grabbing;
+  opacity: 0.7;
+}
+
+.newCollectionRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.newCollectionRow .folderIcon {
+  color: var(--color-amber);
+  flex-shrink: 0;
+}
