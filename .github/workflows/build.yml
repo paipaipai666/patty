@@ -20,6 +20,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Setup Visual Studio Build Tools
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Install dependencies
         run: npm ci
 
