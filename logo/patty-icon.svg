@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" ry="96" fill="#000000"/>
+  
+  <!-- Terminal >_ symbol - minimal, bold -->
+  <g transform="translate(120, 175)">
+    <!-- > shape -->
+    <path d="M0 80 L120 0 L120 30 L40 80 L120 130 L120 160 L0 80Z" fill="#FFFFFF"/>
+    
+    <!-- _ shape -->
+    <rect x="150" y="130" width="150" height="25" rx="6" fill="#FFFFFF"/>
+  </g>
+  
+  <!-- Small dot accent -->
+  <circle cx="410" cy="350" r="10" fill="#FFFFFF" opacity="0.3"/>
+</svg>

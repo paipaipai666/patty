@@ -21,7 +21,9 @@ function createWindow(): void {
       sandbox: false
     },
     roundedCorners: true,
-    icon: join(__dirname, '../../resources/icon.ico')
+    icon: is.dev
+      ? join(__dirname, '../../resources/icon.ico')
+      : join(process.resourcesPath, 'resources/icon.ico')
   })
 
   mainWindow.on('ready-to-show', () => {
