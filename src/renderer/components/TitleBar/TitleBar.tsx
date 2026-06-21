@@ -35,21 +35,15 @@ function CloseIcon() {
   )
 }
 
-function GearIcon() {
+function SettingsIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12">
-      <path
-        d="M6 7.5a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"
-        stroke="currentColor"
-        fill="none"
-        strokeWidth="0.8"
-      />
-      <path
-        d="M7.42 1.56l.36-.36a.5.5 0 01.71 0l.7.7a.5.5 0 00.45.14l.98-.22a.5.5 0 01.57.42l.12.99a.5.5 0 00.26.38l.85.5a.5.5 0 01.21.69l-.42.86a.5.5 0 000 .47l.42.86a.5.5 0 01-.21.69l-.85.5a.5.5 0 00-.26.38l-.12.99a.5.5 0 01-.57.42l-.98-.22a.5.5 0 00-.45.14l-.7.7a.5.5 0 01-.71 0l-.36-.36a.5.5 0 00-.47 0l-.36.36a.5.5 0 01-.71 0l-.7-.7a.5.5 0 00-.45-.14l-.98.22a.5.5 0 01-.57-.42l-.12-.99a.5.5 0 00-.26-.38l-.85-.5a.5.5 0 01-.21-.69l.42-.86a.5.5 0 000-.47l-.42-.86a.5.5 0 01.21-.69l.85-.5a.5.5 0 00.26-.38l.12-.99a.5.5 0 01.57-.42l.98.22a.5.5 0 00.45-.14l.7-.7a.5.5 0 01.71 0l.36.36a.5.5 0 00.47 0z"
-        stroke="currentColor"
-        fill="none"
-        strokeWidth="0.6"
-      />
+      <rect x="1" y="2" width="7" height="1.2" rx="0.6" fill="currentColor" />
+      <rect x="1" y="5.4" width="7" height="1.2" rx="0.6" fill="currentColor" />
+      <rect x="1" y="8.8" width="7" height="1.2" rx="0.6" fill="currentColor" />
+      <circle cx="9.5" cy="2.6" r="1.4" fill="currentColor" />
+      <circle cx="9.5" cy="6" r="1.4" fill="currentColor" />
+      <circle cx="9.5" cy="9.4" r="1.4" fill="currentColor" />
     </svg>
   )
 }
@@ -79,7 +73,7 @@ export function TitleBar({ onOpenSettings }: TitleBarProps) {
             aria-label="Settings"
             title="Settings"
           >
-            <GearIcon />
+            <SettingsIcon />
           </button>
         )}
         <button

@@ -51,22 +51,6 @@
   color: var(--text-primary);
 }
 
-.settingsBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.settingsBtn:hover {
-  background: var(--bg-item-hover);
-  color: var(--text-primary);
-}
-
 .list {
   flex: 1;
   overflow-y: auto;

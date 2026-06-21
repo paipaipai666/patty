@@ -149,7 +149,10 @@ export default function App() {
         {sidebarVisible && (
           <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} />
         )}
-        <div className={styles.content} onContextMenu={(e) => {
+        <div
+          className={styles.content}
+          style={{ [sidebarOnRight ? 'borderRight' : 'borderLeft']: '1px solid var(--border-subtle)' }}
+          onContextMenu={(e) => {
           // Right-click on terminal area - find active session
           const activeId = useSessionStore.getState().activeSessionId
           if (activeId) handleContextMenu(e, activeId)
