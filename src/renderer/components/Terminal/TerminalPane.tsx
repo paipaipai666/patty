@@ -2,6 +2,8 @@ import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { WebglAddon } from '@xterm/addon-webgl'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
 import styles from './Terminal.module.css'
@@ -39,6 +41,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const webglAddonRef = useRef<WebglAddon | null>(null)
   const initializedRef = useRef(false)
   const ptyCreatedRef = useRef(false)
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -72,24 +75,38 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
 
     const term = new Terminal({
       fontFamily: '"Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace',
-      fontSize: 13,
-      lineHeight: 1.4,
+      fontSize: 14,
+      lineHeight: 1.2,
       letterSpacing: 0,
-      fontLigatures: false,
+      fontLigatures: true,
       cursorBlink: true,
       cursorStyle: 'bar',
       allowTransparency: false,
+      allowProposedApi: true,
       theme: TERMINAL_THEME,
       scrollback: 10000,
-      convertEol: false
+      convertEol: false,
+      rescaleOverlappingGlyphs: true
     })
 
     const fitAddon = new FitAddon()
     const webLinksAddon = new WebLinksAddon()
+    const unicode11Addon = new Unicode11Addon()
 
     term.loadAddon(fitAddon)
     term.loadAddon(webLinksAddon)
     term.open(containerRef.current)
+
+    try {
+      const webglAddon = new WebglAddon()
+      term.loadAddon(webglAddon)
+      webglAddonRef.current = webglAddon
+    } catch {
+      console.warn('WebGL addon failed to load, falling back to Canvas renderer')
+    }
+
+    term.loadAddon(unicode11Addon)
+    term.unicode.activeVersion = '11'
 
     termRef.current = term
     fitAddonRef.current = fitAddon
@@ -137,6 +154,8 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
       window.terminalAPI.kill(session.id)
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
+      webglAddonRef.current?.dispose()
+      webglAddonRef.current = null
       term.dispose()
       termRef.current = null
       fitAddonRef.current = null
