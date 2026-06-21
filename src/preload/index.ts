@@ -47,7 +47,10 @@ const terminalAPI = {
   },
 
   // Shell detection
-  detectShells: () => ipcRenderer.invoke('shell:detect')
+  detectShells: () => ipcRenderer.invoke('shell:detect'),
+
+  // Directory selection
+  selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory')
 }
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI)

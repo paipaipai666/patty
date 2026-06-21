@@ -1,7 +1,23 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { createPty, writeToPty, resizePty, killPty, detectAvailableShells } from './ptyManager'
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
+  // Directory picker
+  ipcMain.handle('dialog:selectDirectory', async () => {
+    try {
+      const win = getWindow()
+      if (!win) return { canceled: true, directory: null }
+      const result = await dialog.showOpenDialog(win, {
+        properties: ['openDirectory'],
+        title: 'Select project directory'
+      })
+      return { canceled: result.canceled, directory: result.filePaths[0] || null }
+    } catch (err) {
+      console.error('Directory selection failed:', err)
+      return { canceled: true, directory: null }
+    }
+  })
+
   // PTY handlers
   ipcMain.handle('pty:create', (event, id: string, cwd?: string, shell?: string, cols?: number, rows?: number) => {
     try {

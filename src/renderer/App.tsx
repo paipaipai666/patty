@@ -31,8 +31,14 @@ export default function App() {
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
 
-  const handleNewTerminal = useCallback(() => {
-    addSession()
+  const handleNewTerminal = useCallback(async () => {
+    try {
+      const result = await window.terminalAPI.selectDirectory()
+      if (result.canceled) return
+      addSession({ cwd: result.directory || undefined })
+    } catch (err) {
+      console.error('Failed to create terminal:', err)
+    }
   }, [addSession])
 
   const handleCloseSession = useCallback(

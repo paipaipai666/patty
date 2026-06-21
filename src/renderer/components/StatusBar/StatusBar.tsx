@@ -11,9 +11,9 @@ const SHELL_LABELS: Record<string, string> = {
 
 function formatCwd(cwd: string): string {
   if (!cwd) return '~'
-  const home = 'C:\\Users\\' + (process.env.USERNAME || '')
-  if (cwd.startsWith(home)) {
-    return '~' + cwd.slice(home.length).replace(/\\/g, '/')
+  const match = cwd.match(/^([A-Z]:\\Users\\[^\\]+)/i)
+  if (match && cwd.startsWith(match[1])) {
+    return '~' + cwd.slice(match[1].length).replace(/\\/g, '/')
   }
   return cwd
 }
