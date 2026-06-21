@@ -1,6 +1,8 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { createPty, writeToPty, resizePty, killPty, detectAvailableShells } from './ptyManager'
 import { loadSettings, saveSettings } from './settingsHandler'
+import { loadState, saveState } from './stateHandler'
+import type { PersistedState } from '../shared/stateTypes'
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
   // Settings handlers
@@ -14,6 +16,17 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     saveSettings(settings)
     return settings
   })
+
+  // State handlers
+  ipcMain.handle('state:load', () => {
+    return loadState()
+  })
+
+  ipcMain.handle('state:save', (_event, state: PersistedState) => {
+    saveState(state)
+    return { success: true }
+  })
+
   // Directory picker
   ipcMain.handle('dialog:selectDirectory', async () => {
     try {

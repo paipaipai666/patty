@@ -30,6 +30,7 @@ export default function App() {
   const navigatePrev = useSessionStore((s) => s.navigatePrev)
   const navigateToIndex = useSessionStore((s) => s.navigateToIndex)
   const sessions = useSessionStore((s) => s.sessions)
+  const loadState = useSessionStore((s) => s.loadState)
 
   const settingsInit = useSettingsStore((s) => s.init)
   const settings = useSettingsStore((s) => s.settings)
@@ -41,6 +42,11 @@ export default function App() {
   useEffect(() => {
     settingsInit()
   }, [settingsInit])
+
+  // Load session state on mount
+  useEffect(() => {
+    loadState()
+  }, [loadState])
 
   const handleNewTerminal = useCallback(async () => {
     try {

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppSettings } from '../shared/settingsTypes'
+import type { PersistedState } from '../shared/stateTypes'
 
 const terminalAPI = {
   // Session management
@@ -56,7 +57,12 @@ const terminalAPI = {
   // Settings
   settingsGetAll: () => ipcRenderer.invoke('settings:getAll') as Promise<AppSettings>,
   settingsSet: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
-    ipcRenderer.invoke('settings:set', key, value) as Promise<AppSettings>
+    ipcRenderer.invoke('settings:set', key, value) as Promise<AppSettings>,
+
+  // State persistence
+  stateLoad: () => ipcRenderer.invoke('state:load') as Promise<PersistedState>,
+  stateSave: (state: PersistedState) =>
+    ipcRenderer.invoke('state:save', state) as Promise<{ success: boolean }>
 }
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI)

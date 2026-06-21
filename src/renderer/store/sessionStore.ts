@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { PersistedState } from '../shared/stateTypes'
 
 export type SessionColor = 'blue' | 'green' | 'amber' | 'coral' | 'purple' | 'gray'
 export type ShellType = 'powershell' | 'pwsh' | 'cmd' | 'gitbash' | 'wsl'
@@ -34,6 +35,7 @@ interface SessionStore {
   activeSessionId: string | null
   sidebarVisible: boolean
   sidebarWidth: number
+  loaded: boolean
 
   addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null }) => string
   removeSession: (id: string) => void
@@ -54,6 +56,27 @@ interface SessionStore {
   navigateNext: () => void
   navigatePrev: () => void
   navigateToIndex: (index: number) => void
+
+  loadState: () => Promise<void>
+  saveState: () => Promise<void>
+}
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function debouncedSave(getState: () => SessionStore) {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    const state = getState()
+    if (!state.loaded) return
+    const persistedState: PersistedState = {
+      sessions: state.sessions.map(({ pid, ...rest }) => rest),
+      collections: state.collections,
+      activeSessionId: state.activeSessionId,
+      sidebarVisible: state.sidebarVisible,
+      sidebarWidth: state.sidebarWidth
+    }
+    window.terminalAPI.stateSave(persistedState).catch(console.error)
+  }, 500)
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -62,6 +85,36 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeSessionId: null,
   sidebarVisible: true,
   sidebarWidth: 220,
+  loaded: false,
+
+  loadState: async () => {
+    try {
+      const state = await window.terminalAPI.stateLoad()
+      set({
+        sessions: state.sessions.map((s) => ({ ...s, pid: 0 })),
+        collections: state.collections,
+        activeSessionId: state.activeSessionId,
+        sidebarVisible: state.sidebarVisible,
+        sidebarWidth: state.sidebarWidth,
+        loaded: true
+      })
+    } catch (err) {
+      console.error('Failed to load state:', err)
+      set({ loaded: true })
+    }
+  },
+
+  saveState: async () => {
+    const state = get()
+    const persistedState: PersistedState = {
+      sessions: state.sessions.map(({ pid, ...rest }) => rest),
+      collections: state.collections,
+      activeSessionId: state.activeSessionId,
+      sidebarVisible: state.sidebarVisible,
+      sidebarWidth: state.sidebarWidth
+    }
+    await window.terminalAPI.stateSave(persistedState)
+  },
 
   addSession: (opts = {}) => {
     const id = crypto.randomUUID()
@@ -81,6 +134,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       sessions: [...state.sessions, newSession],
       activeSessionId: id
     }))
+    debouncedSave(get)
     return id
   },
 
@@ -105,22 +159,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         activeSessionId: newActiveId
       }
     })
+    debouncedSave(get)
   },
 
   setActive: (id: string) => {
     set({ activeSessionId: id })
+    debouncedSave(get)
   },
 
   renameSession: (id: string, title: string) => {
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, title } : s))
     }))
+    debouncedSave(get)
   },
 
   setColor: (id: string, color: SessionColor) => {
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, color } : s))
     }))
+    debouncedSave(get)
   },
 
   updatePid: (id: string, pid: number) => {
@@ -135,6 +193,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         s.id === sessionId ? { ...s, collectionId } : s
       )
     }))
+    debouncedSave(get)
   },
 
   addCollection: (name: string, parentId: string | null = null) => {
@@ -149,6 +208,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       collections: [...state.collections, newCollection]
     }))
+    debouncedSave(get)
     return id
   },
 
@@ -170,6 +230,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         )
       }
     })
+    debouncedSave(get)
   },
 
   renameCollection: (id: string, name: string) => {
@@ -178,6 +239,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         c.id === id ? { ...c, name } : c
       )
     }))
+    debouncedSave(get)
   },
 
   toggleCollectionCollapse: (id: string) => {
@@ -186,6 +248,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         c.id === id ? { ...c, collapsed: !c.collapsed } : c
       )
     }))
+    debouncedSave(get)
   },
 
   moveCollection: (collectionId: string, newParentId: string | null) => {
@@ -206,15 +269,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         )
       }
     })
+    debouncedSave(get)
   },
 
   toggleSidebar: () => {
     set((state) => ({ sidebarVisible: !state.sidebarVisible }))
+    debouncedSave(get)
   },
 
   setSidebarWidth: (width: number) => {
     const clamped = Math.min(320, Math.max(160, width))
     set({ sidebarWidth: clamped })
+    debouncedSave(get)
   },
 
   navigateNext: () => {
@@ -223,6 +289,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const idx = sessions.findIndex((s) => s.id === activeSessionId)
     const nextIdx = (idx + 1) % sessions.length
     set({ activeSessionId: sessions[nextIdx].id })
+    debouncedSave(get)
   },
 
   navigatePrev: () => {
@@ -231,12 +298,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const idx = sessions.findIndex((s) => s.id === activeSessionId)
     const prevIdx = (idx - 1 + sessions.length) % sessions.length
     set({ activeSessionId: sessions[prevIdx].id })
+    debouncedSave(get)
   },
 
   navigateToIndex: (index: number) => {
     const { sessions } = get()
     if (index >= 0 && index < sessions.length) {
       set({ activeSessionId: sessions[index].id })
+      debouncedSave(get)
     }
   }
 }))
