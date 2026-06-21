@@ -39,6 +39,7 @@
   "build": {
     "appId": "com.patty.app",
     "productName": "Patty",
+    "npmRebuild": false,
     "directories": {
       "output": "dist"
     },
