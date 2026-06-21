@@ -5,6 +5,7 @@ import styles from './Sidebar.module.css'
 
 interface SessionListProps {
   onClose: (id: string) => void
+  onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
 
 function renderCollection(
@@ -13,6 +14,7 @@ function renderCollection(
   sessions: TerminalSession[],
   activeSessionId: string | null,
   onClose: (id: string) => void,
+  onCollectionContextMenu: ((e: React.MouseEvent, collectionId: string) => void) | undefined,
   depth: number
 ): React.ReactNode {
   const childCollections = collections.filter((c) => c.parentId === collection.id)
@@ -24,9 +26,10 @@ function renderCollection(
       collection={collection}
       depth={depth}
       onCloseSession={onClose}
+      onContextMenu={onCollectionContextMenu}
     >
       {childCollections.map((child) =>
-        renderCollection(child, collections, sessions, activeSessionId, onClose, depth + 1)
+        renderCollection(child, collections, sessions, activeSessionId, onClose, onCollectionContextMenu, depth + 1)
       )}
       {childSessions.map((session) => (
         <SessionItem
@@ -41,7 +44,7 @@ function renderCollection(
   )
 }
 
-export function SessionList({ onClose }: SessionListProps) {
+export function SessionList({ onClose, onCollectionContextMenu }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -62,7 +65,7 @@ export function SessionList({ onClose }: SessionListProps) {
   return (
     <div className={styles.list}>
       {topLevelCollections.map((collection) =>
-        renderCollection(collection, collections, sessions, activeSessionId, onClose, 0)
+        renderCollection(collection, collections, sessions, activeSessionId, onClose, onCollectionContextMenu, 0)
       )}
       {topLevelSessions.map((session) => (
         <SessionItem

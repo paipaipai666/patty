@@ -7,9 +7,10 @@ interface CollectionItemProps {
   depth: number
   children: React.ReactNode
   onCloseSession: (id: string) => void
+  onContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
 
-export function CollectionItem({ collection, depth, children, onCloseSession }: CollectionItemProps) {
+export function CollectionItem({ collection, depth, children, onCloseSession, onContextMenu }: CollectionItemProps) {
   const toggleCollectionCollapse = useSessionStore((s) => s.toggleCollectionCollapse)
   const renameCollection = useSessionStore((s) => s.renameCollection)
   const removeCollection = useSessionStore((s) => s.removeCollection)
@@ -47,6 +48,14 @@ export function CollectionItem({ collection, depth, children, onCloseSession }: 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
     removeCollection(collection.id)
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (onContextMenu) {
+      onContextMenu(e, collection.id)
+    }
   }
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -103,6 +112,7 @@ export function CollectionItem({ collection, depth, children, onCloseSession }: 
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onDoubleClick={handleDoubleClick}
+        onContextMenu={handleContextMenu}
       >
         <button
           className={styles.collapseBtn}

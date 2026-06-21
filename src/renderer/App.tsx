@@ -6,14 +6,21 @@ import { Sidebar } from './components/Sidebar/Sidebar'
 import { TerminalArea } from './components/Terminal/TerminalArea'
 import { StatusBar } from './components/StatusBar/StatusBar'
 import { ContextMenu, type MenuItem } from './components/common/ContextMenu'
+import { PromptDialog, type PromptOptions } from './components/common/PromptDialog'
 import { SettingsModal } from './components/Settings/SettingsModal'
-import { useState } from 'react'
+import { useState, useCallback as useCallbackRef } from 'react'
 import styles from './App.module.css'
 
 interface ContextMenuState {
   x: number
   y: number
   sessionId: string
+}
+
+interface CollectionContextMenuState {
+  x: number
+  y: number
+  collectionId: string
 }
 
 const COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
@@ -31,12 +38,34 @@ export default function App() {
   const navigateToIndex = useSessionStore((s) => s.navigateToIndex)
   const sessions = useSessionStore((s) => s.sessions)
   const loadState = useSessionStore((s) => s.loadState)
+  const addCollection = useSessionStore((s) => s.addCollection)
+  const removeCollection = useSessionStore((s) => s.removeCollection)
+  const renameCollection = useSessionStore((s) => s.renameCollection)
 
   const settingsInit = useSettingsStore((s) => s.init)
   const settings = useSettingsStore((s) => s.settings)
   const openSettings = useSettingsStore((s) => s.openSettings)
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [collectionContextMenu, setCollectionContextMenu] = useState<CollectionContextMenuState | null>(null)
+  const [promptOptions, setPromptOptions] = useState<PromptOptions | null>(null)
+
+  const showPrompt = useCallback((title: string, defaultValue: string = ''): Promise<{ canceled: boolean; value: string }> => {
+    return new Promise((resolve) => {
+      setPromptOptions({
+        title,
+        defaultValue,
+        onSubmit: (value) => {
+          setPromptOptions(null)
+          resolve({ canceled: false, value })
+        },
+        onCancel: () => {
+          setPromptOptions(null)
+          resolve({ canceled: true, value: '' })
+        }
+      })
+    })
+  }, [])
 
   // Initialize settings on mount
   useEffect(() => {
@@ -69,6 +98,11 @@ export default function App() {
   const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string) => {
     e.preventDefault()
     setContextMenu({ x: e.clientX, y: e.clientY, sessionId })
+  }, [])
+
+  const handleCollectionContextMenu = useCallback((e: React.MouseEvent, collectionId: string) => {
+    e.preventDefault()
+    setCollectionContextMenu({ x: e.clientX, y: e.clientY, collectionId })
   }, [])
 
   // Keyboard shortcuts
@@ -124,11 +158,11 @@ export default function App() {
     return [
       {
         label: 'Rename',
-        action: () => {
-          // Trigger rename - the SessionItem handles this via double-click
-          // For now, we'll use a prompt
-          const name = window.prompt('Enter new name:')
-          if (name?.trim()) renameSession(sessionId, name.trim())
+        action: async () => {
+          const result = await showPrompt('Enter new name:')
+          if (!result.canceled && result.value.trim()) {
+            renameSession(sessionId, result.value.trim())
+          }
         }
       },
       { separator: true, label: '', action: () => {} },
@@ -146,6 +180,50 @@ export default function App() {
     ]
   }
 
+  const getCollectionContextMenuItems = (): MenuItem[] => {
+    if (!collectionContextMenu) return []
+    const { collectionId } = collectionContextMenu
+
+    return [
+      {
+        label: 'Rename',
+        action: async () => {
+          const result = await showPrompt('Enter new name:')
+          if (!result.canceled && result.value.trim()) {
+            renameCollection(collectionId, result.value.trim())
+          }
+        }
+      },
+      {
+        label: 'Delete',
+        action: () => removeCollection(collectionId)
+      },
+      { separator: true, label: '', action: () => {} },
+      {
+        label: 'New Subcollection',
+        action: async () => {
+          const result = await showPrompt('Enter collection name:')
+          if (!result.canceled && result.value.trim()) {
+            addCollection(result.value.trim(), collectionId)
+          }
+        }
+      },
+      {
+        label: 'New Terminal Here',
+        action: async () => {
+          try {
+            const result = await window.terminalAPI.selectDirectory()
+            if (!result.canceled) {
+              addSession({ cwd: result.directory || undefined, collectionId, shell: settings.defaultShell })
+            }
+          } catch (err) {
+            console.error('Failed to create terminal:', err)
+          }
+        }
+      }
+    ]
+  }
+
   const sidebarOnRight = settings.sidebarPosition === 'right'
 
   return (
@@ -153,7 +231,7 @@ export default function App() {
       <TitleBar onOpenSettings={openSettings} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         {sidebarVisible && (
-          <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} />
+          <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} onCollectionContextMenu={handleCollectionContextMenu} />
         )}
         <div
           className={styles.content}
@@ -175,6 +253,15 @@ export default function App() {
           onClose={() => setContextMenu(null)}
         />
       )}
+      {collectionContextMenu && (
+        <ContextMenu
+          x={collectionContextMenu.x}
+          y={collectionContextMenu.y}
+          items={getCollectionContextMenuItems()}
+          onClose={() => setCollectionContextMenu(null)}
+        />
+      )}
+      {promptOptions && <PromptDialog options={promptOptions} />}
       <SettingsModal />
     </div>
   )

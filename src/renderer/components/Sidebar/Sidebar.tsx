@@ -7,9 +7,10 @@ import styles from './Sidebar.module.css'
 interface SidebarProps {
   onNewTerminal: () => void
   onCloseSession: (id: string) => void
+  onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
 
-export function Sidebar({ onNewTerminal, onCloseSession }: SidebarProps) {
+export function Sidebar({ onNewTerminal, onCloseSession, onCollectionContextMenu }: SidebarProps) {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const addCollection = useSessionStore((s) => s.addCollection)
@@ -172,7 +173,7 @@ export function Sidebar({ onNewTerminal, onCloseSession }: SidebarProps) {
           />
         </div>
       )}
-      <SessionList onClose={onCloseSession} />
+      <SessionList onClose={onCloseSession} onCollectionContextMenu={onCollectionContextMenu} />
       <div
         className={styles.resizeHandle}
         style={sidebarPosition === 'right' ? { left: -2, right: 'auto' } : undefined}
