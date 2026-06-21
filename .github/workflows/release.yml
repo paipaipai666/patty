@@ -30,6 +30,8 @@ jobs:
 
       - name: Package
         run: npm run package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
