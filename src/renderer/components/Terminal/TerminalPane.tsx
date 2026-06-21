@@ -68,6 +68,32 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
       rescaleOverlappingGlyphs: true
     })
 
+    // Handle copy (Ctrl+Shift+C) and paste (Ctrl+Shift+V)
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
+        if (e.key === 'C' || e.key === 'c') {
+          if (e.type === 'keydown') {
+            const selection = term.getSelection()
+            if (selection) {
+              navigator.clipboard.writeText(selection)
+            }
+          }
+          return false
+        }
+        if (e.key === 'V' || e.key === 'v') {
+          if (e.type === 'keydown') {
+            navigator.clipboard.readText().then((text) => {
+              if (text) {
+                window.terminalAPI.write(session.id, text)
+              }
+            })
+          }
+          return false
+        }
+      }
+      return true
+    })
+
     const fitAddon = new FitAddon()
     const webLinksAddon = new WebLinksAddon()
     const unicode11Addon = new Unicode11Addon()

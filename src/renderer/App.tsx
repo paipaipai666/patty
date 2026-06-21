@@ -122,6 +122,10 @@ export default function App() {
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip global shortcuts when focus is inside terminal
+      const activeEl = document.activeElement
+      if (activeEl?.closest('.xterm')) return
+
       const parts: string[] = []
       if (e.ctrlKey) parts.push('ctrl')
       if (e.altKey) parts.push('alt')

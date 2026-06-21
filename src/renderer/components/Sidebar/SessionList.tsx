@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useSessionStore, type Collection, type TerminalSession } from '../../store/sessionStore'
 import { SessionItem } from './SessionItem'
 import { CollectionItem } from './CollectionItem'
@@ -6,6 +7,7 @@ import styles from './Sidebar.module.css'
 interface SessionListProps {
   onClose: (id: string) => void
   onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
+  searchQuery?: string
 }
 
 function renderCollection(
@@ -44,20 +46,51 @@ function renderCollection(
   )
 }
 
-export function SessionList({ onClose, onCollectionContextMenu }: SessionListProps) {
+export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
 
-  const topLevelCollections = collections.filter((c) => c.parentId === null)
-  const topLevelSessions = sessions.filter((s) => s.collectionId === null)
+  const filteredSessions = useMemo(() => {
+    if (!searchQuery?.trim()) return sessions
+    const query = searchQuery.toLowerCase()
+    return sessions.filter((s) => s.title.toLowerCase().includes(query))
+  }, [sessions, searchQuery])
 
-  if (sessions.length === 0 && collections.length === 0) {
+  const filteredCollections = useMemo(() => {
+    if (!searchQuery?.trim()) return collections
+    // Only show collections that contain matching sessions or have matching child collections
+    const matchingCollectionIds = new Set<string>()
+
+    // Find collections that directly contain matching sessions
+    filteredSessions.forEach((s) => {
+      if (s.collectionId) matchingCollectionIds.add(s.collectionId)
+    })
+
+    // Include parent collections of matching collections
+    const addParents = (id: string) => {
+      const col = collections.find((c) => c.id === id)
+      if (col?.parentId) {
+        matchingCollectionIds.add(col.parentId)
+        addParents(col.parentId)
+      }
+    }
+    matchingCollectionIds.forEach(addParents)
+
+    return collections.filter((c) => matchingCollectionIds.has(c.id))
+  }, [collections, filteredSessions, searchQuery])
+
+  const topLevelCollections = filteredCollections.filter((c) => c.parentId === null)
+  const topLevelSessions = filteredSessions.filter((s) => s.collectionId === null)
+
+  if (filteredSessions.length === 0 && filteredCollections.length === 0) {
     return (
       <div className={styles.emptyState}>
         <span className={styles.emptyIcon}>⌨</span>
-        <span>No terminals</span>
-        <span className={styles.emptyHint}>Press Ctrl+T to create one</span>
+        <span>{searchQuery?.trim() ? 'No matches' : 'No terminals'}</span>
+        <span className={styles.emptyHint}>
+          {searchQuery?.trim() ? 'Try a different search' : 'Press Ctrl+T to create one'}
+        </span>
       </div>
     )
   }
@@ -65,7 +98,7 @@ export function SessionList({ onClose, onCollectionContextMenu }: SessionListPro
   return (
     <div className={styles.list}>
       {topLevelCollections.map((collection) =>
-        renderCollection(collection, collections, sessions, activeSessionId, onClose, onCollectionContextMenu, 0)
+        renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onCollectionContextMenu, 0)
       )}
       {topLevelSessions.map((session) => (
         <SessionItem

@@ -173,7 +173,7 @@ export function Sidebar({ onNewTerminal, onCloseSession, onCollectionContextMenu
           />
         </div>
       )}
-      <SessionList onClose={onCloseSession} onCollectionContextMenu={onCollectionContextMenu} />
+      <SessionList onClose={onCloseSession} onCollectionContextMenu={onCollectionContextMenu} searchQuery={searchQuery} />
       <div
         className={styles.resizeHandle}
         style={sidebarPosition === 'right' ? { left: -2, right: 'auto' } : undefined}
