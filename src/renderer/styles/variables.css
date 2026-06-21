@@ -1,0 +1,46 @@
+:root {
+  --bg-titlebar:       #1c1c1f;
+  --bg-sidebar:        #1a1a1f;
+  --bg-main:           #0f0f12;
+  --bg-item-hover:     #26262e;
+  --bg-item-active:    #2d2d38;
+  --bg-statusbar:      #16161a;
+  --bg-input:          #23232a;
+  --bg-context-menu:   #2a2a33;
+
+  --text-primary:      #e8e8ec;
+  --text-secondary:    #888899;
+  --text-muted:        #55556a;
+
+  --border-subtle:     rgba(255,255,255,0.06);
+  --border-medium:     rgba(255,255,255,0.12);
+
+  --accent:            #6c6cff;
+
+  --color-blue:        #4f8ef7;
+  --color-green:       #4ec97c;
+  --color-amber:       #f5a623;
+  --color-coral:       #f26b5b;
+  --color-purple:      #a78bfa;
+  --color-gray:        #8899aa;
+
+  --btn-close-hover:   #e81123;
+  --btn-min-max-hover: rgba(255,255,255,0.1);
+
+  --sidebar-width:     220px;
+  --sidebar-min-width: 160px;
+  --sidebar-max-width: 320px;
+  --titlebar-height:   32px;
+  --statusbar-height:  22px;
+  --session-header-h:  30px;
+
+  --font-ui:           'Segoe UI Variable', 'Segoe UI', sans-serif;
+  --font-mono:         'Cascadia Code', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  --font-size-term:    13px;
+
+  --radius-sm:         4px;
+  --radius-md:         6px;
+
+  --transition-fast:   120ms ease;
+  --transition-normal: 200ms ease;
+}

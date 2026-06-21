@@ -1,0 +1,70 @@
+{
+  "name": "terminal-sidebar",
+  "version": "1.0.0",
+  "description": "Windows terminal manager with sidebar layout",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "electron-builder --win --config",
+    "package:nsis": "electron-builder --win nsis --config"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "node-pty": "^1.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@electron/rebuild": "^3.7.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.7.2"
+  },
+  "build": {
+    "appId": "com.terminal-sidebar.app",
+    "productName": "Terminal Sidebar",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/node-pty/prebuilds/",
+        "to": "prebuilds/"
+      },
+      {
+        "from": "node_modules/node-pty/build/",
+        "to": "build/"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Terminal Sidebar"
+    }
+  }
+}
