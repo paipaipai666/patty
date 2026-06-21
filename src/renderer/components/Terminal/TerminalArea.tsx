@@ -11,7 +11,7 @@ export function TerminalArea() {
       <div className={styles.emptyArea}>
         <div className={styles.emptyContent}>
           <div className={styles.emptyLogo}>⌨</div>
-          <h2 className={styles.emptyTitle}>Terminal Sidebar</h2>
+          <h2 className={styles.emptyTitle}>Patty</h2>
           <p className={styles.emptyDesc}>Press Ctrl+T or click + to create a new terminal</p>
         </div>
       </div>

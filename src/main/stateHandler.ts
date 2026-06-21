@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync, copyFileSync } from 'fs'
 import { join } from 'path'
 import type { PersistedState } from '../shared/stateTypes'
 
@@ -12,6 +12,27 @@ const DEFAULT_STATE: PersistedState = {
 }
 
 const STATE_FILE = join(app.getPath('userData'), 'state.json')
+const OLD_APP_NAME = 'terminal-sidebar'
+
+function migrateFromOldApp(): void {
+  if (existsSync(STATE_FILE)) return
+
+  const oldUserData = app.getPath('userData').replace(/[/\\]patty$/, `/${OLD_APP_NAME}`)
+  const oldStateFile = join(oldUserData, 'state.json')
+
+  if (existsSync(oldStateFile)) {
+    try {
+      const dir = join(STATE_FILE, '..')
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+      copyFileSync(oldStateFile, STATE_FILE)
+      console.log('Migrated state from', oldStateFile, 'to', STATE_FILE)
+    } catch (err) {
+      console.error('Failed to migrate state:', err)
+    }
+  }
+}
+
+migrateFromOldApp()
 
 export function loadState(): PersistedState {
   if (!existsSync(STATE_FILE)) {

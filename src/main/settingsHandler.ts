@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync, copyFileSync } from 'fs'
 import { join } from 'path'
 import type { AppSettings } from '../shared/settingsTypes'
 
@@ -23,6 +23,27 @@ export const DEFAULT_SETTINGS: AppSettings = {
 }
 
 const SETTINGS_FILE = join(app.getPath('userData'), 'settings.json')
+const OLD_APP_NAME = 'terminal-sidebar'
+
+function migrateFromOldApp(): void {
+  if (existsSync(SETTINGS_FILE)) return
+
+  const oldUserData = app.getPath('userData').replace(/[/\\]patty$/, `/${OLD_APP_NAME}`)
+  const oldSettingsFile = join(oldUserData, 'settings.json')
+
+  if (existsSync(oldSettingsFile)) {
+    try {
+      const dir = join(SETTINGS_FILE, '..')
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+      copyFileSync(oldSettingsFile, SETTINGS_FILE)
+      console.log('Migrated settings from', oldSettingsFile, 'to', SETTINGS_FILE)
+    } catch (err) {
+      console.error('Failed to migrate settings:', err)
+    }
+  }
+}
+
+migrateFromOldApp()
 
 export function loadSettings(): AppSettings {
   if (!existsSync(SETTINGS_FILE)) {

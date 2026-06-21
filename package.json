@@ -1,5 +1,5 @@
 {
-  "name": "terminal-sidebar",
+  "name": "patty",
   "version": "1.0.0",
   "description": "Windows terminal manager with sidebar layout",
   "main": "./out/main/index.js",
@@ -34,8 +34,8 @@
     "typescript": "^5.7.2"
   },
   "build": {
-    "appId": "com.terminal-sidebar.app",
-    "productName": "Terminal Sidebar",
+    "appId": "com.patty.app",
+    "productName": "Patty",
     "directories": {
       "output": "dist"
     },
@@ -68,7 +68,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Terminal Sidebar"
+      "shortcutName": "Patty"
     }
   }
 }

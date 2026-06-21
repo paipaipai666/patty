@@ -63,7 +63,7 @@ export function TitleBar({ onOpenSettings }: TitleBarProps) {
   return (
     <div className={styles.titlebar}>
       <div className={styles.dragRegion}>
-        <span className={styles.title}>Terminal Sidebar</span>
+        <span className={styles.title}>Patty</span>
       </div>
       <div className={styles.controls}>
         {onOpenSettings && (

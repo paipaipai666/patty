@@ -51,7 +51,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.terminal-sidebar.app')
+  electronApp.setAppUserModelId('com.patty.app')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
