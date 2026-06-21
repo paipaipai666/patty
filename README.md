@@ -21,6 +21,14 @@ A modern, minimal terminal manager for Windows.
 - **Drag & Drop** - Move terminals between collections
 - **Custom Shortcuts** - Configurable keyboard shortcuts
 
+## Screenshot
+
+<div align="center">
+
+![Patty](main.png)
+
+</div>
+
 ## Supported Shells
 
 | Shell | Command |
