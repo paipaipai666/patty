@@ -102,6 +102,19 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     term.loadAddon(webLinksAddon)
     term.open(containerRef.current)
 
+    // Prevent xterm.js built-in paste handler from firing alongside our custom
+    // Ctrl+Shift+V handler. Without this, both handlers write the same text
+    // to PTY, causing duplicated output (e.g. "echo" → "echoecho").
+    // Use capturing phase so we intercept before xterm.js's stopPropagation.
+    containerRef.current.addEventListener(
+      'paste',
+      (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      },
+      true
+    )
+
     try {
       const webglAddon = new WebglAddon()
       term.loadAddon(webglAddon)
