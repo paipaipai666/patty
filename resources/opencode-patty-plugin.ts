@@ -4,8 +4,9 @@
  * 监听 OpenCode 事件，当需要用户介入时发送通知到 Patty。
  * 支持的事件：
  * - permission.asked: 权限请求
- * - permission.replied: 权限已回复（复位通知）
+ * - question.asked: 询问问题
  * - session.idle: 会话空闲（agent 完成回答）
+ * - session.error: 执行出错
  */
 
 export const PattyNotifier = async ({ project, directory, $ }) => {
@@ -44,6 +45,10 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
 
         case 'session.idle':
           await notifyPatty('idle')
+          break
+
+        case 'session.error':
+          await notifyPatty('error')
           break
       }
     }
