@@ -20,6 +20,7 @@ A modern, minimal terminal manager for Windows.
 - **Copy/Paste** - Ctrl+Shift+C/V in terminal
 - **Drag & Drop** - Move terminals between collections
 - **Custom Shortcuts** - Configurable keyboard shortcuts
+- **AI Attention Notifications** - Visual indicators when Claude Code or OpenCode needs your input
 
 ## Screenshot
 
@@ -38,6 +39,28 @@ A modern, minimal terminal manager for Windows.
 | CMD | `cmd` |
 | Git Bash | `gitbash` |
 | WSL | `wsl` |
+
+## AI Attention Notifications
+
+Patty can show visual indicators when AI coding assistants need your attention:
+
+| Event | Color | Description |
+|-------|-------|-------------|
+| Permission Request | 🔵 Blue | Tool needs permission to run |
+| Question | 🔵 Blue | AI is asking for clarification |
+| Task Complete | 🟢 Green | AI finished responding |
+| Error | 🔴 Red | Execution error occurred |
+
+### Supported AI Tools
+
+- **Claude Code** - Via Notification and Stop hooks
+- **OpenCode** - Via plugin system
+
+### Configuration
+
+Go to **Settings → Notifications** to enable/disable for each AI tool independently.
+
+> When disabled, external config files (Claude Code settings.json, OpenCode plugin) will not be modified.
 
 ## Installation
 
@@ -91,13 +114,21 @@ The installer will be created in the `dist` directory.
 patty/
 ├── src/
 │   ├── main/          # Electron main process
+│   │   ├── index.ts           # App entry point
+│   │   ├── ptyManager.ts      # PTY management + Hook Server
+│   │   ├── hookInstaller.ts   # Claude Code/OpenCode hook installer
+│   │   ├── ipcHandlers.ts     # IPC handlers
+│   │   └── settingsHandler.ts # Settings persistence
 │   ├── preload/       # Preload scripts
 │   ├── renderer/      # React application
 │   │   ├── components/
 │   │   ├── store/
 │   │   └── styles/
 │   └── shared/        # Shared types
-├── resources/         # App icons
+├── resources/
+│   ├── icon.ico               # App icon
+│   ├── patty-hook.ps1         # Claude Code notification hook
+│   └── opencode-patty-plugin.ts  # OpenCode notification plugin
 └── package.json
 ```
 
