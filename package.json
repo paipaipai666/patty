@@ -58,6 +58,10 @@
       {
         "from": "resources/patty-hook.ps1",
         "to": "resources/patty-hook.ps1"
+      },
+      {
+        "from": "resources/opencode-patty-plugin.ts",
+        "to": "resources/opencode-patty-plugin.ts"
       }
     ],
     "win": {

@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipcHandlers'
 import { startHookServer, stopHookServer } from './ptyManager'
-import { ensureClaudeCodeHook } from './hookInstaller'
+import { ensureClaudeCodeHook, ensureOpenCodePlugin } from './hookInstaller'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -73,6 +73,9 @@ app.whenReady().then(async () => {
 
   // Ensure Claude Code hook is installed
   await ensureClaudeCodeHook(hookPort)
+
+  // Ensure OpenCode plugin is installed
+  await ensureOpenCodePlugin()
 
   createWindow()
 

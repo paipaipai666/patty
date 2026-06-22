@@ -148,3 +148,32 @@ export async function ensureClaudeCodeHook(hookPort: number): Promise<void> {
     console.error('Failed to install Claude Code hook:', error)
   }
 }
+
+export async function ensureOpenCodePlugin(): Promise<void> {
+  try {
+    const sourcePath = app.isPackaged
+      ? path.join(process.resourcesPath, 'resources', 'opencode-patty-plugin.ts')
+      : path.join(__dirname, '../../resources/opencode-patty-plugin.ts')
+
+    const destDir = path.join(
+      process.env.USERPROFILE || '',
+      '.config', 'opencode', 'plugins'
+    )
+    const destPath = path.join(destDir, 'patty-notifier.ts')
+
+    // Create destination directory if it doesn't exist
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true })
+    }
+
+    // Copy plugin file
+    if (fs.existsSync(sourcePath)) {
+      fs.copyFileSync(sourcePath, destPath)
+      console.log('OpenCode plugin installed successfully')
+    } else {
+      console.warn('OpenCode plugin source not found:', sourcePath)
+    }
+  } catch (error) {
+    console.error('Failed to install OpenCode plugin:', error)
+  }
+}

@@ -71,7 +71,9 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
       TERM_PROGRAM: 'TerminalSidebar',
       PATTY_PANE_ID: id,
       PATTY_PORT: hookPort.toString(),
-      PATTY_PIPE: 'patty-attention'
+      PATTY_PIPE: 'patty-attention',
+      // OpenCode 插件目录
+      XDG_CONFIG_HOME: process.env.USERPROFILE + '\\.config'
     },
     useConpty: true,
     conptyInheritCursor: false
