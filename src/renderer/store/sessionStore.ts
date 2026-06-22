@@ -36,7 +36,7 @@ interface SessionStore {
   sidebarVisible: boolean
   sidebarWidth: number
   loaded: boolean
-  attentionMap: Record<string, boolean>
+  attentionMap: Record<string, string | null>
 
   addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null }) => string
   removeSession: (id: string) => void
@@ -58,7 +58,7 @@ interface SessionStore {
   navigatePrev: () => void
   navigateToIndex: (index: number) => void
 
-  setAttention: (id: string, val: boolean) => void
+  setAttention: (id: string, eventType: string | null) => void
   resetAttention: (id: string) => void
 
   loadState: () => Promise<void>
@@ -106,13 +106,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
 
       // Listen for attention changes from hook server
-      window.terminalAPI.onAttentionChange((paneId, attention) => {
-        get().setAttention(paneId, attention)
+      window.terminalAPI.onAttentionChange((paneId, eventType) => {
+        get().setAttention(paneId, eventType)
       })
 
       // Listen for PTY exit to cleanup attention state
       window.terminalAPI.onPtyExit((paneId) => {
-        get().setAttention(paneId, false)
+        get().setAttention(paneId, null)
         get().removeSession(paneId)
       })
     } catch (err) {
@@ -326,9 +326,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  setAttention: (id: string, val: boolean) => {
-    if (val === true) {
-      // Debounce: ignore if within 1 second window
+  setAttention: (id: string, eventType: string | null) => {
+    if (eventType !== null) {
+      // Setting attention: debounce if within 1 second window
       if (attentionTimers[id]) return
       attentionTimers[id] = setTimeout(() => {
         delete attentionTimers[id]
@@ -341,12 +341,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
     }
     set((state) => ({
-      attentionMap: { ...state.attentionMap, [id]: val }
+      attentionMap: { ...state.attentionMap, [id]: eventType }
     }))
   },
 
   resetAttention: (id: string) => {
-    get().setAttention(id, false)
+    get().setAttention(id, null)
     window.terminalAPI.resetAttention(id)
   }
 }))

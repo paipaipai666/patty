@@ -7,6 +7,25 @@ import { ensureClaudeCodeHook, ensureOpenCodePlugin } from './hookInstaller'
 
 let mainWindow: BrowserWindow | null = null
 
+// 映射原始事件到注意力类型
+function mapEventToAttentionType(event: string): string | null {
+  // 权限请求/询问问题 → 蓝色
+  if (event === 'permission_prompt' || event === 'elicitation_dialog' ||
+      event.includes('permission') || event.includes('question')) {
+    return 'permission'
+  }
+  // 回答完毕 → 绿色
+  if (event === 'idle' || event === 'stop') {
+    return 'complete'
+  }
+  // 执行出错 → 红色
+  if (event === 'error' || event.startsWith('error_')) {
+    return 'error'
+  }
+  // 未知事件，不处理
+  return null
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -65,8 +84,9 @@ app.whenReady().then(async () => {
 
   // Start hook server for Claude Code notifications
   const hookPort = await startHookServer((paneId, event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('pty:attn', paneId, true)
+    const attentionType = mapEventToAttentionType(event)
+    if (attentionType && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pty:attn', paneId, attentionType)
     }
   })
   console.log(`Hook server listening on port ${hookPort}`)

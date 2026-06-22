@@ -40,9 +40,9 @@ const terminalAPI = {
     ipcRenderer.send('pty:resetAttention', id)
   },
 
-  onAttentionChange: (callback: (paneId: string, attention: boolean) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, paneId: string, attention: boolean) =>
-      callback(paneId, attention)
+  onAttentionChange: (callback: (paneId: string, eventType: string | null) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, paneId: string, eventType: string | null) =>
+      callback(paneId, eventType)
     ipcRenderer.on('pty:attn', handler)
     return () => {
       ipcRenderer.removeListener('pty:attn', handler)

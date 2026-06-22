@@ -136,7 +136,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.on('pty:resetAttention', (_event, id: string) => {
     const win = getWindow()
     if (win && !win.isDestroyed()) {
-      win.webContents.send('pty:attn', id, false)
+      win.webContents.send('pty:attn', id, null)
     }
   })
 

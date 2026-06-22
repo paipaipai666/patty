@@ -21,10 +21,25 @@ const COLOR_MAP: Record<string, string> = {
 export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionItemProps) {
   const setActive = useSessionStore((s) => s.setActive)
   const renameSession = useSessionStore((s) => s.renameSession)
-  const attention = useSessionStore((s) => s.attentionMap[session.id] ?? false)
+  const attentionType = useSessionStore((s) => s.attentionMap[session.id] ?? null)
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(session.title)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // 根据注意力类型获取 CSS 类名
+  const getAttentionClass = () => {
+    if (!attentionType) return ''
+    switch (attentionType) {
+      case 'permission':
+        return styles['itemAttention-permission']
+      case 'complete':
+        return styles['itemAttention-complete']
+      case 'error':
+        return styles['itemAttention-error']
+      default:
+        return ''
+    }
+  }
 
   const handleDoubleClick = () => {
     setIsEditing(true)
@@ -60,7 +75,7 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
 
   return (
     <div
-      className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
+      className={`${styles.item} ${isActive ? styles.itemActive : ''} ${getAttentionClass()}`}
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
       onClick={() => setActive(session.id)}
       onDoubleClick={handleDoubleClick}
@@ -68,8 +83,8 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
       onDragStart={handleDragStart}
     >
       <span
-        className={`${styles.colorDot} ${attention ? styles.attentionDot : ''}`}
-        style={{ backgroundColor: attention ? '#f59e0b' : (COLOR_MAP[session.color] || COLOR_MAP.blue) }}
+        className={styles.colorDot}
+        style={{ backgroundColor: COLOR_MAP[session.color] || COLOR_MAP.blue }}
       />
       {isEditing ? (
         <input
