@@ -33,10 +33,12 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
     event: async ({ event }) => {
       switch (event.type) {
         case 'permission.asked':
+        case 'question.asked':
           await notifyPatty('permission_prompt')
           break
 
         case 'permission.replied':
+        case 'question.replied':
           await notifyPatty('idle')
           break
 
