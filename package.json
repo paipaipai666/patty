@@ -54,6 +54,10 @@
       {
         "from": "node_modules/node-pty/build/",
         "to": "build/"
+      },
+      {
+        "from": "resources/patty-hook.ps1",
+        "to": "resources/patty-hook.ps1"
       }
     ],
     "win": {

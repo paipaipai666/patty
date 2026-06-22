@@ -36,6 +36,7 @@ interface SessionStore {
   sidebarVisible: boolean
   sidebarWidth: number
   loaded: boolean
+  attentionMap: Record<string, boolean>
 
   addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null }) => string
   removeSession: (id: string) => void
@@ -57,11 +58,15 @@ interface SessionStore {
   navigatePrev: () => void
   navigateToIndex: (index: number) => void
 
+  setAttention: (id: string, val: boolean) => void
+  resetAttention: (id: string) => void
+
   loadState: () => Promise<void>
   saveState: () => Promise<void>
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
+const attentionTimers: Record<string, ReturnType<typeof setTimeout>> = {}
 
 function debouncedSave(getState: () => SessionStore) {
   if (saveTimer) clearTimeout(saveTimer)
@@ -86,6 +91,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sidebarVisible: true,
   sidebarWidth: 220,
   loaded: false,
+  attentionMap: {},
 
   loadState: async () => {
     try {
@@ -97,6 +103,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         sidebarVisible: state.sidebarVisible,
         sidebarWidth: state.sidebarWidth,
         loaded: true
+      })
+
+      // Listen for attention changes from hook server
+      window.terminalAPI.onAttentionChange((paneId, attention) => {
+        get().setAttention(paneId, attention)
+      })
+
+      // Listen for PTY exit to cleanup attention state
+      window.terminalAPI.onPtyExit((paneId) => {
+        get().setAttention(paneId, false)
+        get().removeSession(paneId)
       })
     } catch (err) {
       console.error('Failed to load state:', err)
@@ -307,5 +324,29 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({ activeSessionId: sessions[index].id })
       debouncedSave(get)
     }
+  },
+
+  setAttention: (id: string, val: boolean) => {
+    if (val === true) {
+      // Debounce: ignore if within 1 second window
+      if (attentionTimers[id]) return
+      attentionTimers[id] = setTimeout(() => {
+        delete attentionTimers[id]
+      }, 1000)
+    } else {
+      // Reset: clear debounce timer so next notification isn't blocked
+      if (attentionTimers[id]) {
+        clearTimeout(attentionTimers[id])
+        delete attentionTimers[id]
+      }
+    }
+    set((state) => ({
+      attentionMap: { ...state.attentionMap, [id]: val }
+    }))
+  },
+
+  resetAttention: (id: string) => {
+    get().setAttention(id, false)
+    window.terminalAPI.resetAttention(id)
   }
 }))

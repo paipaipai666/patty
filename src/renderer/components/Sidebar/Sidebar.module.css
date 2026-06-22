@@ -94,6 +94,22 @@
   flex-shrink: 0;
 }
 
+.attentionDot {
+  animation: pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+    transform: scale(1.1);
+  }
+}
+
 .itemTitle {
   flex: 1;
   font-size: 12px;

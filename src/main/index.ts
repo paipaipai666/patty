@@ -2,6 +2,8 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipcHandlers'
+import { startHookServer, stopHookServer } from './ptyManager'
+import { ensureClaudeCodeHook } from './hookInstaller'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -52,7 +54,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.patty.app')
 
   app.on('browser-window-created', (_, window) => {
@@ -61,6 +63,17 @@ app.whenReady().then(() => {
 
   registerIpcHandlers(() => mainWindow)
 
+  // Start hook server for Claude Code notifications
+  const hookPort = await startHookServer((paneId, event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pty:attn', paneId, true)
+    }
+  })
+  console.log(`Hook server listening on port ${hookPort}`)
+
+  // Ensure Claude Code hook is installed
+  await ensureClaudeCodeHook(hookPort)
+
   createWindow()
 
   app.on('activate', () => {
@@ -68,6 +81,10 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  stopHookServer()
 })
 
 app.on('window-all-closed', () => {

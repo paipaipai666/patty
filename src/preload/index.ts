@@ -35,6 +35,32 @@ const terminalAPI = {
     }
   },
 
+  // Attention management
+  resetAttention: (id: string) => {
+    ipcRenderer.send('pty:resetAttention', id)
+  },
+
+  onAttentionChange: (callback: (paneId: string, attention: boolean) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, paneId: string, attention: boolean) =>
+      callback(paneId, attention)
+    ipcRenderer.on('pty:attn', handler)
+    return () => {
+      ipcRenderer.removeListener('pty:attn', handler)
+    }
+  },
+
+  onPtyExit: (callback: (paneId: string, exitCode: number) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, paneId: string, exitCode: number) =>
+      callback(paneId, exitCode)
+    ipcRenderer.on('pty:exit', handler)
+    return () => {
+      ipcRenderer.removeListener('pty:exit', handler)
+    }
+  },
+
+  // Hook port
+  getHookPort: () => ipcRenderer.invoke('system:getHookPort') as Promise<number>,
+
   // Window controls
   windowMinimize: () => ipcRenderer.send('window:minimize'),
   windowMaximize: () => ipcRenderer.send('window:maximize'),
