@@ -3,16 +3,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import type { AppSettings, ShortcutMap } from '../../../shared/settingsTypes'
 import styles from './SettingsModal.module.css'
 
-type Category = 'appearance' | 'terminal' | 'shortcuts' | 'layout'
-
-const CATEGORIES: { key: Category; label: string }[] = [
-  { key: 'appearance', label: 'Appearance' },
-  { key: 'terminal', label: 'Terminal' },
-  { key: 'shortcuts', label: 'Shortcuts' },
-  { key: 'layout', label: 'Layout' }
-]
-
-const FONT_OPTIONS = [
+const FALLBACK_FONTS = [
   'Cascadia Code',
   'Cascadia Mono',
   'Consolas',
@@ -21,6 +12,15 @@ const FONT_OPTIONS = [
   'Source Code Pro',
   'Courier New',
   'monospace'
+]
+
+type Category = 'appearance' | 'terminal' | 'shortcuts' | 'layout'
+
+const CATEGORIES: { key: Category; label: string }[] = [
+  { key: 'appearance', label: 'Appearance' },
+  { key: 'terminal', label: 'Terminal' },
+  { key: 'shortcuts', label: 'Shortcuts' },
+  { key: 'layout', label: 'Layout' }
 ]
 
 const SHELL_OPTIONS: { value: AppSettings['defaultShell']; label: string }[] = [
@@ -157,6 +157,73 @@ export function SettingsModal() {
   )
 }
 
+function FontPicker({
+  value,
+  onChange
+}: {
+  value: string
+  onChange: (font: string) => void
+}) {
+  const [fonts, setFonts] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    window.terminalAPI.getFonts().then((systemFonts) => {
+      setFonts(systemFonts.length > 0 ? systemFonts : FALLBACK_FONTS)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  const filtered = fonts.filter((f) => f.toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <div className={styles.fontPicker} ref={containerRef}>
+      <input
+        className={styles.fontPickerInput}
+        value={open ? search : value}
+        placeholder="Search fonts..."
+        onFocus={() => {
+          setSearch('')
+          setOpen(true)
+        }}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+      {open && (
+        <div className={styles.fontPickerList}>
+          {filtered.length === 0 ? (
+            <div className={styles.fontPickerEmpty}>No fonts found</div>
+          ) : (
+            filtered.map((font) => (
+              <div
+                key={font}
+                className={`${styles.fontPickerItem} ${font === value ? styles.fontPickerItemActive : ''}`}
+                onClick={() => {
+                  onChange(font)
+                  setOpen(false)
+                }}
+              >
+                {font}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AppearanceSection({
   settings,
   updateSetting
@@ -188,15 +255,10 @@ function AppearanceSection({
       <div className={styles.sectionTitle}>Font</div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Font Family</span>
-        <select
-          className={styles.select}
+        <FontPicker
           value={settings.fontFamily}
-          onChange={(e) => updateSetting('fontFamily', e.target.value)}
-        >
-          {FONT_OPTIONS.map((f) => (
-            <option key={f} value={f}>{f}</option>
-          ))}
-        </select>
+          onChange={(font) => updateSetting('fontFamily', font)}
+        />
       </div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Font Size</span>

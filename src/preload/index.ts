@@ -51,6 +51,9 @@ const terminalAPI = {
   // Shell detection
   detectShells: () => ipcRenderer.invoke('shell:detect'),
 
+  // System fonts
+  getFonts: () => ipcRenderer.invoke('system:getFonts') as Promise<string[]>,
+
   // Directory selection
   selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),
 

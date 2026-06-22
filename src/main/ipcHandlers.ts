@@ -1,8 +1,33 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
+import { execSync } from 'child_process'
 import { createPty, writeToPty, resizePty, killPty, detectAvailableShells } from './ptyManager'
 import { loadSettings, saveSettings } from './settingsHandler'
 import { loadState, saveState } from './stateHandler'
 import type { PersistedState } from '../shared/stateTypes'
+
+function getInstalledFonts(): string[] {
+  const fonts = new Set<string>()
+  const keys = [
+    'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts',
+    'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts'
+  ]
+  for (const key of keys) {
+    try {
+      const result = execSync(`reg query "${key}" /s`, { encoding: 'utf-8', timeout: 10000 })
+      for (const line of result.split(/\r?\n/)) {
+        const match = line.match(/^\s+(.+?)\s+REG_(SZ|EXPAND_SZ)\s+(.+)$/)
+        if (match) {
+          const name = match[1].trim()
+          const clean = name.replace(/\s*\((?:TrueType|OpenType|All res)\)\s*$/i, '').trim()
+          if (clean) fonts.add(clean)
+        }
+      }
+    } catch {
+      // registry key not found or access denied — skip
+    }
+  }
+  return [...fonts].sort()
+}
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
   // Settings handlers
@@ -86,6 +111,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   // Shell detection
   ipcMain.handle('shell:detect', () => {
     return detectAvailableShells()
+  })
+
+  // System fonts
+  ipcMain.handle('system:getFonts', () => {
+    return getInstalledFonts()
   })
 
   // Window controls
