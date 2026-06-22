@@ -12,7 +12,7 @@ export interface PtySession {
 const sessions = new Map<string, PtySession>()
 let hookServer: http.Server | null = null
 let hookPort = 0
-let onHookRequest: ((paneId: string, event: string) => void) | null = null
+let onHookRequest: ((paneId: string, event: string, source: string) => void) | null = null
 
 const SHELL_PATHS: Record<string, string> = {
   powershell: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
@@ -122,7 +122,7 @@ export function getPtySession(id: string): PtySession | undefined {
   return sessions.get(id)
 }
 
-export function startHookServer(handler: (paneId: string, event: string) => void): Promise<number> {
+export function startHookServer(handler: (paneId: string, event: string, source: string) => void): Promise<number> {
   return new Promise((resolve, reject) => {
     if (hookServer) {
       resolve(hookPort)
@@ -143,7 +143,7 @@ export function startHookServer(handler: (paneId: string, event: string) => void
       req.on('end', () => {
         try {
           const data = JSON.parse(body)
-          const { paneId, event } = data
+          const { paneId, event, source } = data
 
           // Validate session exists
           if (!sessions.has(paneId)) {
@@ -152,9 +152,9 @@ export function startHookServer(handler: (paneId: string, event: string) => void
             return
           }
 
-          // Notify renderer
+          // Notify renderer with source
           if (onHookRequest) {
-            onHookRequest(paneId, event)
+            onHookRequest(paneId, event, source || 'unknown')
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json' })

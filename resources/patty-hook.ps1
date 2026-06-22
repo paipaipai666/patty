@@ -54,6 +54,7 @@ try {
     $body = @{
         paneId = $env:PATTY_PANE_ID
         event  = $eventType
+        source = "claude-code"
     } | ConvertTo-Json -Compress
 
     "Request body: $body" | Out-File -FilePath $logFile -Append

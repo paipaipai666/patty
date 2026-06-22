@@ -15,13 +15,14 @@ const FALLBACK_FONTS = [
   'monospace'
 ]
 
-type Category = 'appearance' | 'terminal' | 'shortcuts' | 'layout'
+type Category = 'appearance' | 'terminal' | 'shortcuts' | 'layout' | 'notifications'
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: 'appearance', label: 'Appearance' },
   { key: 'terminal', label: 'Terminal' },
   { key: 'shortcuts', label: 'Shortcuts' },
-  { key: 'layout', label: 'Layout' }
+  { key: 'layout', label: 'Layout' },
+  { key: 'notifications', label: 'Notifications' }
 ]
 
 const SHELL_OPTIONS: { value: AppSettings['defaultShell']; label: string }[] = [
@@ -150,6 +151,9 @@ export function SettingsModal() {
             )}
             {activeCategory === 'layout' && (
               <LayoutSection settings={settings} updateSetting={updateSetting} />
+            )}
+            {activeCategory === 'notifications' && (
+              <NotificationsSection settings={settings} updateSetting={updateSetting} />
             )}
           </div>
         </div>
@@ -604,6 +608,71 @@ function LayoutSection({
             Right
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function NotificationsSection({
+  settings,
+  updateSetting
+}: {
+  settings: AppSettings
+  updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
+}) {
+  const toggleClaudeCode = () => {
+    updateSetting('notifications', {
+      ...settings.notifications,
+      claudeCode: !settings.notifications.claudeCode
+    })
+  }
+
+  const toggleOpenCode = () => {
+    updateSetting('notifications', {
+      ...settings.notifications,
+      openCode: !settings.notifications.openCode
+    })
+  }
+
+  return (
+    <div className={styles.section}>
+      <div className={styles.sectionTitle}>Attention Notifications</div>
+      <div className={styles.settingDesc}>
+        Show attention indicators when AI tools need your input.
+      </div>
+
+      <div className={styles.settingRow}>
+        <div>
+          <span className={styles.settingLabel}>Claude Code</span>
+          <div className={styles.settingDesc}>
+            Show indicators for permission requests, questions, and errors
+          </div>
+        </div>
+        <div
+          className={`${styles.toggle} ${settings.notifications.claudeCode ? styles.toggleOn : ''}`}
+          onClick={toggleClaudeCode}
+        >
+          <div className={styles.toggleKnob} />
+        </div>
+      </div>
+
+      <div className={styles.settingRow}>
+        <div>
+          <span className={styles.settingLabel}>OpenCode</span>
+          <div className={styles.settingDesc}>
+            Show indicators for permission requests, questions, and errors
+          </div>
+        </div>
+        <div
+          className={`${styles.toggle} ${settings.notifications.openCode ? styles.toggleOn : ''}`}
+          onClick={toggleOpenCode}
+        >
+          <div className={styles.toggleKnob} />
+        </div>
+      </div>
+
+      <div className={styles.settingDesc} style={{ marginTop: '16px' }}>
+        ℹ️ When disabled, external config files (Claude Code settings.json, OpenCode plugin) will not be modified.
       </div>
     </div>
   )

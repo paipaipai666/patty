@@ -59,6 +59,11 @@ export interface CustomTheme {
   terminal: XtermTheme
 }
 
+export interface NotificationSettings {
+  claudeCode: boolean
+  openCode: boolean
+}
+
 export interface AppSettings {
   theme: string
   fontFamily: string
@@ -70,4 +75,5 @@ export interface AppSettings {
   sidebarPosition: 'left' | 'right'
   shortcuts: ShortcutMap
   customThemes: CustomTheme[]
+  notifications: NotificationSettings
 }

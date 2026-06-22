@@ -20,7 +20,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     toggleSidebar: 'Ctrl+B',
     settings: 'Ctrl+,'
   },
-  customThemes: []
+  customThemes: [],
+  notifications: {
+    claudeCode: true,
+    openCode: true
+  }
 }
 
 const SETTINGS_FILE = join(app.getPath('userData'), 'settings.json')
@@ -48,7 +52,11 @@ migrateFromOldApp()
 
 export function loadSettings(): AppSettings {
   if (!existsSync(SETTINGS_FILE)) {
-    return { ...DEFAULT_SETTINGS, shortcuts: { ...DEFAULT_SETTINGS.shortcuts } }
+    return {
+      ...DEFAULT_SETTINGS,
+      shortcuts: { ...DEFAULT_SETTINGS.shortcuts },
+      notifications: { ...DEFAULT_SETTINGS.notifications }
+    }
   }
   try {
     const raw = readFileSync(SETTINGS_FILE, 'utf-8')
@@ -56,10 +64,15 @@ export function loadSettings(): AppSettings {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
-      shortcuts: { ...DEFAULT_SETTINGS.shortcuts, ...parsed.shortcuts }
+      shortcuts: { ...DEFAULT_SETTINGS.shortcuts, ...parsed.shortcuts },
+      notifications: { ...DEFAULT_SETTINGS.notifications, ...parsed.notifications }
     }
   } catch {
-    return { ...DEFAULT_SETTINGS, shortcuts: { ...DEFAULT_SETTINGS.shortcuts } }
+    return {
+      ...DEFAULT_SETTINGS,
+      shortcuts: { ...DEFAULT_SETTINGS.shortcuts },
+      notifications: { ...DEFAULT_SETTINGS.notifications }
+    }
   }
 }
 

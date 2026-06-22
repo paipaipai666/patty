@@ -23,7 +23,7 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
       await fetch(`http://127.0.0.1:${PATTY_PORT}/hook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paneId: PANE_ID, event })
+        body: JSON.stringify({ paneId: PANE_ID, event, source: 'opencode' })
       })
     } catch {
       // 静默忽略网络错误

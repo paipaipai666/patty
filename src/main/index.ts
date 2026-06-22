@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipcHandlers'
 import { startHookServer, stopHookServer } from './ptyManager'
 import { ensureClaudeCodeHook, ensureOpenCodePlugin } from './hookInstaller'
+import { loadSettings } from './settingsHandler'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -82,8 +83,13 @@ app.whenReady().then(async () => {
 
   registerIpcHandlers(() => mainWindow)
 
-  // Start hook server for Claude Code notifications
-  const hookPort = await startHookServer((paneId, event) => {
+  // Start hook server for notifications
+  const hookPort = await startHookServer((paneId, event, source) => {
+    // 检查对应工具是否启用
+    const settings = loadSettings()
+    if (source === 'claude-code' && !settings.notifications.claudeCode) return
+    if (source === 'opencode' && !settings.notifications.openCode) return
+
     const attentionType = mapEventToAttentionType(event)
     if (attentionType && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('pty:attn', paneId, attentionType)
@@ -91,11 +97,14 @@ app.whenReady().then(async () => {
   })
   console.log(`Hook server listening on port ${hookPort}`)
 
-  // Ensure Claude Code hook is installed
-  await ensureClaudeCodeHook(hookPort)
-
-  // Ensure OpenCode plugin is installed
-  await ensureOpenCodePlugin()
+  // 只在启用时安装配置
+  const settings = loadSettings()
+  if (settings.notifications.claudeCode) {
+    await ensureClaudeCodeHook(hookPort)
+  }
+  if (settings.notifications.openCode) {
+    await ensureOpenCodePlugin()
+  }
 
   createWindow()
 
