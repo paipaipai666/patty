@@ -18,7 +18,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     prevTab: 'Ctrl+[',
     toggleSidebar: 'Ctrl+B',
     settings: 'Ctrl+,'
-  }
+  },
+  customThemes: []
 }
 
 interface SettingsStore {
@@ -41,7 +42,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     try {
       const settings = await window.terminalAPI.settingsGetAll()
       set({ settings, loaded: true })
-      applyTheme(settings.theme)
+      applyTheme(settings.theme, settings.customThemes)
       applyFontSettings(settings.fontFamily, settings.fontSize)
     } catch (err) {
       console.error('Failed to load settings:', err)
@@ -54,8 +55,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const next = { ...prev, [key]: value }
     set({ settings: next })
 
-    if (key === 'theme') {
-      applyTheme(value as AppSettings['theme'])
+    if (key === 'theme' || key === 'customThemes') {
+      const theme = key === 'theme' ? (value as string) : prev.theme
+      const customs = key === 'customThemes' ? (value as AppSettings['customThemes']) : prev.customThemes
+      applyTheme(theme, customs)
     }
     if (key === 'fontFamily' || key === 'fontSize') {
       applyFontSettings(

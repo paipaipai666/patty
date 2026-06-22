@@ -7,7 +7,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
-import { XTERM_THEMES } from '../../styles/themes'
+import { getThemeColors } from '../../styles/themes'
 import styles from './Terminal.module.css'
 
 interface TerminalPaneProps {
@@ -62,7 +62,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
       cursorStyle: settings.cursorStyle,
       allowTransparency: settings.opacity < 1,
       allowProposedApi: true,
-      theme: XTERM_THEMES[settings.theme],
+      theme: getThemeColors(settings.theme, settings.customThemes).terminal,
       scrollback: 10000,
       convertEol: false,
       rescaleOverlappingGlyphs: true
@@ -201,7 +201,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     term.options.fontSize = settings.fontSize
     term.options.cursorBlink = settings.cursorBlink
     term.options.cursorStyle = settings.cursorStyle
-    term.options.theme = XTERM_THEMES[settings.theme]
+    term.options.theme = getThemeColors(settings.theme, settings.customThemes).terminal
 
     // Re-fit after font size change
     setTimeout(() => fitTerminal(), 20)

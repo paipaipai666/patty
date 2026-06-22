@@ -19,7 +19,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     prevTab: 'Ctrl+[',
     toggleSidebar: 'Ctrl+B',
     settings: 'Ctrl+,'
-  }
+  },
+  customThemes: []
 }
 
 const SETTINGS_FILE = join(app.getPath('userData'), 'settings.json')

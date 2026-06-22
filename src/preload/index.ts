@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSettings } from '../shared/settingsTypes'
+import type { AppSettings, CustomTheme } from '../shared/settingsTypes'
 import type { PersistedState } from '../shared/stateTypes'
 
 const terminalAPI = {
@@ -53,6 +53,12 @@ const terminalAPI = {
 
   // System fonts
   getFonts: () => ipcRenderer.invoke('system:getFonts') as Promise<string[]>,
+
+  // Theme import/export
+  themeExport: (theme: CustomTheme) =>
+    ipcRenderer.invoke('theme:export', theme) as Promise<{ success: boolean; error?: string }>,
+  themeImport: () =>
+    ipcRenderer.invoke('theme:import') as Promise<{ success: boolean; theme?: CustomTheme; error?: string }>,
 
   // Directory selection
   selectDirectory: () => ipcRenderer.invoke('dialog:selectDirectory'),

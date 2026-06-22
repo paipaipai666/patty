@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSettingsStore } from '../../store/settingsStore'
-import type { AppSettings, ShortcutMap } from '../../../shared/settingsTypes'
+import type { AppSettings, CustomTheme, ShortcutMap } from '../../../shared/settingsTypes'
+import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS } from '../../styles/themes'
 import styles from './SettingsModal.module.css'
 
 const FALLBACK_FONTS = [
@@ -157,13 +158,7 @@ export function SettingsModal() {
   )
 }
 
-function FontPicker({
-  value,
-  onChange
-}: {
-  value: string
-  onChange: (font: string) => void
-}) {
+function FontPicker({ value, onChange }: { value: string; onChange: (font: string) => void }) {
   const [fonts, setFonts] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
@@ -178,9 +173,7 @@ function FontPicker({
   useEffect(() => {
     if (!open) return
     const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -194,10 +187,7 @@ function FontPicker({
         className={styles.fontPickerInput}
         value={open ? search : value}
         placeholder="Search fonts..."
-        onFocus={() => {
-          setSearch('')
-          setOpen(true)
-        }}
+        onFocus={() => { setSearch(''); setOpen(true) }}
         onChange={(e) => setSearch(e.target.value)}
       />
       {open && (
@@ -209,14 +199,200 @@ function FontPicker({
               <div
                 key={font}
                 className={`${styles.fontPickerItem} ${font === value ? styles.fontPickerItemActive : ''}`}
-                onClick={() => {
-                  onChange(font)
-                  setOpen(false)
-                }}
+                onClick={() => { onChange(font); setOpen(false) }}
               >
                 {font}
               </div>
             ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ThemeEditor({
+  customThemes,
+  currentTheme,
+  onUpdateThemes,
+  onSelectTheme
+}: {
+  customThemes: CustomTheme[]
+  currentTheme: string
+  onUpdateThemes: (themes: CustomTheme[]) => void
+  onSelectTheme: (themeId: string) => void
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editorMode, setEditorMode] = useState<'visual' | 'json'>('visual')
+  const [jsonText, setJsonText] = useState('')
+  const [jsonError, setJsonError] = useState<string | null>(null)
+
+  const editingTheme = customThemes.find((t) => t.id === editingId)
+
+  const handleNew = () => {
+    const theme = createDefaultCustomTheme(`Theme ${customThemes.length + 1}`)
+    onUpdateThemes([...customThemes, theme])
+    setEditingId(theme.id)
+    onSelectTheme(theme.id)
+  }
+
+  const handleDelete = (id: string) => {
+    onUpdateThemes(customThemes.filter((t) => t.id !== id))
+    if (editingId === id) setEditingId(null)
+    if (currentTheme === id) onSelectTheme('dark')
+  }
+
+  const handleDuplicate = (theme: CustomTheme) => {
+    const copy: CustomTheme = {
+      ...theme,
+      id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: `${theme.name} (copy)`,
+      ui: { ...theme.ui },
+      terminal: { ...theme.terminal }
+    }
+    onUpdateThemes([...customThemes, copy])
+    setEditingId(copy.id)
+    onSelectTheme(copy.id)
+  }
+
+  const handleImport = async () => {
+    const result = await window.terminalAPI.themeImport()
+    if (result.success && result.theme) {
+      onUpdateThemes([...customThemes, result.theme])
+      setEditingId(result.theme.id)
+      onSelectTheme(result.theme.id)
+    }
+  }
+
+  const handleExport = (theme: CustomTheme) => {
+    window.terminalAPI.themeExport(theme)
+  }
+
+  const updateEditingTheme = (updater: (t: CustomTheme) => CustomTheme) => {
+    if (!editingId) return
+    onUpdateThemes(customThemes.map((t) => (t.id === editingId ? updater(t) : t)))
+  }
+
+  const startJsonEdit = () => {
+    if (editingTheme) {
+      setJsonText(JSON.stringify(editingTheme, null, 2))
+      setJsonError(null)
+    }
+    setEditorMode('json')
+  }
+
+  const applyJsonEdit = () => {
+    try {
+      const parsed = JSON.parse(jsonText) as CustomTheme
+      if (!parsed.name || !parsed.ui || !parsed.terminal) {
+        setJsonError('Invalid theme: missing name, ui, or terminal')
+        return
+      }
+      updateEditingTheme(() => ({ ...parsed, id: editingId! }))
+      setJsonError(null)
+      setEditorMode('visual')
+    } catch (err) {
+      setJsonError(`JSON error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
+  return (
+    <div className={styles.themeEditor}>
+      <div className={styles.themeList}>
+        {customThemes.map((theme) => (
+          <div
+            key={theme.id}
+            className={`${styles.themeItem} ${editingId === theme.id ? styles.themeItemActive : ''}`}
+            onClick={() => setEditingId(theme.id)}
+          >
+            <span className={styles.themeItemName}>{theme.name}</span>
+            <div className={styles.themeItemActions}>
+              <button className={styles.themeActionBtn} title="Apply" onClick={() => onSelectTheme(theme.id)}>✓</button>
+              <button className={styles.themeActionBtn} title="Duplicate" onClick={(e) => { e.stopPropagation(); handleDuplicate(theme) }}>⧉</button>
+              <button className={styles.themeActionBtn} title="Export" onClick={(e) => { e.stopPropagation(); handleExport(theme) }}>↓</button>
+              <button className={styles.themeActionBtn} title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(theme.id) }}>✕</button>
+            </div>
+          </div>
+        ))}
+        <div className={styles.themeListActions}>
+          <button className={styles.themeBtn} onClick={handleNew}>+ New Theme</button>
+          <button className={styles.themeBtn} onClick={handleImport}>Import</button>
+        </div>
+      </div>
+
+      {editingTheme && (
+        <div className={styles.themeDetail}>
+          <div className={styles.themeDetailHeader}>
+            <input
+              className={styles.themeNameInput}
+              value={editingTheme.name}
+              onChange={(e) => updateEditingTheme((t) => ({ ...t, name: e.target.value }))}
+            />
+            <div className={styles.segmentGroup}>
+              <button
+                className={`${styles.segmentBtn} ${editorMode === 'visual' ? styles.segmentBtnActive : ''}`}
+                onClick={() => setEditorMode('visual')}
+              >
+                Visual
+              </button>
+              <button
+                className={`${styles.segmentBtn} ${editorMode === 'json' ? styles.segmentBtnActive : ''}`}
+                onClick={startJsonEdit}
+              >
+                JSON
+              </button>
+            </div>
+          </div>
+
+          {editorMode === 'visual' ? (
+            <div className={styles.colorSections}>
+              <div className={styles.colorSection}>
+                <div className={styles.colorSectionTitle}>UI Colors</div>
+                <div className={styles.colorGrid}>
+                  {(Object.keys(UI_COLOR_LABELS) as (keyof typeof UI_COLOR_LABELS)[]).map((key) => (
+                    <label key={key} className={styles.colorItem}>
+                      <input
+                        type="color"
+                        className={styles.colorInput}
+                        value={editingTheme.ui[key]}
+                        onChange={(e) => updateEditingTheme((t) => ({ ...t, ui: { ...t.ui, [key]: e.target.value } }))}
+                      />
+                      <span className={styles.colorLabel}>{UI_COLOR_LABELS[key]}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className={styles.colorSection}>
+                <div className={styles.colorSectionTitle}>Terminal Colors</div>
+                <div className={styles.colorGrid}>
+                  {(Object.keys(XTERM_COLOR_LABELS) as (keyof typeof XTERM_COLOR_LABELS)[]).map((key) => (
+                    <label key={key} className={styles.colorItem}>
+                      <input
+                        type="color"
+                        className={styles.colorInput}
+                        value={editingTheme.terminal[key]}
+                        onChange={(e) => updateEditingTheme((t) => ({ ...t, terminal: { ...t.terminal, [key]: e.target.value } }))}
+                      />
+                      <span className={styles.colorLabel}>{XTERM_COLOR_LABELS[key]}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.jsonEditor}>
+              <textarea
+                className={styles.jsonTextarea}
+                value={jsonText}
+                onChange={(e) => setJsonText(e.target.value)}
+                spellCheck={false}
+              />
+              {jsonError && <div className={styles.jsonError}>{jsonError}</div>}
+              <div className={styles.jsonActions}>
+                <button className={styles.themeBtn} onClick={applyJsonEdit}>Apply</button>
+                <button className={styles.themeBtn} onClick={() => setEditorMode('visual')}>Cancel</button>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -231,6 +407,8 @@ function AppearanceSection({
   settings: AppSettings
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
 }) {
+  const isCustom = settings.theme !== 'dark' && settings.theme !== 'light'
+
   return (
     <div className={styles.section}>
       <div className={styles.sectionTitle}>Theme</div>
@@ -249,43 +427,50 @@ function AppearanceSection({
           >
             Light
           </button>
+          <button
+            className={`${styles.segmentBtn} ${isCustom ? styles.segmentBtnActive : ''}`}
+            onClick={() => {
+              if (settings.customThemes.length > 0) {
+                updateSetting('theme', settings.customThemes[0].id)
+              } else {
+                const theme = createDefaultCustomTheme('My Theme')
+                updateSetting('customThemes', [theme])
+                updateSetting('theme', theme.id)
+              }
+            }}
+          >
+            Custom
+          </button>
         </div>
       </div>
+
+      {isCustom && (
+        <ThemeEditor
+          customThemes={settings.customThemes}
+          currentTheme={settings.theme}
+          onUpdateThemes={(themes) => updateSetting('customThemes', themes)}
+          onSelectTheme={(id) => updateSetting('theme', id)}
+        />
+      )}
 
       <div className={styles.sectionTitle}>Font</div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Font Family</span>
-        <FontPicker
-          value={settings.fontFamily}
-          onChange={(font) => updateSetting('fontFamily', font)}
-        />
+        <FontPicker value={settings.fontFamily} onChange={(font) => updateSetting('fontFamily', font)} />
       </div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Font Size</span>
         <div className={styles.stepper}>
-          <button
-            className={styles.stepBtn}
-            onClick={() => updateSetting('fontSize', Math.max(8, settings.fontSize - 1))}
-          >
-            -
-          </button>
+          <button className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.max(8, settings.fontSize - 1))}>-</button>
           <input
             type="number"
             className={styles.numberInput}
             value={settings.fontSize}
             min={8}
             max={32}
-            onChange={(e) => {
-              const v = parseInt(e.target.value)
-              if (!isNaN(v) && v >= 8 && v <= 32) updateSetting('fontSize', v)
-            }}
+            onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 8 && v <= 32) updateSetting('fontSize', v) }}
           />
-          <button
-            className={styles.stepBtn}
-            onClick={() => updateSetting('fontSize', Math.min(32, settings.fontSize + 1))}
-          >
-            +
-          </button>
+          <button className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.min(32, settings.fontSize + 1))}>+</button>
         </div>
       </div>
     </div>
@@ -380,15 +565,10 @@ function ShortcutsSection({
         <div key={key} className={styles.shortcutRow}>
           <span className={styles.shortcutLabel}>{label}</span>
           <div className={styles.shortcutValue}>
-            <span
-              className={`${styles.shortcutKey} ${capturing === key ? styles.shortcutCapture : ''}`}
-            >
+            <span className={`${styles.shortcutKey} ${capturing === key ? styles.shortcutCapture : ''}`}>
               {capturing === key ? 'Press keys...' : shortcuts[key]}
             </span>
-            <button
-              className={styles.shortcutBtn}
-              onClick={() => onStartCapture(key)}
-            >
+            <button className={styles.shortcutBtn} onClick={() => onStartCapture(key)}>
               {capturing === key ? 'Cancel' : 'Edit'}
             </button>
           </div>

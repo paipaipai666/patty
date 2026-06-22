@@ -1,9 +1,11 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { execSync } from 'child_process'
+import { readFileSync, writeFileSync } from 'fs'
 import { createPty, writeToPty, resizePty, killPty, detectAvailableShells } from './ptyManager'
 import { loadSettings, saveSettings } from './settingsHandler'
 import { loadState, saveState } from './stateHandler'
 import type { PersistedState } from '../shared/stateTypes'
+import type { CustomTheme } from '../shared/settingsTypes'
 
 function getInstalledFonts(): string[] {
   const fonts = new Set<string>()
@@ -116,6 +118,47 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   // System fonts
   ipcMain.handle('system:getFonts', () => {
     return getInstalledFonts()
+  })
+
+  // Theme export
+  ipcMain.handle('theme:export', async (_event, theme: CustomTheme) => {
+    try {
+      const win = getWindow()
+      if (!win) return { success: false }
+      const result = await dialog.showSaveDialog(win, {
+        title: 'Export Theme',
+        defaultPath: `${theme.name}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      })
+      if (result.canceled || !result.filePath) return { success: false }
+      writeFileSync(result.filePath, JSON.stringify(theme, null, 2), 'utf-8')
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
+  })
+
+  // Theme import
+  ipcMain.handle('theme:import', async () => {
+    try {
+      const win = getWindow()
+      if (!win) return { success: false }
+      const result = await dialog.showOpenDialog(win, {
+        title: 'Import Theme',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+        properties: ['openFile']
+      })
+      if (result.canceled || result.filePaths.length === 0) return { success: false }
+      const raw = readFileSync(result.filePaths[0], 'utf-8')
+      const theme = JSON.parse(raw) as CustomTheme
+      if (!theme.name || !theme.ui || !theme.terminal) {
+        return { success: false, error: 'Invalid theme file' }
+      }
+      theme.id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      return { success: true, theme }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
   })
 
   // Window controls

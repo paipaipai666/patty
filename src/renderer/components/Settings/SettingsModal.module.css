@@ -342,6 +342,49 @@
 }
 
 /* Font Picker */
+.fontPicker { position: relative; min-width: 200px; }
+.fontPickerInput { background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; padding: 4px 8px; width: 100%; outline: none; box-sizing: border-box; }
+.fontPickerInput:focus { border-color: var(--accent); }
+.fontPickerList { position: absolute; top: calc(100% + 4px); left: 0; right: 0; max-height: 220px; overflow-y: auto; background: var(--bg-input); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 10; }
+.fontPickerItem { padding: 5px 10px; font-size: 12px; color: var(--text-primary); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fontPickerItem:hover { background: var(--bg-item-hover); }
+.fontPickerItemActive { background: var(--bg-item-active); color: var(--accent); }
+.fontPickerEmpty { padding: 8px 10px; font-size: 12px; color: var(--text-muted); text-align: center; }
+
+/* Theme Editor */
+.themeEditor { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+.themeList { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 4px; }
+.themeItem { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; color: var(--text-primary); }
+.themeItem:hover { background: var(--bg-item-hover); }
+.themeItemActive { background: var(--bg-item-active); }
+.themeItemName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.themeItemActions { display: flex; gap: 2px; margin-left: 8px; }
+.themeActionBtn { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 2px 4px; font-size: 11px; border-radius: 3px; line-height: 1; }
+.themeActionBtn:hover { background: var(--bg-item-hover); color: var(--text-primary); }
+.themeListActions { display: flex; gap: 6px; padding-top: 4px; }
+.themeBtn { background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 11px; padding: 4px 10px; cursor: pointer; }
+.themeBtn:hover { background: var(--bg-item-hover); color: var(--text-primary); border-color: var(--border-medium); }
+.themeDetail { display: flex; flex-direction: column; gap: 10px; }
+.themeDetailHeader { display: flex; align-items: center; gap: 8px; }
+.themeNameInput { flex: 1; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; padding: 4px 8px; outline: none; }
+.themeNameInput:focus { border-color: var(--accent); }
+.colorSections { display: flex; flex-direction: column; gap: 12px; max-height: 300px; overflow-y: auto; }
+.colorSection { display: flex; flex-direction: column; gap: 6px; }
+.colorSectionTitle { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+.colorGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 4px; }
+.colorItem { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: var(--radius-sm); cursor: pointer; font-size: 11px; color: var(--text-secondary); }
+.colorItem:hover { background: var(--bg-item-hover); color: var(--text-primary); }
+.colorInput { width: 18px; height: 18px; border: 1px solid var(--border-medium); border-radius: 3px; padding: 0; cursor: pointer; background: none; }
+.colorInput::-webkit-color-swatch-wrapper { padding: 0; }
+.colorInput::-webkit-color-swatch { border: none; border-radius: 2px; }
+.colorLabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jsonEditor { display: flex; flex-direction: column; gap: 8px; }
+.jsonTextarea { width: 100%; min-height: 200px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; padding: 8px; outline: none; resize: vertical; box-sizing: border-box; tab-size: 2; }
+.jsonTextarea:focus { border-color: var(--accent); }
+.jsonError { color: #f26b5b; font-size: 11px; padding: 4px 8px; background: rgba(242,107,91,0.1); border-radius: var(--radius-sm); }
+.jsonActions { display: flex; gap: 6px; }
+
+/* Font Picker */
 .fontPicker {
   position: relative;
   min-width: 200px;
