@@ -1,6 +1,11 @@
 # patty-hook.ps1 - Claude Code Notification Hook for Patty
 # This script is called by Claude Code when a notification event occurs.
 # It sends the event to the Patty main process via HTTP POST.
+#
+# Supported events:
+# - Notification: permission_prompt, idle_prompt, elicitation_dialog
+# - Stop: agent finished answering
+# - StopFailure: API errors (rate_limit, overloaded, server_error, etc.)
 
 # Debug logging
 $logFile = "$env:TEMP\patty-hook-debug.log"
@@ -25,9 +30,14 @@ try {
         try {
             $inputData = $stdinInput | ConvertFrom-Json
             if ($inputData.notification_type) {
+                # Notification hook: permission_prompt, idle_prompt, elicitation_dialog
                 $eventType = $inputData.notification_type
             } elseif ($inputData.type) {
-                $eventType = $inputData.type
+                # StopFailure hook: rate_limit, overloaded, server_error, etc.
+                $eventType = "error_$($inputData.type)"
+            } elseif ($inputData.error_type) {
+                # Alternative error format
+                $eventType = "error_$($inputData.error_type)"
             }
         } catch {
             # If JSON parsing fails, use stdin as event type

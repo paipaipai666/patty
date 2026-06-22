@@ -7,6 +7,7 @@
  * - question.asked: 询问问题
  * - session.idle: 会话空闲（agent 完成回答）
  * - session.error: 执行出错
+ * - session.status: 会话状态变化
  */
 
 export const PattyNotifier = async ({ project, directory, $ }) => {
@@ -49,6 +50,11 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
 
         case 'session.error':
           await notifyPatty('error')
+          break
+
+        case 'session.status':
+          // 会话状态变化，可能需要关注
+          await notifyPatty('status_change')
           break
       }
     }

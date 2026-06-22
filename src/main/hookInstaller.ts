@@ -3,6 +3,7 @@ import * as path from 'path'
 import { app } from 'electron'
 
 const HOOK_MATCHER = 'permission_prompt|idle_prompt|elicitation_dialog'
+const STOP_FAILURE_MATCHER = 'rate_limit|overloaded|authentication_failed|oauth_org_not_allowed|billing_error|invalid_request|model_not_found|server_error|max_output_tokens|unknown'
 
 function getClaudeSettingsPath(): string {
   const homeDir = process.env.USERPROFILE || process.env.HOME || ''
@@ -53,6 +54,7 @@ interface ClaudeSettings {
   hooks?: {
     Notification?: NotificationHook[]
     Stop?: NotificationHook[]
+    StopFailure?: NotificationHook[]
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -133,6 +135,30 @@ export async function ensureClaudeCodeHook(hookPort: number): Promise<void> {
     }
 
     settings.hooks.Stop = stopHooks
+
+    // Also add StopFailure hook for API errors
+    const stopFailureHooks = settings.hooks.StopFailure || []
+    const existingStopFailurePattyIndex = stopFailureHooks.findIndex(
+      (n) => n.hooks?.some((h) => h.command && h.command.includes('patty-hook.ps1'))
+    )
+
+    const newStopFailureHookEntry: NotificationHook = {
+      matcher: STOP_FAILURE_MATCHER,
+      hooks: [
+        {
+          type: 'command',
+          command: hookCommand
+        }
+      ]
+    }
+
+    if (existingStopFailurePattyIndex >= 0) {
+      stopFailureHooks[existingStopFailurePattyIndex] = newStopFailureHookEntry
+    } else {
+      stopFailureHooks.push(newStopFailureHookEntry)
+    }
+
+    settings.hooks.StopFailure = stopFailureHooks
 
     // Ensure settings directory exists
     const settingsDir = path.dirname(settingsPath)
