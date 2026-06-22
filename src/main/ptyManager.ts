@@ -1,5 +1,6 @@
 import * as pty from 'node-pty'
 import * as fs from 'fs'
+import { execSync } from 'child_process'
 
 export interface PtySession {
   pty: pty.IPty
@@ -9,29 +10,40 @@ export interface PtySession {
 const sessions = new Map<string, PtySession>()
 
 const SHELL_PATHS: Record<string, string> = {
-  pwsh: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
   powershell: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
   cmd: 'C:\\Windows\\System32\\cmd.exe',
   gitbash: 'C:\\Program Files\\Git\\bin\\bash.exe',
   wsl: 'C:\\Windows\\System32\\wsl.exe'
 }
 
+function findPwsh(): string | null {
+  try {
+    const result = execSync('where.exe pwsh', { encoding: 'utf-8', timeout: 5000 })
+    const firstPath = result.split('\n')[0]?.trim()
+    if (firstPath && fs.existsSync(firstPath)) return firstPath
+  } catch {
+    // where.exe failed — pwsh not in PATH
+  }
+  return null
+}
+
 export function detectDefaultShell(): string {
-  if (fs.existsSync(SHELL_PATHS.pwsh)) return SHELL_PATHS.pwsh
-  return SHELL_PATHS.powershell
+  return findPwsh() ?? SHELL_PATHS.powershell
 }
 
 export function detectAvailableShells(): Array<{ name: string; path: string; available: boolean }> {
-  return Object.entries(SHELL_PATHS).map(([name, shellPath]) => ({
-    name,
-    path: shellPath,
-    available: fs.existsSync(shellPath)
-  }))
+  const pwshPath = findPwsh()
+  const shells = [{ name: 'pwsh', path: pwshPath ?? 'pwsh (not found)', available: !!pwshPath }]
+  for (const [name, shellPath] of Object.entries(SHELL_PATHS)) {
+    shells.push({ name, path: shellPath, available: fs.existsSync(shellPath) })
+  }
+  return shells
 }
 
 export function getShellPath(shellName?: string): string {
   if (!shellName) return detectDefaultShell()
   const key = shellName.toLowerCase()
+  if (key === 'pwsh') return findPwsh() ?? detectDefaultShell()
   if (SHELL_PATHS[key] && fs.existsSync(SHELL_PATHS[key])) {
     return SHELL_PATHS[key]
   }
