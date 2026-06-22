@@ -1,7 +1,14 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { execSync } from 'child_process'
 import { readFileSync, writeFileSync } from 'fs'
-import { createPty, writeToPty, resizePty, killPty, detectAvailableShells } from './ptyManager'
+import {
+  createPty,
+  writeToPty,
+  resizePty,
+  killPty,
+  detectAvailableShells,
+  getHookPort
+} from './ptyManager'
 import { loadSettings, saveSettings } from './settingsHandler'
 import { loadState, saveState } from './stateHandler'
 import type { PersistedState } from '../shared/stateTypes'
@@ -118,6 +125,19 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   // System fonts
   ipcMain.handle('system:getFonts', () => {
     return getInstalledFonts()
+  })
+
+  // Hook port
+  ipcMain.handle('system:getHookPort', () => {
+    return getHookPort()
+  })
+
+  // Reset attention for a pane
+  ipcMain.on('pty:resetAttention', (_event, id: string) => {
+    const win = getWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pty:attn', id, null)
+    }
   })
 
   // Theme export

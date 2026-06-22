@@ -148,9 +148,10 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
       }, 200)
     }, 50)
 
-    // Forward keyboard input to PTY
+    // Forward keyboard input to PTY and reset attention
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
+      useSessionStore.getState().resetAttention(session.id)
     })
 
     // Receive PTY output

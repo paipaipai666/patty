@@ -2,8 +2,30 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipcHandlers'
+import { startHookServer, stopHookServer } from './ptyManager'
+import { ensureClaudeCodeHook, ensureOpenCodePlugin } from './hookInstaller'
+import { loadSettings } from './settingsHandler'
 
 let mainWindow: BrowserWindow | null = null
+
+// 映射原始事件到注意力类型
+function mapEventToAttentionType(event: string): string | null {
+  // 权限请求/询问问题 → 蓝色
+  if (event === 'permission_prompt' || event === 'elicitation_dialog' ||
+      event.includes('permission') || event.includes('question')) {
+    return 'permission'
+  }
+  // 回答完毕 → 绿色
+  if (event === 'idle' || event === 'stop') {
+    return 'complete'
+  }
+  // 执行出错 → 红色
+  if (event === 'error' || event.startsWith('error_')) {
+    return 'error'
+  }
+  // 未知事件，不处理
+  return null
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -52,7 +74,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.patty.app')
 
   app.on('browser-window-created', (_, window) => {
@@ -61,6 +83,29 @@ app.whenReady().then(() => {
 
   registerIpcHandlers(() => mainWindow)
 
+  // Start hook server for notifications
+  const hookPort = await startHookServer((paneId, event, source) => {
+    // 检查对应工具是否启用
+    const settings = loadSettings()
+    if (source === 'claude-code' && !settings.notifications.claudeCode) return
+    if (source === 'opencode' && !settings.notifications.openCode) return
+
+    const attentionType = mapEventToAttentionType(event)
+    if (attentionType && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('pty:attn', paneId, attentionType)
+    }
+  })
+  console.log(`Hook server listening on port ${hookPort}`)
+
+  // 只在启用时安装配置
+  const settings = loadSettings()
+  if (settings.notifications.claudeCode) {
+    await ensureClaudeCodeHook(hookPort)
+  }
+  if (settings.notifications.openCode) {
+    await ensureOpenCodePlugin()
+  }
+
   createWindow()
 
   app.on('activate', () => {
@@ -68,6 +113,10 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+})
+
+app.on('before-quit', () => {
+  stopHookServer()
 })
 
 app.on('window-all-closed', () => {
