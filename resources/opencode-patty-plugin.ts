@@ -38,10 +38,8 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
           await notifyPatty('permission_prompt')
           break
 
-        case 'permission.replied':
-        case 'question.replied':
-          await notifyPatty('idle')
-          break
+        // permission.replied 和 question.replied 不触发通知
+        // 因为用户回复后 agent 还在处理，只有 session.idle 才表示真正完成
 
         case 'session.idle':
           await notifyPatty('idle')
