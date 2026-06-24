@@ -103,30 +103,25 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     term.open(containerRef.current)
 
     // --- IME composition window tracking (xterm v5.5) ---
-    // CSS pins the textarea at layout (0, 0) via !important (see global.css),
-    // preventing the browser from scrolling it into view (viewport shift bug).
-    // We use transform: translate() to move it VISUALLY to the cursor position —
-    // transform does not affect layout, so it never triggers scroll-into-view.
+    // xterm.js positions the textarea via inline left/top. CSS !important in
+    // global.css pins the layout at (0, 0) to prevent scroll-into-view, but
+    // leaves the inline values readable. We observe style changes and convert
+    // xterm.js's intended coordinates into a visual-only transform.
+    // No inline values are cleared — CSS !important already suppresses their
+    // layout effect, and clearing would re-trigger the observer (infinite loop).
     const textarea = containerRef.current?.querySelector(
       'textarea.xterm-helper-textarea'
     ) as HTMLElement | null
 
+    let imeObserver: MutationObserver | null = null
+
     if (textarea) {
-      const updateImePosition = () => {
-        // Re-read dimensions each call — not cached, since renderer can change on resize.
-        // _renderService is private API (xterm v5.5); guarded with optional chaining.
-        const dims = (term as any)._core?._renderService?.dimensions
-        if (!dims?.css?.cell) return
-
-        // cursorY is already viewport-relative (0..rows-1), do NOT subtract viewportY.
-        const cursorX = term.buffer.active.cursorX
-        const cursorY = term.buffer.active.cursorY
-
-        textarea.style.transform =
-          `translate(${cursorX * dims.css.cell.width}px, ${cursorY * dims.css.cell.height}px)`
-      }
-
-      term.onCursorMove(updateImePosition)
+      imeObserver = new MutationObserver(() => {
+        const x = parseFloat(textarea.style.left) || 0
+        const y = parseFloat(textarea.style.top) || 0
+        textarea.style.transform = `translate(${x}px, ${y}px)`
+      })
+      imeObserver.observe(textarea, { attributes: true, attributeFilter: ['style'] })
     }
 
     // Prevent xterm.js built-in paste handler from firing alongside our custom
@@ -197,6 +192,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     return () => {
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
       if (ptyReadyTimerRef.current) clearTimeout(ptyReadyTimerRef.current)
+      imeObserver?.disconnect()
       window.terminalAPI.kill(session.id)
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()

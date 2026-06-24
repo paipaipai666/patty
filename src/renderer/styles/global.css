@@ -78,12 +78,15 @@ input {
 /*
  * IME helper textarea positioning (xterm v5.5)
  *
- * Pin the textarea at layout position (0, 0) so the browser never tries to
- * scroll it into view (which causes the viewport shift bug on Windows).
+ * Pin the textarea at layout position (0, 0) via !important so the browser
+ * never tries to scroll it into view (which causes the viewport shift bug
+ * on Windows). xterm.js still sets inline left/top — CSS !important suppresses
+ * their layout effect but leaves them readable for xterm.js internals.
  *
- * The visual position is updated via transform: translate() in TerminalPane.tsx
- * so the IME composition window follows the cursor. transform does not affect
- * layout, so it never triggers scroll-into-view.
+ * A MutationObserver in TerminalPane.tsx reads xterm.js's inline left/top and
+ * converts them to transform: translate() for visual positioning only.
+ * This makes the IME candidate window follow the cursor without triggering
+ * scroll-into-view (transform does not affect layout).
  */
 .xterm .xterm-helper-textarea {
   left: 0 !important;
