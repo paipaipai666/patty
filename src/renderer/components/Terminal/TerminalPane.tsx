@@ -16,21 +16,6 @@ interface TerminalPaneProps {
   onUsed?: (id: string) => void
 }
 
-// ── Terminal instance cache (survives React unmount) ──────────────────────
-
-interface CachedTerminal {
-  term: Terminal
-  fitAddon: FitAddon
-  webglAddon: WebglAddon | null
-  ptyCreated: boolean
-  cleanupData: (() => void) | null
-  cleanupExit: (() => void) | null
-}
-
-const terminalCache = new Map<string, CachedTerminal>()
-
-// ── Component ────────────────────────────────────────────────────────────
-
 const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
 
 export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
@@ -44,7 +29,6 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
   const cleanupImeRef = useRef<(() => void) | null>(null)
-  const removedRef = useRef(false)
   const renderCountRef = useRef(0)
   const updatePid = useSessionStore((s) => s.updatePid)
   const settings = useSettingsStore((s) => s.settings)
@@ -73,89 +57,12 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
     [session.id]
   )
 
-  // ── IME composition handling ────────────────────────────────────────────
+  // ── Initialize terminal ─────────────────────────────────────────────────
 
-  const setupIme = useCallback((container: HTMLElement) => {
-    const textarea = container.querySelector(
-      'textarea.xterm-helper-textarea'
-    ) as HTMLElement | null
-    if (!textarea) return () => {}
+  useEffect(() => {
+    if (!containerRef.current) return
+    const container = containerRef.current
 
-    let isComposing = false
-    let savedLeft = ''
-    let savedTop = ''
-    let savedScrollIntoView: (() => void) | null = null
-
-    const blockTextareaStyles = () => {
-      const s = textarea.style as any
-      savedLeft = s.left
-      savedTop = s.top
-      Object.defineProperty(s, 'left', {
-        set: () => {},
-        get: () => savedLeft,
-        configurable: true
-      })
-      Object.defineProperty(s, 'top', {
-        set: () => {},
-        get: () => savedTop,
-        configurable: true
-      })
-      savedScrollIntoView = textarea.scrollIntoView.bind(textarea)
-      textarea.scrollIntoView = () => {}
-    }
-
-    const unblockTextareaStyles = () => {
-      const s = textarea.style as any
-      delete s.left
-      delete s.top
-      if (savedScrollIntoView) textarea.scrollIntoView = savedScrollIntoView
-    }
-
-    const onCompositionStart = () => {
-      isComposing = true
-      blockTextareaStyles()
-    }
-    const onCompositionEnd = () => {
-      isComposing = false
-      unblockTextareaStyles()
-    }
-
-    textarea.addEventListener('compositionstart', onCompositionStart)
-    textarea.addEventListener('compositionend', onCompositionEnd)
-
-    return () => {
-      if (isComposing) unblockTextareaStyles()
-      textarea.removeEventListener('compositionstart', onCompositionStart)
-      textarea.removeEventListener('compositionend', onCompositionEnd)
-    }
-  }, [])
-
-  // ── PTY lifecycle ───────────────────────────────────────────────────────
-
-  const startPty = useCallback((term: Terminal) => {
-    cleanupDataRef.current?.()
-    cleanupExitRef.current?.()
-    window.terminalAPI
-      .createSession(session.id, session.cwd, session.shell, term.cols, term.rows)
-      .then((result) => {
-        if (result.success && result.pid) {
-          updatePid(session.id, result.pid)
-          ptyCreatedRef.current = true
-          cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
-            term.write(data)
-          })
-          cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
-            ptyCreatedRef.current = false
-            term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
-            setTimeout(() => startPty(term), 500)
-          })
-        }
-      })
-  }, [session.id, session.cwd, session.shell, updatePid])
-
-  // ── Create fresh terminal ───────────────────────────────────────────────
-
-  const createTerminal = useCallback((container: HTMLElement) => {
     const term = new Terminal({
       fontFamily: `'${settings.fontFamily}', Consolas, 'Courier New', monospace`,
       fontSize: settings.fontSize,
@@ -205,8 +112,56 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
     // Paste guard
     container.addEventListener('paste', (e) => { e.preventDefault(); e.stopPropagation() }, true)
 
-    // IME
-    const cleanupIme = setupIme(container)
+    // IME composition handling
+    const textarea = container.querySelector(
+      'textarea.xterm-helper-textarea'
+    ) as HTMLElement | null
+
+    let isComposing = false
+    let savedLeft = ''
+    let savedTop = ''
+    let savedScrollIntoView: (() => void) | null = null
+
+    const blockTextareaStyles = () => {
+      if (!textarea) return
+      const s = textarea.style as any
+      savedLeft = s.left
+      savedTop = s.top
+      Object.defineProperty(s, 'left', {
+        set: () => {},
+        get: () => savedLeft,
+        configurable: true
+      })
+      Object.defineProperty(s, 'top', {
+        set: () => {},
+        get: () => savedTop,
+        configurable: true
+      })
+      savedScrollIntoView = textarea.scrollIntoView.bind(textarea)
+      textarea.scrollIntoView = () => {}
+    }
+
+    const unblockTextareaStyles = () => {
+      if (!textarea) return
+      const s = textarea.style as any
+      delete s.left
+      delete s.top
+      if (savedScrollIntoView) textarea.scrollIntoView = savedScrollIntoView
+    }
+
+    const onCompositionStart = () => {
+      isComposing = true
+      blockTextareaStyles()
+    }
+    const onCompositionEnd = () => {
+      isComposing = false
+      unblockTextareaStyles()
+    }
+
+    if (textarea) {
+      textarea.addEventListener('compositionstart', onCompositionStart)
+      textarea.addEventListener('compositionend', onCompositionEnd)
+    }
 
     // WebGL
     let webglAddon: WebglAddon | null = null
@@ -220,6 +175,10 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
     term.loadAddon(unicode11Addon)
     term.unicode.activeVersion = '11'
 
+    termRef.current = term
+    fitAddonRef.current = fitAddon
+    webglAddonRef.current = webglAddon
+
     // Keyboard input → PTY + mark used
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
@@ -227,88 +186,49 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
       onUsed?.(session.id)
     })
 
-    return { term, fitAddon, webglAddon, cleanupIme }
-  }, [session.id, settings, setupIme, onUsed])
-
-  // ── Initialize (or reattach from cache) ─────────────────────────────────
-
-  useEffect(() => {
-    if (!containerRef.current) return
-    const container = containerRef.current
-    removedRef.current = false
-
-    const cached = terminalCache.get(session.id)
-    let term: Terminal
-    let fitAddon: FitAddon
-    let webglAddon: WebglAddon | null
-    let cleanupIme: (() => void)
-
-    if (cached) {
-      // Reattach cached terminal
-      term = cached.term
-      fitAddon = cached.fitAddon
-      webglAddon = cached.webglAddon
-      ptyCreatedRef.current = cached.ptyCreated
-      cleanupDataRef.current = cached.cleanupData
-      cleanupExitRef.current = cached.cleanupExit
-      term.open(container)
-      cleanupIme = setupIme(container)
-      terminalCache.delete(session.id)
-    } else {
-      // Create fresh terminal
-      const created = createTerminal(container)
-      term = created.term
-      fitAddon = created.fitAddon
-      webglAddon = created.webglAddon
-      cleanupIme = created.cleanupIme
-
-      initTimerRef.current = setTimeout(() => {
-        fitAddon.fit()
-        startPty(term)
-      }, 50)
+    // PTY lifecycle
+    const startPty = () => {
+      cleanupDataRef.current?.()
+      cleanupExitRef.current?.()
+      window.terminalAPI
+        .createSession(session.id, session.cwd, session.shell, term.cols, term.rows)
+        .then((result) => {
+          if (result.success && result.pid) {
+            updatePid(session.id, result.pid)
+            ptyCreatedRef.current = true
+            cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
+              term.write(data)
+            })
+            cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
+              ptyCreatedRef.current = false
+              term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
+              setTimeout(() => startPty(), 500)
+            })
+          }
+        })
     }
 
-    termRef.current = term
-    fitAddonRef.current = fitAddon
-    webglAddonRef.current = webglAddon
-    cleanupImeRef.current = cleanupIme
+    // Delay PTY creation to allow initial fit
+    initTimerRef.current = setTimeout(() => {
+      fitAddon.fit()
+      startPty()
+    }, 50)
 
     return () => {
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
-      cleanupImeRef.current?.()
-
-      if (removedRef.current) {
-        // Session removed → full cleanup
-        window.terminalAPI.kill(session.id)
-        cleanupDataRef.current?.()
-        cleanupExitRef.current?.()
-        webglAddon?.dispose()
-        term.dispose()
-        terminalCache.delete(session.id)
-      } else {
-        // LRU eviction → cache for reattach
-        terminalCache.set(session.id, {
-          term,
-          fitAddon,
-          webglAddon,
-          ptyCreated: ptyCreatedRef.current,
-          cleanupData: cleanupDataRef.current,
-          cleanupExit: cleanupExitRef.current
-        })
-      }
+      if (isComposing) unblockTextareaStyles()
+      textarea?.removeEventListener('compositionstart', onCompositionStart)
+      textarea?.removeEventListener('compositionend', onCompositionEnd)
+      window.terminalAPI.kill(session.id)
+      cleanupDataRef.current?.()
+      cleanupExitRef.current?.()
+      webglAddon?.dispose()
+      term.dispose()
+      termRef.current = null
+      fitAddonRef.current = null
+      webglAddonRef.current = null
     }
-  }, [session.id, createTerminal, setupIme, startPty])
-
-  // ── Detect session removal (vs LRU eviction) ────────────────────────────
-
-  const sessions = useSessionStore((s) => s.sessions)
-  const sessionExists = sessions.some((s) => s.id === session.id)
-
-  useEffect(() => {
-    if (!sessionExists) {
-      removedRef.current = true
-    }
-  }, [sessionExists])
+  }, [session.id]) // Only re-run if session ID changes (shouldn't happen)
 
   // ── Fit when becoming active ────────────────────────────────────────────
 

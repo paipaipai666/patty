@@ -14,43 +14,31 @@ export function TerminalArea() {
   const sessions = useSessionStore((s) => s.sessions)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
 
-  // LRU: ordered by most-recent-access. Value tracks whether it was truly "used".
+  // LRU: ordered by most-recent-access
   const lruRef = useRef(new Map<string, LruEntry>())
-  // All mounted terminals (have full xterm.js DOM, includes LRU + new terminals)
+  // Terminals currently mounted (have full xterm.js + PTY)
   const mountedRef = useRef(new Set<string>())
-  // Terminals whose DOM was removed but xterm.js is cached
-  const evictedRef = useRef(new Set<string>())
   // Track last active + session count to distinguish new-terminal from tab-switch
   const lastActiveRef = useRef<string | null>(null)
   const lastCountRef = useRef(0)
 
-  // Access a terminal in the LRU
-  const accessLru = useCallback((id: string, isUsed: boolean) => {
+  // Evict oldest non-used mounted terminal
+  const evictOne = useCallback((excludeId: string) => {
     const lru = lruRef.current
-    const existing = lru.get(id)
-
-    lru.delete(id)
-    lru.set(id, { used: isUsed || existing?.used || false })
-
-    // Evict over-capacity entries
-    while (lru.size > LRU_CAPACITY) {
-      let evicted = false
-      for (const [candidateId, entry] of lru) {
-        if (!entry.used && candidateId !== id) {
-          lru.delete(candidateId)
-          evictedRef.current.add(candidateId)
-          evicted = true
-          break
-        }
+    // Try evicting oldest LRU entry that is only "visited"
+    for (const [candidateId, entry] of lru) {
+      if (!entry.used && candidateId !== excludeId && mountedRef.current.has(candidateId)) {
+        mountedRef.current.delete(candidateId)
+        lru.delete(candidateId)
+        return
       }
-      if (!evicted) {
-        const oldest = lru.keys().next().value
-        if (oldest && oldest !== id) {
-          lru.delete(oldest)
-          evictedRef.current.add(oldest)
-        } else {
-          break
-        }
+    }
+    // All mounted are "used" — evict oldest mounted (not the current one)
+    for (const candidateId of mountedRef.current) {
+      if (candidateId !== excludeId) {
+        mountedRef.current.delete(candidateId)
+        lru.delete(candidateId)
+        return
       }
     }
   }, [])
@@ -59,16 +47,18 @@ export function TerminalArea() {
   const markUsed = useCallback((id: string) => {
     const lru = lruRef.current
     const entry = lru.get(id)
-    if (entry && !entry.used) {
-      lru.delete(id)
+    if (entry) {
+      if (!entry.used) {
+        lru.delete(id)
+        lru.set(id, { used: true })
+      }
+    } else {
       lru.set(id, { used: true })
     }
-    // Ensure it's tracked as mounted and not evicted
     mountedRef.current.add(id)
-    evictedRef.current.delete(id)
   }, [])
 
-  // Track active session changes — only count tab switches, not new terminal creation
+  // Track active session changes
   if (activeSessionId && activeSessionId !== lastActiveRef.current) {
     const isNewTerminal = sessions.length !== lastCountRef.current
     lastActiveRef.current = activeSessionId
@@ -78,38 +68,16 @@ export function TerminalArea() {
     mountedRef.current.add(activeSessionId)
 
     if (!isNewTerminal) {
-      // Tab switch to existing terminal → add to LRU
-      accessLru(activeSessionId, false)
+      // Tab switch → add to LRU
+      const lru = lruRef.current
+      const existing = lru.get(activeSessionId)
+      lru.delete(activeSessionId)
+      lru.set(activeSessionId, { used: existing?.used || false })
     }
 
-    // Enforce capacity: evict oldest non-used mounted terminals
+    // Enforce capacity
     while (mountedRef.current.size > LRU_CAPACITY) {
-      const lru = lruRef.current
-      let evicted = false
-
-      // Try to evict oldest LRU entry that is only "visited"
-      for (const [candidateId, entry] of lru) {
-        if (!entry.used && candidateId !== activeSessionId && mountedRef.current.has(candidateId)) {
-          mountedRef.current.delete(candidateId)
-          lru.delete(candidateId)
-          evictedRef.current.add(candidateId)
-          evicted = true
-          break
-        }
-      }
-
-      if (!evicted) {
-        // All mounted are "used" or in LRU — evict oldest mounted (not active)
-        for (const candidateId of mountedRef.current) {
-          if (candidateId !== activeSessionId) {
-            mountedRef.current.delete(candidateId)
-            lru.delete(candidateId)
-            evictedRef.current.add(candidateId)
-            break
-          }
-        }
-        break // avoid infinite loop
-      }
+      evictOne(activeSessionId)
     }
   }
 
@@ -129,10 +97,10 @@ export function TerminalArea() {
     <div className={styles.area}>
       {sessions.map((session) => {
         const isActive = session.id === activeSessionId
-        const isEvicted = evictedRef.current.has(session.id)
+        const isMounted = mountedRef.current.has(session.id)
 
-        // Evicted + not active → render empty placeholder (TerminalPane cached its xterm.js)
-        if (isEvicted && !isActive) {
+        // Evicted terminal → empty placeholder
+        if (!isMounted && !isActive) {
           return (
             <div
               key={session.id}
@@ -142,10 +110,13 @@ export function TerminalArea() {
           )
         }
 
-        // Active + was evicted → un-evict (TerminalPane will reattach from cache)
-        if (isActive && isEvicted) {
-          evictedRef.current.delete(session.id)
-          accessLru(session.id, false)
+        // Active terminal that was evicted → re-mount
+        if (isActive && !isMounted) {
+          mountedRef.current.add(session.id)
+          const lru = lruRef.current
+          if (!lru.has(session.id)) {
+            lru.set(session.id, { used: false })
+          }
         }
 
         return (
