@@ -4,9 +4,24 @@
   justify-content: space-between;
   height: var(--titlebar-height);
   background: var(--bg-titlebar);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
   border-bottom: 1px solid var(--border-subtle);
   -webkit-app-region: drag;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.titlebar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--accent-alpha) 30%, rgba(34, 211, 238, 0.08) 60%, transparent 95%);
+  pointer-events: none;
 }
 
 .dragRegion {
@@ -19,7 +34,9 @@
 }
 
 .title {
-  font-size: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -38,12 +55,12 @@
   justify-content: center;
   width: 46px;
   height: 100%;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .btnControl:hover {
-  background: var(--btn-min-max-hover);
+  background: rgba(128,128,128,0.08);
   color: var(--text-primary);
 }
 

@@ -8,7 +8,7 @@ import { StatusBar } from './components/StatusBar/StatusBar'
 import { ContextMenu, type MenuItem } from './components/common/ContextMenu'
 import { PromptDialog, type PromptOptions } from './components/common/PromptDialog'
 import { SettingsModal } from './components/Settings/SettingsModal'
-import { useState, useCallback as useCallbackRef } from 'react'
+import { useState } from 'react'
 import styles from './App.module.css'
 
 interface ContextMenuState {

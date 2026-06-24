@@ -18,16 +18,33 @@ body {
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--text-primary);
-  background-color: var(--bg-main);
+  background: var(--bg-app);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: none;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 45% at 15% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 55% at 85% 80%, rgba(34, 211, 238, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -35,12 +52,13 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 4px;
+  background: rgba(128,128,128,0.1);
+  border-radius: 2px;
+  transition: background 150ms var(--ease-out);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.25);
+  background: var(--accent);
 }
 
 /* Reset button styles */
@@ -67,12 +85,12 @@ input {
 }
 
 .xterm-viewport::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
 }
 
 .xterm-viewport::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 4px;
+  background: rgba(128,128,128,0.1);
+  border-radius: 2px;
 }
 
 /*
@@ -83,3 +101,15 @@ input {
  * xterm.js sets inline left/top to the cursor position; during composition,
  * Object.defineProperty blocks further writes to freeze the IME position.
  */
+.xterm .xterm-helper-textarea {
+  left: 0 !important;
+  top: 0 !important;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

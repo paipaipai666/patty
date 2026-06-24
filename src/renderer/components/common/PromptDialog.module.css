@@ -4,15 +4,25 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  animation: fadeIn 120ms var(--ease-out);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .dialog {
   background: var(--bg-context-menu);
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
   padding: 16px;
@@ -20,12 +30,25 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  box-shadow: var(--shadow-lg);
+  animation: dialogIn 200ms var(--ease-out);
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .title {
   font-family: var(--font-ui);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -33,15 +56,17 @@
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 8px;
+  padding: 8px 10px;
   color: var(--text-primary);
+  font-family: var(--font-ui);
   font-size: 13px;
   outline: none;
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .input:focus {
   border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .buttons {
@@ -52,32 +77,37 @@
 }
 
 .cancelBtn {
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  background: rgba(128,128,128,0.06);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   padding: 6px 16px;
   color: var(--text-secondary);
+  font-family: var(--font-ui);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .cancelBtn:hover {
-  background: var(--bg-item-hover);
+  background: rgba(128,128,128,0.1);
   color: var(--text-primary);
 }
 
 .okBtn {
   background: var(--accent);
-  border: 1px solid var(--accent);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   padding: 6px 16px;
   color: #ffffff;
+  font-family: var(--font-ui);
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .okBtn:hover {
-  background: #5a5aee;
+  background: #5558e6;
+  box-shadow: 0 0 8px var(--accent-glow);
 }

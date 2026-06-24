@@ -1,46 +1,65 @@
 :root {
-  --bg-titlebar:       #1c1c1f;
-  --bg-sidebar:        #1a1a1f;
-  --bg-main:           #0f0f12;
-  --bg-item-hover:     #26262e;
-  --bg-item-active:    #2d2d38;
-  --bg-statusbar:      #16161a;
-  --bg-input:          #23232a;
-  --bg-context-menu:   #2a2a33;
+  --accent:            #6366f1;
+  --accent-alpha:      rgba(99, 102, 241, 0.12);
+  --accent-glow:       rgba(99, 102, 241, 0.25);
+  --cyan:              #22d3ee;
+  --green:             #34d399;
+  --red:               #f87171;
+  --amber:             #fbbf24;
 
-  --text-primary:      #e8e8ec;
-  --text-secondary:    #888899;
-  --text-muted:        #55556a;
+  /* Surface hierarchy: background/base < surface < card < dialog */
+  --bg-titlebar:       rgba(18, 18, 22, 0.5);
+  --bg-sidebar:        rgba(18, 18, 22, 0.5);
+  --bg-main:           rgba(10, 10, 12, 0.4);
+  --bg-terminal:       #0a0a0c;
+  --bg-item-hover:     rgba(128,128,128,0.06);
+  --bg-item-active:    rgba(99, 102, 241, 0.08);
+  --bg-statusbar:      rgba(18, 18, 22, 0.5);
+  --bg-input:          rgba(128,128,128,0.06);
+  --bg-context-menu:   rgba(28, 28, 34, 0.78);
+  --bg-dropdown-menu:  rgba(28, 28, 34, 0.85);
 
-  --border-subtle:     rgba(255,255,255,0.06);
-  --border-medium:     rgba(255,255,255,0.12);
+  --text-primary:      #e6e6ed;
+  --text-secondary:    #90909e;
+  --text-muted:        #5c5c6a;
 
-  --accent:            #6c6cff;
+  --border-subtle:     rgba(255,255,255,0.05);
+  --border-medium:     rgba(255,255,255,0.08);
 
-  --color-blue:        #4f8ef7;
-  --color-green:       #4ec97c;
-  --color-amber:       #f5a623;
-  --color-coral:       #f26b5b;
+  --color-blue:        #818cf8;
+  --color-green:       #34d399;
+  --color-amber:       #fbbf24;
+  --color-coral:       #f87171;
   --color-purple:      #a78bfa;
   --color-gray:        #8899aa;
 
   --btn-close-hover:   #e81123;
-  --btn-min-max-hover: rgba(255,255,255,0.1);
 
   --sidebar-width:     220px;
   --sidebar-min-width: 160px;
   --sidebar-max-width: 320px;
   --titlebar-height:   32px;
-  --statusbar-height:  22px;
-  --session-header-h:  30px;
+  --statusbar-height:  24px;
+  --session-header-h:  28px;
 
-  --font-ui:           'Segoe UI Variable', 'Segoe UI', sans-serif;
-  --font-mono:         'Cascadia Code', 'Cascadia Mono', Consolas, 'Courier New', monospace;
+  --font-ui:           'Inter', system-ui, sans-serif;
+  --font-mono:         'JetBrains Mono', 'Cascadia Code', Consolas, 'Courier New', monospace;
   --font-size-term:    13px;
 
-  --radius-sm:         4px;
-  --radius-md:         6px;
+  --radius-sm:         6px;
+  --radius-md:         10px;
+  --radius-lg:         14px;
 
-  --transition-fast:   120ms ease;
-  --transition-normal: 200ms ease;
+  --shadow-sm:         0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md:         0 4px 12px rgba(0,0,0,0.35);
+  --shadow-lg:         0 8px 32px rgba(0,0,0,0.45);
+
+  --glass-blur-sm:     6px;
+  --glass-blur-md:     12px;
+  --glass-blur-lg:     20px;
+
+  --ease-out:          cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-fast:   150ms var(--ease-out);
+  --transition-normal: 200ms var(--ease-out);
+  --transition-slow:   300ms var(--ease-out);
 }

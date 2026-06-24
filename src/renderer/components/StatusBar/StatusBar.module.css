@@ -4,27 +4,50 @@
   height: var(--statusbar-height);
   padding: 0 10px;
   background: var(--bg-statusbar);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
   border-top: 1px solid var(--border-subtle);
   font-size: 11px;
-  color: var(--text-secondary);
   gap: 6px;
   flex-shrink: 0;
+  position: relative;
+}
+
+.statusbar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(128,128,128,0.04), transparent);
+  pointer-events: none;
 }
 
 .item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   white-space: nowrap;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.item:hover {
+  color: var(--text-secondary);
 }
 
 .dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 5px rgba(52, 211, 153, 0.3);
 }
 
 .separator {
-  color: var(--text-muted);
+  color: rgba(128,128,128,0.2);
   font-size: 10px;
+  font-weight: 400;
 }

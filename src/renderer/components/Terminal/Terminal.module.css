@@ -1,7 +1,28 @@
 .area {
   flex: 1;
   position: relative;
+  margin: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  background: var(--bg-terminal);
+  border: 1px solid var(--border-subtle);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+  transition: all var(--transition-normal);
+}
+
+.area::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  transition: opacity var(--transition-fast);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.area:hover::after {
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px var(--accent-alpha);
 }
 
 .pane {
@@ -10,7 +31,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--bg-main);
+  background: var(--bg-terminal);
 }
 
 .emptyArea {
@@ -18,29 +39,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-main);
+  background: var(--bg-terminal);
+  margin: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .emptyContent {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  opacity: 0.5;
+  gap: 14px;
+  opacity: 0.35;
+  transition: opacity var(--transition-normal);
 }
 
 .emptyLogo {
-  font-size: 48px;
-  margin-bottom: 8px;
+  margin-bottom: 2px;
 }
 
 .emptyTitle {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary);
+  letter-spacing: -0.2px;
+  color: var(--text-secondary);
 }
 
 .emptyDesc {
-  font-size: 13px;
-  color: var(--text-secondary);
+  font-size: 12.5px;
+  color: var(--text-muted);
 }

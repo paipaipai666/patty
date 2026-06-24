@@ -34,9 +34,11 @@ export interface XtermTheme {
 }
 
 export interface UITheme {
+  '--bg-app': string
   '--bg-titlebar': string
   '--bg-sidebar': string
   '--bg-main': string
+  '--bg-terminal': string
   '--bg-item-hover': string
   '--bg-item-active': string
   '--bg-statusbar': string
@@ -48,6 +50,9 @@ export interface UITheme {
   '--border-subtle': string
   '--border-medium': string
   '--accent': string
+  '--accent-alpha': string
+  '--accent-glow': string
+  '--bg-dropdown-menu': string
   '--btn-close-hover': string
   '--btn-min-max-hover': string
 }
