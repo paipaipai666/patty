@@ -2,47 +2,60 @@
 
 # Patty
 
-A modern, minimal terminal manager for Windows.
+A modern, minimal terminal manager for Windows with a sidebar layout.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 ![Electron](https://img.shields.io/badge/electron-33-47848F.svg)
+![Version](https://img.shields.io/badge/version-1.2.2-78489F.svg)
 
 </div>
 
 ## Features
 
-- **Multi-tab Terminal** - Create and manage multiple terminal sessions
-- **Collection System** - Organize terminals into folders with nesting support
-- **Customizable Interface** - Dark/Light themes, font settings, cursor styles
-- **Search** - Quickly find terminals by name
-- **Persistent State** - Sessions and collections survive restarts
-- **Copy/Paste** - Ctrl+Shift+C/V in terminal
-- **Drag & Drop** - Move terminals between collections
-- **Custom Shortcuts** - Configurable keyboard shortcuts
+- **Multi-tab Terminal** - Create and manage multiple terminal sessions with independent PTY processes
+- **Collection System** - Organize terminals into nested folders with full drag-and-drop support
+- **5 Shell Support** - PowerShell 7, Windows PowerShell, CMD, Git Bash, and WSL
+- **Fully Customizable UI** - Dark/Light themes plus fully custom themes with visual color picker and JSON editor; import/export themes
+- **Customizable Terminal** - Font family (with system font picker), font size (8-32), cursor style (block/underline/bar), cursor blink, terminal opacity (40-100%)
+- **Resizable Sidebar** - Left or right positioning with session search/filter
+- **Context Menus** - Rename, recolor, close sessions; create, rename, delete subcollections
+- **Status Bar** - Shows active session name, shell type, current working directory, and PID
+- **Configurable Shortcuts** - All keyboard shortcuts remappable in settings
+- **Session Persistence** - Sessions and collections survive restarts with auto-save
 - **AI Attention Notifications** - Visual indicators when Claude Code or OpenCode needs your input
 
 ## Screenshot
 
+### Dark
+
 <div align="center">
 
-![Patty](main.png)
+![Patty-dark](main-dark.png)
+
+</div>
+
+### Light
+
+<div align="center">
+
+![Patty-light](main-light.png)
 
 </div>
 
 ## Supported Shells
 
-| Shell | Command |
-|-------|---------|
+| Shell | ID |
+|-------|-----|
 | PowerShell 7 | `pwsh` |
 | Windows PowerShell | `powershell` |
-| CMD | `cmd` |
+| Command Prompt | `cmd` |
 | Git Bash | `gitbash` |
 | WSL | `wsl` |
 
 ## AI Attention Notifications
 
-Patty can show visual indicators when AI coding assistants need your attention:
+Patty integrates with AI coding assistants to show colored visual indicators on sidebar items when they need your attention:
 
 | Event | Color | Description |
 |-------|-------|-------------|
@@ -51,16 +64,46 @@ Patty can show visual indicators when AI coding assistants need your attention:
 | Task Complete | 🟢 Green | AI finished responding |
 | Error | 🔴 Red | Execution error occurred |
 
+Notification events trigger an animated contribution-grid style effect and a colored glow on the session item.
+
 ### Supported AI Tools
 
-- **Claude Code** - Via Notification and Stop hooks
-- **OpenCode** - Via plugin system
+- **Claude Code** - Via Notification and Stop hooks (PowerShell hook script)
+- **OpenCode** - Via plugin system (TypeScript plugin)
 
 ### Configuration
 
-Go to **Settings → Notifications** to enable/disable for each AI tool independently.
+Go to **Settings → Notifications** to enable or disable for each AI tool independently.
 
-> When disabled, external config files (Claude Code settings.json, OpenCode plugin) will not be modified.
+> When disabled, external config files (Claude Code `settings.json`, OpenCode plugin directory) will not be modified.
+
+## Settings
+
+The settings modal covers 5 categories:
+
+| Category | Options |
+|----------|---------|
+| **Appearance** | Dark/Light/Custom themes, font family (system font picker), font size |
+| **Terminal** | Cursor style (block/underline/bar), cursor blink, terminal opacity (40-100%), default shell |
+| **Shortcuts** | Remap all keyboard shortcuts via key capture |
+| **Layout** | Sidebar position (left/right) |
+| **Notifications** | Toggle AI notifications for Claude Code and OpenCode independently |
+
+Custom themes can be edited visually with color pickers or directly as JSON, with import/export support.
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+T` | New terminal |
+| `Ctrl+W` | Close current terminal |
+| `Ctrl+]` / `Ctrl+[` | Next / Previous terminal |
+| `Ctrl+B` | Toggle sidebar |
+| `Ctrl+1-9` | Jump to terminal by index |
+| `Ctrl+Shift+C` | Copy in terminal |
+| `Ctrl+Shift+V` | Paste in terminal |
+
+All shortcuts are remappable in Settings.
 
 ## Installation
 
@@ -87,49 +130,49 @@ npm run package
 
 The installer will be created in the `dist` directory.
 
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+T` | New terminal |
-| `Ctrl+W` | Close current terminal |
-| `Ctrl+]` / `Ctrl+[` | Next / Previous terminal |
-| `Ctrl+B` | Toggle sidebar |
-| `Ctrl+1-9` | Jump to terminal by index |
-| `Ctrl+Shift+C` | Copy in terminal |
-| `Ctrl+Shift+V` | Paste in terminal |
-
 ## Tech Stack
 
-- **Framework**: Electron + electron-vite
-- **Language**: TypeScript
-- **UI**: React 18 + CSS Modules
-- **Terminal**: xterm.js + WebGL renderer
-- **Backend**: node-pty (Windows ConPTY)
-- **State**: Zustand
+- **Framework**: Electron 33 + electron-vite 2.3
+- **Language**: TypeScript 5.7 (strict mode)
+- **UI**: React 18.3 + CSS Modules
+- **Terminal**: xterm.js 5.5 (WebGL renderer, Fit, WebLinks, Unicode11 addons)
+- **Backend**: node-pty 1.0 (Windows ConPTY)
+- **State**: Zustand 5
+- **Packaging**: electron-builder 25 (NSIS installer)
 
 ## Project Structure
 
 ```
 patty/
 ├── src/
-│   ├── main/          # Electron main process
-│   │   ├── index.ts           # App entry point
-│   │   ├── ptyManager.ts      # PTY management + Hook Server
-│   │   ├── hookInstaller.ts   # Claude Code/OpenCode hook installer
-│   │   ├── ipcHandlers.ts     # IPC handlers
-│   │   └── settingsHandler.ts # Settings persistence
-│   ├── preload/       # Preload scripts
-│   ├── renderer/      # React application
+│   ├── main/                    # Electron main process
+│   │   ├── index.ts             # App entry point, window creation
+│   │   ├── ipcHandlers.ts       # All IPC handlers
+│   │   ├── ptyManager.ts        # PTY session management + hook server
+│   │   ├── settingsHandler.ts   # Settings persistence with migration
+│   │   ├── stateHandler.ts      # Session state persistence
+│   │   └── hookInstaller.ts     # Claude Code / OpenCode hook installer
+│   ├── preload/
+│   │   └── index.ts             # contextBridge (typed terminalAPI)
+│   ├── renderer/                # React application
 │   │   ├── components/
-│   │   ├── store/
-│   │   └── styles/
-│   └── shared/        # Shared types
-├── resources/
-│   ├── icon.ico               # App icon
-│   ├── patty-hook.ps1         # Claude Code notification hook
-│   └── opencode-patty-plugin.ts  # OpenCode notification plugin
-└── package.json
+│   │   │   ├── TitleBar/        # Custom frameless title bar
+│   │   │   ├── Sidebar/         # Sidebar, session tree, collection tree
+│   │   │   ├── Terminal/        # xterm.js terminal panes
+│   │   │   ├── StatusBar/       # Session info bar
+│   │   │   ├── Settings/        # Settings modal (5 categories)
+│   │   │   ├── ContributionGrid/ # Animated AI activity indicator
+│   │   │   └── common/          # ContextMenu, PromptDialog
+│   │   ├── store/               # Zustand stores (session, settings)
+│   │   ├── hooks/               # Shared React hooks
+│   │   └── styles/              # Global CSS, theme definitions
+│   └── shared/                  # Shared TypeScript types
+├── resources/                   # App icon, Claude Code hook, OpenCode plugin
+├── logo/                        # Logo assets
+├── electron.vite.config.ts
+├── package.json
+├── tsconfig.json
+└── ...
 ```
 
 ## License
