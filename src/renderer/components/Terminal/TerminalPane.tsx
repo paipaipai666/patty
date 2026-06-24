@@ -107,29 +107,28 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     // global.css pins the layout at (0, 0) to prevent scroll-into-view, but
     // leaves the inline values readable. We observe style changes and convert
     // xterm.js's intended coordinates into a visual-only transform.
-    // No inline values are cleared — CSS !important already suppresses their
-    // layout effect, and clearing would re-trigger the observer (infinite loop).
     //
-    // During active IME composition the observer is frozen: xterm.js may
-    // reposition the textarea due to terminal output (onRender), but we must
-    // keep the transform locked to where the user started composing.
+    // During IME composition we must also prevent xterm.js from repositioning
+    // the textarea itself — the browser's IME reads inline left/top (not our
+    // transform) to decide where to render composition text. If xterm.js moves
+    // the textarea (e.g. onRender after terminal output), the pinyin jumps.
+    // We use disconnect/revert/reconnect to avoid infinite observer loops.
     const textarea = containerRef.current?.querySelector(
       'textarea.xterm-helper-textarea'
     ) as HTMLElement | null
 
     let imeObserver: MutationObserver | null = null
     let isComposing = false
+    let savedLeft = ''
+    let savedTop = ''
+    let savedTransform = ''
 
     const onCompositionStart = () => {
       isComposing = true
-      // Correct stale transform — cursor may have moved back to input line
-      // without triggering a style mutation.
-      const dims = (term as any)._core?._renderService?.dimensions
-      if (!dims?.css?.cell) return
-      const cursorX = term.buffer.active.cursorX
-      const cursorY = term.buffer.active.cursorY
-      textarea!.style.transform =
-        `translate(${cursorX * dims.css.cell.width}px, ${cursorY * dims.css.cell.height}px)`
+      // Save current position — this is where the user is typing
+      savedLeft = textarea!.style.left
+      savedTop = textarea!.style.top
+      savedTransform = textarea!.style.transform
     }
 
     const onCompositionEnd = () => {
@@ -137,9 +136,16 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     }
 
     if (textarea) {
-      // MutationObserver: track xterm.js's inline left/top → visual transform
       imeObserver = new MutationObserver(() => {
-        if (isComposing) return // Freeze during composition — position locked
+        if (isComposing) {
+          // Intercept xterm.js repositioning: disconnect, revert, reconnect
+          imeObserver!.disconnect()
+          textarea.style.left = savedLeft
+          textarea.style.top = savedTop
+          textarea.style.transform = savedTransform
+          imeObserver!.observe(textarea, { attributes: true, attributeFilter: ['style'] })
+          return
+        }
         const x = parseFloat(textarea.style.left) || 0
         const y = parseFloat(textarea.style.top) || 0
         textarea.style.transform = `translate(${x}px, ${y}px)`
