@@ -115,13 +115,31 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
 
     let imeObserver: MutationObserver | null = null
 
+    // Handler reference stored for cleanup (term.dispose() won't remove DOM listeners)
+    const onCompositionStart = () => {
+      // xterm.js updates textarea position on render, but when the cursor moves
+      // back to the input line there's no style mutation — the transform stays
+      // stale at the last rendered position. Force a correction at the moment
+      // the user actually starts composing, using the real buffer cursor coords.
+      const dims = (term as any)._core?._renderService?.dimensions
+      if (!dims?.css?.cell) return
+      const cursorX = term.buffer.active.cursorX
+      const cursorY = term.buffer.active.cursorY
+      textarea!.style.transform =
+        `translate(${cursorX * dims.css.cell.width}px, ${cursorY * dims.css.cell.height}px)`
+    }
+
     if (textarea) {
+      // MutationObserver: track xterm.js's inline left/top → visual transform
       imeObserver = new MutationObserver(() => {
         const x = parseFloat(textarea.style.left) || 0
         const y = parseFloat(textarea.style.top) || 0
         textarea.style.transform = `translate(${x}px, ${y}px)`
       })
       imeObserver.observe(textarea, { attributes: true, attributeFilter: ['style'] })
+
+      // compositionstart: correct stale transform at the instant IME input begins
+      textarea.addEventListener('compositionstart', onCompositionStart)
     }
 
     // Prevent xterm.js built-in paste handler from firing alongside our custom
@@ -193,6 +211,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
       if (ptyReadyTimerRef.current) clearTimeout(ptyReadyTimerRef.current)
       imeObserver?.disconnect()
+      textarea?.removeEventListener('compositionstart', onCompositionStart)
       window.terminalAPI.kill(session.id)
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
