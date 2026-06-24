@@ -102,6 +102,69 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     term.loadAddon(webLinksAddon)
     term.open(containerRef.current)
 
+    // --- IME composition window positioning (xterm v5.5) ---
+    // xterm.js's updateCompositionElements() repositions the textarea on every
+    // render cycle. Without !important CSS, inline left/top directly control the
+    // layout position — the IME reads this to place the candidate window.
+    //
+    // During composition we block style changes on the textarea using
+    // Object.defineProperty (synchronous, no race condition). The textarea is
+    // already at the cursor position from _syncTextArea (which has an
+    // isComposing guard and won't reposition during composition).
+    //
+    // We do NOT block _compositionView — the IME only reads the textarea
+    // position, and the composition view needs to update to show composition text.
+    const textarea = containerRef.current?.querySelector(
+      'textarea.xterm-helper-textarea'
+    ) as HTMLElement | null
+
+    let isComposing = false
+    let savedLeft = ''
+    let savedTop = ''
+    let savedScrollIntoView: (() => void) | null = null
+
+    const blockTextareaStyles = () => {
+      if (!textarea) return
+      const s = textarea.style as any
+      savedLeft = s.left
+      savedTop = s.top
+      Object.defineProperty(s, 'left', {
+        set: () => {},
+        get: () => savedLeft,
+        configurable: true
+      })
+      Object.defineProperty(s, 'top', {
+        set: () => {},
+        get: () => savedTop,
+        configurable: true
+      })
+      savedScrollIntoView = textarea.scrollIntoView.bind(textarea)
+      textarea.scrollIntoView = () => {}
+    }
+
+    const unblockTextareaStyles = () => {
+      if (!textarea) return
+      const s = textarea.style as any
+      delete s.left
+      delete s.top
+      if (savedScrollIntoView) textarea.scrollIntoView = savedScrollIntoView
+    }
+
+    const onCompositionStart = () => {
+      isComposing = true
+      blockTextareaStyles()
+    }
+
+    const onCompositionEnd = () => {
+      isComposing = false
+      unblockTextareaStyles()
+    }
+
+    if (textarea) {
+      textarea.addEventListener('compositionstart', onCompositionStart)
+      textarea.addEventListener('compositionend', onCompositionEnd)
+    }
+
     // Prevent xterm.js built-in paste handler from firing alongside our custom
     // Ctrl+Shift+V handler. Without this, both handlers write the same text
     // to PTY, causing duplicated output (e.g. "echo" → "echoecho").
@@ -129,47 +192,45 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    // Initial fit — skip PTY resize to avoid double prompt
-    initTimerRef.current = setTimeout(() => {
-      fitAddon.fit()
-      // Create PTY session with fitted dimensions
-      const cols = term.cols
-      const rows = term.rows
-      window.terminalAPI
-        .createSession(session.id, session.cwd, session.shell, cols, rows)
-        .then((result) => {
-          if (result.success && result.pid) {
-            updatePid(session.id, result.pid)
-          }
-        })
-      // Delay allowing ResizeObserver-triggered resizes to avoid ConPTY double prompt
-      ptyReadyTimerRef.current = setTimeout(() => {
-        ptyCreatedRef.current = true
-      }, 200)
-    }, 50)
-
     // Forward keyboard input to PTY and reset attention
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
       useSessionStore.getState().resetAttention(session.id)
     })
 
-    // Receive PTY output
-    const cleanupData = window.terminalAPI.onData(session.id, (data) => {
-      term.write(data)
-    })
-    cleanupDataRef.current = cleanupData
-
-    // Handle PTY exit
-    const cleanupExit = window.terminalAPI.onExit(session.id, () => {
-      ptyCreatedRef.current = false
-      term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
-    })
-    cleanupExitRef.current = cleanupExit
+    // Handle PTY exit — restart shell automatically (standard terminal behavior)
+    const startPty = () => {
+      cleanupDataRef.current?.()
+      cleanupExitRef.current?.()
+      window.terminalAPI
+        .createSession(session.id, session.cwd, session.shell, term.cols, term.rows)
+        .then((result) => {
+          if (result.success && result.pid) {
+            updatePid(session.id, result.pid)
+            ptyCreatedRef.current = true
+            cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
+              term.write(data)
+            })
+            cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
+              ptyCreatedRef.current = false
+              term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
+              setTimeout(() => startPty(), 500)
+            })
+          }
+        })
+    }
+    // Delay PTY creation to allow initial fit
+    initTimerRef.current = setTimeout(() => {
+      fitAddon.fit()
+      startPty()
+    }, 50)
 
     return () => {
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
       if (ptyReadyTimerRef.current) clearTimeout(ptyReadyTimerRef.current)
+      if (isComposing) unblockTextareaStyles()
+      textarea?.removeEventListener('compositionstart', onCompositionStart)
+      textarea?.removeEventListener('compositionend', onCompositionEnd)
       window.terminalAPI.kill(session.id)
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()

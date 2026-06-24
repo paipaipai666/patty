@@ -75,8 +75,11 @@ input {
   border-radius: 4px;
 }
 
-/* Fix IME composition window causing viewport shift on Windows */
-.xterm .xterm-helper-textarea {
-  left: 0 !important;
-  top: 0 !important;
-}
+/*
+ * IME helper textarea positioning (xterm v5.5)
+ *
+ * Do NOT use !important on left/top — the browser's IME reads the CSS layout
+ * position (not transforms) to decide where to render composition text.
+ * xterm.js sets inline left/top to the cursor position; during composition,
+ * Object.defineProperty blocks further writes to freeze the IME position.
+ */

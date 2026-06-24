@@ -95,7 +95,11 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
 export function writeToPty(id: string, data: string): void {
   const session = sessions.get(id)
   if (session) {
-    session.pty.write(data)
+    try {
+      session.pty.write(data)
+    } catch {
+      // PTY may have exited; ignore write errors (EPIPE)
+    }
   }
 }
 
