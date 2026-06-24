@@ -102,56 +102,65 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     term.loadAddon(webLinksAddon)
     term.open(containerRef.current)
 
-    // --- IME composition window tracking (xterm v5.5) ---
-    // xterm.js positions the textarea via inline left/top. CSS !important in
-    // global.css pins the layout at (0, 0) to prevent scroll-into-view, but
-    // leaves the inline values readable. We observe style changes and convert
-    // xterm.js's intended coordinates into a visual-only transform.
+    // --- IME composition window positioning (xterm v5.5) ---
+    // xterm.js's updateCompositionElements() repositions the textarea on every
+    // render cycle. Without !important CSS, inline left/top directly control the
+    // layout position — the IME reads this to place the candidate window.
     //
-    // During IME composition we must also prevent xterm.js from repositioning
-    // the textarea itself — the browser's IME reads inline left/top (not our
-    // transform) to decide where to render composition text. If xterm.js moves
-    // the textarea (e.g. onRender after terminal output), the pinyin jumps.
-    // We use disconnect/revert/reconnect to avoid infinite observer loops.
+    // During composition we block style changes on the textarea using
+    // Object.defineProperty (synchronous, no race condition). The textarea is
+    // already at the cursor position from _syncTextArea (which has an
+    // isComposing guard and won't reposition during composition).
+    //
+    // We do NOT block _compositionView — the IME only reads the textarea
+    // position, and the composition view needs to update to show composition text.
     const textarea = containerRef.current?.querySelector(
       'textarea.xterm-helper-textarea'
     ) as HTMLElement | null
 
-    let imeObserver: MutationObserver | null = null
     let isComposing = false
     let savedLeft = ''
     let savedTop = ''
-    let savedTransform = ''
+    let savedScrollIntoView: (() => void) | null = null
+
+    const blockTextareaStyles = () => {
+      if (!textarea) return
+      const s = textarea.style as any
+      savedLeft = s.left
+      savedTop = s.top
+      Object.defineProperty(s, 'left', {
+        set: () => {},
+        get: () => savedLeft,
+        configurable: true
+      })
+      Object.defineProperty(s, 'top', {
+        set: () => {},
+        get: () => savedTop,
+        configurable: true
+      })
+      savedScrollIntoView = textarea.scrollIntoView.bind(textarea)
+      textarea.scrollIntoView = () => {}
+    }
+
+    const unblockTextareaStyles = () => {
+      if (!textarea) return
+      const s = textarea.style as any
+      delete s.left
+      delete s.top
+      if (savedScrollIntoView) textarea.scrollIntoView = savedScrollIntoView
+    }
 
     const onCompositionStart = () => {
       isComposing = true
-      // Save current position — this is where the user is typing
-      savedLeft = textarea!.style.left
-      savedTop = textarea!.style.top
-      savedTransform = textarea!.style.transform
+      blockTextareaStyles()
     }
 
     const onCompositionEnd = () => {
       isComposing = false
+      unblockTextareaStyles()
     }
 
     if (textarea) {
-      imeObserver = new MutationObserver(() => {
-        if (isComposing) {
-          // Intercept xterm.js repositioning: disconnect, revert, reconnect
-          imeObserver!.disconnect()
-          textarea.style.left = savedLeft
-          textarea.style.top = savedTop
-          textarea.style.transform = savedTransform
-          imeObserver!.observe(textarea, { attributes: true, attributeFilter: ['style'] })
-          return
-        }
-        const x = parseFloat(textarea.style.left) || 0
-        const y = parseFloat(textarea.style.top) || 0
-        textarea.style.transform = `translate(${x}px, ${y}px)`
-      })
-      imeObserver.observe(textarea, { attributes: true, attributeFilter: ['style'] })
-
       textarea.addEventListener('compositionstart', onCompositionStart)
       textarea.addEventListener('compositionend', onCompositionEnd)
     }
@@ -224,7 +233,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     return () => {
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
       if (ptyReadyTimerRef.current) clearTimeout(ptyReadyTimerRef.current)
-      imeObserver?.disconnect()
+      if (isComposing) unblockTextareaStyles()
       textarea?.removeEventListener('compositionstart', onCompositionStart)
       textarea?.removeEventListener('compositionend', onCompositionEnd)
       window.terminalAPI.kill(session.id)
