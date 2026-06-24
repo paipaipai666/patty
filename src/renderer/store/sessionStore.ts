@@ -111,9 +111,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
 
       // Listen for PTY exit to cleanup attention state
+      // Don't remove the session — let the user close it manually.
+      // TerminalPane's onExit handler writes "[Process exited]" to the terminal.
       window.terminalAPI.onPtyExit((paneId) => {
         get().setAttention(paneId, null)
-        get().removeSession(paneId)
       })
     } catch (err) {
       console.error('Failed to load state:', err)
