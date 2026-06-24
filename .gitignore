@@ -18,6 +18,7 @@ Thumbs.db
 .omc/
 *.swp
 *.swo
+CLAUDE**.md
 
 # Logs
 *.log
