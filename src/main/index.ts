@@ -5,6 +5,7 @@ import { registerIpcHandlers } from './ipcHandlers'
 import { startHookServer, stopHookServer } from './ptyManager'
 import { ensureClaudeCodeHook, ensureOpenCodePlugin } from './hookInstaller'
 import { loadSettings } from './settingsHandler'
+import { perfMark, perfMeasure, perfMemoryMain, perfReport, perfDump, perfEnabled } from '../shared/perf'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -55,6 +56,9 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
+    perfMeasure('app:create-window-to-show', 'app:create-window-start')
+    perfMeasure('app:total-startup', 'app:ready-start')
+    perfMark('app:shown')
     mainWindow?.show()
   })
 
@@ -80,7 +84,11 @@ function createWindow(): void {
   }
 }
 
+perfMark('app:ready-start')
+
 app.whenReady().then(async () => {
+  perfMeasure('app:whenReady', 'app:ready-start')
+  perfMark('app:init-start')
   electronApp.setAppUserModelId('com.patty.app')
 
   app.on('browser-window-created', (_, window) => {
@@ -90,6 +98,7 @@ app.whenReady().then(async () => {
   registerIpcHandlers(() => mainWindow)
 
   // Start hook server for notifications
+  perfMark('app:hook-server-start')
   const hookPort = await startHookServer((paneId, event, source) => {
     // 检查对应工具是否启用
     const settings = loadSettings()
@@ -119,9 +128,11 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('pty:attn', paneId, attentionType, aiType)
     }
   })
+  perfMeasure('app:hook-server', 'app:hook-server-start')
   console.log(`Hook server listening on port ${hookPort}`)
 
   // 只在启用时安装配置
+  perfMark('app:hooks-install-start')
   const settings = loadSettings()
   if (settings.notifications.claudeCode) {
     await ensureClaudeCodeHook(hookPort)
@@ -129,8 +140,17 @@ app.whenReady().then(async () => {
   if (settings.notifications.openCode) {
     await ensureOpenCodePlugin()
   }
+  perfMeasure('app:hooks-install', 'app:hooks-install-start')
 
+  perfMark('app:create-window-start')
   createWindow()
+
+  // Periodic memory snapshot in perf mode
+  if (perfEnabled) {
+    perfMemoryMain('startup')
+    setInterval(() => perfMemoryMain('periodic'), 30_000)
+    setInterval(() => perfReport(), 60_000)
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -140,6 +160,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  perfDump()
   stopHookServer()
 })
 

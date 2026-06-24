@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron'
+import { ipcMain, BrowserWindow, dialog, app } from 'electron'
 import { execSync } from 'child_process'
 import { readFileSync, writeFileSync } from 'fs'
 import {
@@ -13,8 +13,10 @@ import { loadSettings, saveSettings } from './settingsHandler'
 import { loadState, saveState } from './stateHandler'
 import type { PersistedState } from '../shared/stateTypes'
 import type { CustomTheme } from '../shared/settingsTypes'
+import { perfTimerStart, perfTimerEnd, perfCounter, perfDump } from '../shared/perf'
 
 function getInstalledFonts(): string[] {
+  perfTimerStart('fonts:enumerate')
   const fonts = new Set<string>()
   const keys = [
     'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts',
@@ -35,7 +37,9 @@ function getInstalledFonts(): string[] {
       // registry key not found or access denied — skip
     }
   }
-  return [...fonts].sort()
+  const result = [...fonts].sort()
+  perfTimerEnd('fonts:enumerate')
+  return result
 }
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
@@ -81,16 +85,22 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle('pty:create', (event, id: string, cwd?: string, shell?: string, cols?: number, rows?: number) => {
     try {
       const term = createPty(id, cwd, shell, cols, rows)
-      const win = getWindow()
 
       // Forward PTY data to renderer
       term.onData((data) => {
-        win?.webContents.send(`pty:data:${id}`, data)
+        perfCounter('pty:data:ipc')
+        const win = getWindow()
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(`pty:data:${id}`, data)
+        }
       })
 
       // Forward PTY exit to renderer
       term.onExit(({ exitCode }) => {
-        win?.webContents.send(`pty:exit:${id}`, exitCode)
+        const win = getWindow()
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(`pty:exit:${id}`, exitCode)
+        }
       })
 
       return { pid: term.pid, success: true }
@@ -199,5 +209,24 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
 
   ipcMain.on('window:close', () => {
     getWindow()?.close()
+  })
+
+  // Perf dump (for benchmark script)
+  ipcMain.handle('perf:dump', () => {
+    perfDump()
+    return { success: true }
+  })
+
+  // Perf metrics (CPU/memory per process)
+  ipcMain.handle('perf:metrics', () => {
+    const metrics = app.getAppMetrics()
+    return metrics.map((m) => ({
+      pid: m.pid,
+      type: m.type,
+      cpuPercent: m.cpu?.percentCPUUsage ?? 0,
+      memoryKB: m.memory?.workingSetSize ?? 0,
+      peakMemoryKB: m.memory?.peakWorkingSetSize ?? 0,
+      idleWakeups: m.cpu?.idleWakeupsPerSecond ?? 0
+    }))
   })
 }

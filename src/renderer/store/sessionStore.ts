@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { PersistedState } from '../shared/stateTypes'
 
+const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
+
 export type SessionColor = 'blue' | 'green' | 'amber' | 'coral' | 'purple' | 'gray'
 export type ShellType = 'powershell' | 'pwsh' | 'cmd' | 'gitbash' | 'wsl'
 
@@ -75,6 +77,7 @@ function debouncedSave(getState: () => SessionStore) {
   saveTimer = setTimeout(() => {
     const state = getState()
     if (!state.loaded) return
+    const t0 = perfEnabled ? performance.now() : 0
     const persistedState: PersistedState = {
       sessions: state.sessions.map(({ pid, aiType, ...rest }) => rest),
       collections: state.collections,
@@ -82,7 +85,16 @@ function debouncedSave(getState: () => SessionStore) {
       sidebarVisible: state.sidebarVisible,
       sidebarWidth: state.sidebarWidth
     }
-    window.terminalAPI.stateSave(persistedState).catch(console.error)
+    if (perfEnabled) {
+      const serializeTime = performance.now() - t0
+      console.log(`[perf] state:serialize ${serializeTime.toFixed(2)}ms (${persistedState.sessions.length} sessions)`)
+    }
+    const saveStart = perfEnabled ? performance.now() : 0
+    window.terminalAPI.stateSave(persistedState).then(() => {
+      if (perfEnabled) {
+        console.log(`[perf] state:save-ipc ${(performance.now() - saveStart).toFixed(2)}ms`)
+      }
+    }).catch(console.error)
   }, 500)
 }
 

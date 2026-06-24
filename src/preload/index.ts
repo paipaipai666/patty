@@ -97,7 +97,15 @@ const terminalAPI = {
   // State persistence
   stateLoad: () => ipcRenderer.invoke('state:load') as Promise<PersistedState>,
   stateSave: (state: PersistedState) =>
-    ipcRenderer.invoke('state:save', state) as Promise<{ success: boolean }>
+    ipcRenderer.invoke('state:save', state) as Promise<{ success: boolean }>,
+
+  // Perf
+  perfEnabled: process.env.PATTY_PERF === '1',
+  perfDump: () => ipcRenderer.invoke('perf:dump') as Promise<{ success: boolean }>,
+  perfMetrics: () => ipcRenderer.invoke('perf:metrics') as Promise<Array<{
+    pid: number; type: string; cpuPercent: number;
+    memoryKB: number; peakMemoryKB: number; idleWakeups: number
+  }>>
 }
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI)

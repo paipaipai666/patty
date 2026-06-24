@@ -3,6 +3,7 @@ import * as fs from 'fs'
 import * as http from 'http'
 import { execSync } from 'child_process'
 import { BrowserWindow } from 'electron'
+import { perfTimerStart, perfTimerEnd, perfCounter } from '../shared/perf'
 
 export interface PtySession {
   pty: pty.IPty
@@ -21,14 +22,30 @@ const SHELL_PATHS: Record<string, string> = {
   wsl: 'C:\\Windows\\System32\\wsl.exe'
 }
 
+let pwshCache: string | null | undefined // undefined = not checked, null = not found
+
 function findPwsh(): string | null {
+  // Return cache if valid
+  if (pwshCache !== undefined) {
+    if (pwshCache === null) return null
+    if (fs.existsSync(pwshCache)) return pwshCache
+    // Cached path no longer exists — fall through to re-detect
+  }
+
+  perfTimerStart('shell:findPwsh')
   try {
     const result = execSync('where.exe pwsh', { encoding: 'utf-8', timeout: 5000 })
     const firstPath = result.split('\n')[0]?.trim()
-    if (firstPath && fs.existsSync(firstPath)) return firstPath
+    if (firstPath && fs.existsSync(firstPath)) {
+      pwshCache = firstPath
+      perfTimerEnd('shell:findPwsh')
+      return firstPath
+    }
   } catch {
     // where.exe failed — pwsh not in PATH
   }
+  pwshCache = null
+  perfTimerEnd('shell:findPwsh')
   return null
 }
 
@@ -56,6 +73,7 @@ export function getShellPath(shellName?: string): string {
 }
 
 export function createPty(id: string, cwd?: string, shell?: string, cols?: number, rows?: number): pty.IPty {
+  perfTimerStart('pty:create')
   const shellPath = getShellPath(shell)
   const workingDir = cwd || process.env.USERPROFILE || 'C:\\Users'
 
@@ -89,6 +107,7 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
   })
 
   sessions.set(id, { pty: term, id })
+  perfTimerEnd('pty:create')
   return term
 }
 

@@ -1,0 +1,740 @@
+{
+  "timestamp": "2026-06-24T13:39:56.364Z",
+  "machine": "win32 x64",
+  "summaries": [
+    {
+      "label": "idle-baseline (1 terminal)",
+      "samples": 10,
+      "total": {
+        "cpuAvg": 1.9729999999999996,
+        "cpuMax": 2.46,
+        "memAvg": 382.21000000000004,
+        "memMax": 382.5
+      },
+      "main": {
+        "cpuAvg": 0.11300000000000002,
+        "cpuMax": 0.33,
+        "memAvg": 106.41999999999999,
+        "memMax": 106.5
+      },
+      "renderer": {
+        "cpuAvg": 0.40499999999999997,
+        "cpuMax": 0.49,
+        "memAvg": 115.12,
+        "memMax": 115.2
+      },
+      "gpu": {
+        "cpuAvg": 1.4529999999999998,
+        "cpuMax": 1.68,
+        "memAvg": 112.72999999999998,
+        "memMax": 113.1
+      }
+    },
+    {
+      "label": "idle-30-terminals",
+      "samples": 10,
+      "total": {
+        "cpuAvg": 3.3560000000000003,
+        "cpuMax": 9.17,
+        "memAvg": 478.56000000000006,
+        "memMax": 481.4
+      },
+      "main": {
+        "cpuAvg": 1.211,
+        "cpuMax": 6.74,
+        "memAvg": 210.75000000000006,
+        "memMax": 212
+      },
+      "renderer": {
+        "cpuAvg": 0.5050000000000001,
+        "cpuMax": 0.75,
+        "memAvg": 114.41000000000001,
+        "memMax": 116.1
+      },
+      "gpu": {
+        "cpuAvg": 1.64,
+        "cpuMax": 1.88,
+        "memAvg": 105.5,
+        "memMax": 105.5
+      }
+    },
+    {
+      "label": "heavy-output-cmd-50k",
+      "samples": 33,
+      "total": {
+        "cpuAvg": 2.1075757575757574,
+        "cpuMax": 2.34,
+        "memAvg": 469.35454545454553,
+        "memMax": 469.7
+      },
+      "main": {
+        "cpuAvg": 0.06424242424242428,
+        "cpuMax": 0.21,
+        "memAvg": 207.73636363636365,
+        "memMax": 207.8
+      },
+      "renderer": {
+        "cpuAvg": 0.4448484848484849,
+        "cpuMax": 0.54,
+        "memAvg": 108.21515151515155,
+        "memMax": 108.5
+      },
+      "gpu": {
+        "cpuAvg": 1.5978787878787877,
+        "cpuMax": 1.72,
+        "memAvg": 105.5,
+        "memMax": 105.5
+      }
+    },
+    {
+      "label": "multi-terminal-output-5x10k",
+      "samples": 33,
+      "total": {
+        "cpuAvg": 2.205454545454546,
+        "cpuMax": 3.56,
+        "memAvg": 515.0878787878789,
+        "memMax": 517.4
+      },
+      "main": {
+        "cpuAvg": 0.0790909090909091,
+        "cpuMax": 0.62,
+        "memAvg": 237.53636363636355,
+        "memMax": 237.7
+      },
+      "renderer": {
+        "cpuAvg": 0.47212121212121194,
+        "cpuMax": 0.99,
+        "memAvg": 116.37575757575755,
+        "memMax": 116.7
+      },
+      "gpu": {
+        "cpuAvg": 1.6527272727272728,
+        "cpuMax": 1.95,
+        "memAvg": 113.3454545454545,
+        "memMax": 115.1
+      }
+    },
+    {
+      "label": "extreme-output-cmd-200k",
+      "samples": 49,
+      "total": {
+        "cpuAvg": 2.1391836734693874,
+        "cpuMax": 2.43,
+        "memAvg": 509.45918367346945,
+        "memMax": 510.1
+      },
+      "main": {
+        "cpuAvg": 0.08346938775510204,
+        "cpuMax": 0.26,
+        "memAvg": 236.7244897959184,
+        "memMax": 237.1
+      },
+      "renderer": {
+        "cpuAvg": 0.44959183673469366,
+        "cpuMax": 0.58,
+        "memAvg": 113.76734693877545,
+        "memMax": 114.2
+      },
+      "gpu": {
+        "cpuAvg": 1.606530612244898,
+        "cpuMax": 1.68,
+        "memAvg": 111.19999999999992,
+        "memMax": 111.2
+      }
+    },
+    {
+      "label": "rapid-tab-switch-50x",
+      "samples": 5,
+      "total": {
+        "cpuAvg": 11.886,
+        "cpuMax": 16.74,
+        "memAvg": 540.98,
+        "memMax": 553.1
+      },
+      "main": {
+        "cpuAvg": 2.7019999999999995,
+        "cpuMax": 5.18,
+        "memAvg": 255.92,
+        "memMax": 262
+      },
+      "renderer": {
+        "cpuAvg": 4.9959999999999996,
+        "cpuMax": 8.02,
+        "memAvg": 118.86000000000001,
+        "memMax": 121.7
+      },
+      "gpu": {
+        "cpuAvg": 4.186,
+        "cpuMax": 6.1,
+        "memAvg": 118.4,
+        "memMax": 121.6
+      }
+    },
+    {
+      "label": "post-load-idle",
+      "samples": 10,
+      "total": {
+        "cpuAvg": 2.6819999999999995,
+        "cpuMax": 6.87,
+        "memAvg": 547.0899999999999,
+        "memMax": 553
+      },
+      "main": {
+        "cpuAvg": 0.199,
+        "cpuMax": 0.83,
+        "memAvg": 259.06000000000006,
+        "memMax": 261.1
+      },
+      "renderer": {
+        "cpuAvg": 0.689,
+        "cpuMax": 2.81,
+        "memAvg": 120.73999999999998,
+        "memMax": 122.5
+      },
+      "gpu": {
+        "cpuAvg": 1.795,
+        "cpuMax": 3.23,
+        "memAvg": 119.50999999999999,
+        "memMax": 121.7
+      }
+    },
+    {
+      "label": "sustained-output-5x50k-30s",
+      "samples": 30,
+      "total": {
+        "cpuAvg": 2.163,
+        "cpuMax": 2.83,
+        "memAvg": 546.7133333333334,
+        "memMax": 555.5
+      },
+      "main": {
+        "cpuAvg": 0.09133333333333332,
+        "cpuMax": 0.81,
+        "memAvg": 254.65333333333325,
+        "memMax": 259.1
+      },
+      "renderer": {
+        "cpuAvg": 0.45733333333333326,
+        "cpuMax": 0.79,
+        "memAvg": 124.2766666666666,
+        "memMax": 125.7
+      },
+      "gpu": {
+        "cpuAvg": 1.615,
+        "cpuMax": 1.72,
+        "memAvg": 119.92666666666665,
+        "memMax": 122.9
+      }
+    },
+    {
+      "label": "idle-50-terminals",
+      "samples": 10,
+      "total": {
+        "cpuAvg": 2.446,
+        "cpuMax": 4.7,
+        "memAvg": 589.7299999999999,
+        "memMax": 590.5
+      },
+      "main": {
+        "cpuAvg": 0.374,
+        "cpuMax": 2.49,
+        "memAvg": 298.54999999999995,
+        "memMax": 299.3
+      },
+      "renderer": {
+        "cpuAvg": 0.449,
+        "cpuMax": 0.49,
+        "memAvg": 124.1,
+        "memMax": 124.1
+      },
+      "gpu": {
+        "cpuAvg": 1.6260000000000001,
+        "cpuMax": 1.72,
+        "memAvg": 119.29999999999998,
+        "memMax": 119.3
+      }
+    },
+    {
+      "label": "contribution-grid-10-ai",
+      "samples": 10,
+      "total": {
+        "cpuAvg": 2.15,
+        "cpuMax": 2.26,
+        "memAvg": 589.6600000000001,
+        "memMax": 590
+      },
+      "main": {
+        "cpuAvg": 0.08499999999999999,
+        "cpuMax": 0.1,
+        "memAvg": 298.19999999999993,
+        "memMax": 298.2
+      },
+      "renderer": {
+        "cpuAvg": 0.4530000000000001,
+        "cpuMax": 0.54,
+        "memAvg": 124.35999999999999,
+        "memMax": 124.7
+      },
+      "gpu": {
+        "cpuAvg": 1.611,
+        "cpuMax": 1.64,
+        "memAvg": 119.29999999999998,
+        "memMax": 119.3
+      }
+    },
+    {
+      "label": "pty-crash-recovery-5x",
+      "samples": 5,
+      "total": {
+        "cpuAvg": 2.206,
+        "cpuMax": 2.25,
+        "memAvg": 589.64,
+        "memMax": 589.8
+      },
+      "main": {
+        "cpuAvg": 0.126,
+        "cpuMax": 0.13,
+        "memAvg": 298.2,
+        "memMax": 298.2
+      },
+      "renderer": {
+        "cpuAvg": 0.472,
+        "cpuMax": 0.48,
+        "memAvg": 124.33999999999999,
+        "memMax": 124.5
+      },
+      "gpu": {
+        "cpuAvg": 1.6079999999999999,
+        "cpuMax": 1.64,
+        "memAvg": 119.3,
+        "memMax": 119.3
+      }
+    },
+    {
+      "label": "long-idle-leak-2min",
+      "samples": 24,
+      "total": {
+        "cpuAvg": 2.2033333333333327,
+        "cpuMax": 3.79,
+        "memAvg": 588.6999999999998,
+        "memMax": 589.6
+      },
+      "main": {
+        "cpuAvg": 0.1937499999999999,
+        "cpuMax": 2.74,
+        "memAvg": 297.30833333333334,
+        "memMax": 298.2
+      },
+      "renderer": {
+        "cpuAvg": 0.46625,
+        "cpuMax": 1.06,
+        "memAvg": 124.31250000000001,
+        "memMax": 124.5
+      },
+      "gpu": {
+        "cpuAvg": 1.5420833333333333,
+        "cpuMax": 1.62,
+        "memAvg": 119.30000000000003,
+        "memMax": 119.3
+      }
+    },
+    {
+      "label": "startup-recovery-50-sessions",
+      "samples": 1,
+      "total": {
+        "cpuAvg": 0,
+        "cpuMax": 0,
+        "memAvg": 376.8,
+        "memMax": 376.8
+      },
+      "main": {
+        "cpuAvg": 0,
+        "cpuMax": 0,
+        "memAvg": 102.6,
+        "memMax": 102.6
+      },
+      "renderer": {
+        "cpuAvg": 0,
+        "cpuMax": 0,
+        "memAvg": 114.2,
+        "memMax": 114.2
+      },
+      "gpu": {
+        "cpuAvg": 0,
+        "cpuMax": 0,
+        "memAvg": 112.2,
+        "memMax": 112.2
+      }
+    }
+  ],
+  "memoryGrowthCurve": [
+    {
+      "terminals": 1,
+      "totalMB": 380.6,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 0.02,
+          "memoryMB": 106.5,
+          "peakMemoryMB": 106.5
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.68,
+          "memoryMB": 110.9,
+          "peakMemoryMB": 113.9
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.9,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.49,
+          "memoryMB": 115.2,
+          "peakMemoryMB": 115.2
+        }
+      ]
+    },
+    {
+      "terminals": 5,
+      "totalMB": 418.8,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 5.47,
+          "memoryMB": 147.7,
+          "peakMemoryMB": 147.7
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.87,
+          "memoryMB": 107.7,
+          "peakMemoryMB": 113.9
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.9,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.54,
+          "memoryMB": 115.5,
+          "peakMemoryMB": 115.5
+        }
+      ]
+    },
+    {
+      "terminals": 10,
+      "totalMB": 426.6,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 7.17,
+          "memoryMB": 157.7,
+          "peakMemoryMB": 158.3
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.95,
+          "memoryMB": 105.4,
+          "peakMemoryMB": 113.9
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.9,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.58,
+          "memoryMB": 115.6,
+          "peakMemoryMB": 115.6
+        }
+      ]
+    },
+    {
+      "terminals": 15,
+      "totalMB": 437.8,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 7.65,
+          "memoryMB": 168.8,
+          "peakMemoryMB": 169
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.97,
+          "memoryMB": 105.4,
+          "peakMemoryMB": 113.9
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.9,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.59,
+          "memoryMB": 115.6,
+          "peakMemoryMB": 115.6
+        }
+      ]
+    },
+    {
+      "terminals": 20,
+      "totalMB": 449.2,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 7.35,
+          "memoryMB": 180,
+          "peakMemoryMB": 180.2
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.9,
+          "memoryMB": 105.5,
+          "peakMemoryMB": 113.9
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.9,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.56,
+          "memoryMB": 115.7,
+          "peakMemoryMB": 115.7
+        }
+      ]
+    },
+    {
+      "terminals": 25,
+      "totalMB": 467.7,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 6.92,
+          "memoryMB": 198.4,
+          "peakMemoryMB": 198.6
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.9,
+          "memoryMB": 105.5,
+          "peakMemoryMB": 113.9
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.9,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.55,
+          "memoryMB": 115.8,
+          "peakMemoryMB": 115.8
+        }
+      ]
+    },
+    {
+      "terminals": 30,
+      "totalMB": 476.5,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 6.47,
+          "memoryMB": 207.2,
+          "peakMemoryMB": 207.4
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.88,
+          "memoryMB": 105.5,
+          "peakMemoryMB": 113.9
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.9,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.56,
+          "memoryMB": 115.9,
+          "peakMemoryMB": 115.9
+        }
+      ]
+    },
+    {
+      "terminals": 40,
+      "totalMB": 553,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 4.96,
+          "memoryMB": 261.7,
+          "peakMemoryMB": 263.2
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.81,
+          "memoryMB": 119.2,
+          "peakMemoryMB": 124.1
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.8,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.53,
+          "memoryMB": 124.4,
+          "peakMemoryMB": 126.4
+        }
+      ]
+    },
+    {
+      "terminals": 50,
+      "totalMB": 589.7,
+      "processes": [
+        {
+          "pid": 31840,
+          "type": "Browser",
+          "cpuPercent": 6.45,
+          "memoryMB": 298.5,
+          "peakMemoryMB": 298.6
+        },
+        {
+          "pid": 33716,
+          "type": "GPU",
+          "cpuPercent": 1.9,
+          "memoryMB": 119.3,
+          "peakMemoryMB": 124.1
+        },
+        {
+          "pid": 34040,
+          "type": "Utility",
+          "cpuPercent": 0,
+          "memoryMB": 47.7,
+          "peakMemoryMB": 47.9
+        },
+        {
+          "pid": 11424,
+          "type": "Tab",
+          "cpuPercent": 0.53,
+          "memoryMB": 124.1,
+          "peakMemoryMB": 126.4
+        }
+      ]
+    }
+  ],
+  "finalProcessBreakdown": {
+    "timestamp": 1782308396361,
+    "processes": [
+      {
+        "pid": 6140,
+        "type": "Browser",
+        "cpuPercent": 0.18,
+        "memoryMB": 102.7,
+        "peakMemoryMB": 102.7
+      },
+      {
+        "pid": 22272,
+        "type": "GPU",
+        "cpuPercent": 1.71,
+        "memoryMB": 112.2,
+        "peakMemoryMB": 113.3
+      },
+      {
+        "pid": 34396,
+        "type": "Utility",
+        "cpuPercent": 0,
+        "memoryMB": 47.7,
+        "peakMemoryMB": 47.7
+      },
+      {
+        "pid": 16340,
+        "type": "Tab",
+        "cpuPercent": 0.55,
+        "memoryMB": 114.3,
+        "peakMemoryMB": 114.5
+      }
+    ],
+    "totals": {
+      "cpuPercent": 2.44,
+      "memoryMB": 376.9,
+      "gpuPercent": 1.709354007660308
+    }
+  },
+  "rendererHeap": {
+    "used": 15.4,
+    "total": 24.8
+  },
+  "speedMetrics": {
+    "app:whenReady": 51,
+    "app:hook-server": 10,
+    "app:hooks-install": 3,
+    "app:create-window-to-show": 304,
+    "app:total-startup": 373,
+    "shell:findPwsh": 130,
+    "pty:create": 207,
+    "counter:pty:data:ipc": 4
+  },
+  "rawPerfLogs": [
+    "[perf] app:whenReady: 51.00ms",
+    "[perf] app:hook-server: 10.00ms",
+    "[perf] app:hooks-install: 3.00ms",
+    "[perf] memory[startup] rss=84.6MB heap=4.4/9.0MB external=2.5MB",
+    "[perf] app:create-window-to-show: 304.00ms",
+    "[perf] app:total-startup: 373.00ms",
+    "[perf] shell:findPwsh: 130.00ms",
+    "[perf] pty:create: 207.00ms"
+  ]
+}

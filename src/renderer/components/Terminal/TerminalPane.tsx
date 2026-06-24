@@ -15,6 +15,8 @@ interface TerminalPaneProps {
   isActive: boolean
 }
 
+const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
+
 export function TerminalPane({ session, isActive }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
@@ -27,8 +29,16 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
   const ptyReadyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
+  const renderCountRef = useRef(0)
   const updatePid = useSessionStore((s) => s.updatePid)
   const settings = useSettingsStore((s) => s.settings)
+
+  if (perfEnabled) {
+    renderCountRef.current++
+    if (renderCountRef.current % 10 === 1) {
+      console.log(`[perf] TerminalPane[${session.id.slice(0, 8)}] renders: ${renderCountRef.current}`)
+    }
+  }
 
   const fitTerminal = useCallback(
     (skipResize = false) => {
