@@ -101,10 +101,6 @@ input {
  * xterm.js sets inline left/top to the cursor position; during composition,
  * Object.defineProperty blocks further writes to freeze the IME position.
  */
-.xterm .xterm-helper-textarea {
-  left: 0 !important;
-  top: 0 !important;
-}
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
