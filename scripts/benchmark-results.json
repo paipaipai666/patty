@@ -1,341 +1,341 @@
 {
-  "timestamp": "2026-06-24T13:39:56.364Z",
+  "timestamp": "2026-06-24T14:24:53.676Z",
   "machine": "win32 x64",
   "summaries": [
     {
       "label": "idle-baseline (1 terminal)",
       "samples": 10,
       "total": {
-        "cpuAvg": 1.9729999999999996,
-        "cpuMax": 2.46,
-        "memAvg": 382.21000000000004,
-        "memMax": 382.5
+        "cpuAvg": 2.7210000000000005,
+        "cpuMax": 4.57,
+        "memAvg": 470.28999999999996,
+        "memMax": 471.2
       },
       "main": {
-        "cpuAvg": 0.11300000000000002,
-        "cpuMax": 0.33,
-        "memAvg": 106.41999999999999,
-        "memMax": 106.5
+        "cpuAvg": 0.07300000000000001,
+        "cpuMax": 0.71,
+        "memAvg": 166.10999999999996,
+        "memMax": 166.3
       },
       "renderer": {
-        "cpuAvg": 0.40499999999999997,
-        "cpuMax": 0.49,
-        "memAvg": 115.12,
-        "memMax": 115.2
+        "cpuAvg": 0.7590000000000001,
+        "cpuMax": 2.89,
+        "memAvg": 133.21999999999997,
+        "memMax": 133.5
       },
       "gpu": {
-        "cpuAvg": 1.4529999999999998,
-        "cpuMax": 1.68,
-        "memAvg": 112.72999999999998,
-        "memMax": 113.1
+        "cpuAvg": 1.8729999999999998,
+        "cpuMax": 2.54,
+        "memAvg": 123.15,
+        "memMax": 123.7
       }
     },
     {
       "label": "idle-30-terminals",
       "samples": 10,
       "total": {
-        "cpuAvg": 3.3560000000000003,
-        "cpuMax": 9.17,
-        "memAvg": 478.56000000000006,
-        "memMax": 481.4
+        "cpuAvg": 5.796,
+        "cpuMax": 11.79,
+        "memAvg": 569.19,
+        "memMax": 571.3
       },
       "main": {
-        "cpuAvg": 1.211,
-        "cpuMax": 6.74,
-        "memAvg": 210.75000000000006,
-        "memMax": 212
+        "cpuAvg": 3.5390000000000006,
+        "cpuMax": 9.22,
+        "memAvg": 272.43,
+        "memMax": 274.5
       },
       "renderer": {
-        "cpuAvg": 0.5050000000000001,
-        "cpuMax": 0.75,
-        "memAvg": 114.41000000000001,
-        "memMax": 116.1
+        "cpuAvg": 0.501,
+        "cpuMax": 0.61,
+        "memAvg": 134.47999999999996,
+        "memMax": 134.6
       },
       "gpu": {
-        "cpuAvg": 1.64,
-        "cpuMax": 1.88,
-        "memAvg": 105.5,
-        "memMax": 105.5
+        "cpuAvg": 1.759,
+        "cpuMax": 1.97,
+        "memAvg": 114.4,
+        "memMax": 114.4
       }
     },
     {
       "label": "heavy-output-cmd-50k",
       "samples": 33,
       "total": {
-        "cpuAvg": 2.1075757575757574,
-        "cpuMax": 2.34,
-        "memAvg": 469.35454545454553,
-        "memMax": 469.7
+        "cpuAvg": 2.2224242424242426,
+        "cpuMax": 2.87,
+        "memAvg": 552.4545454545454,
+        "memMax": 571
       },
       "main": {
-        "cpuAvg": 0.06424242424242428,
-        "cpuMax": 0.21,
-        "memAvg": 207.73636363636365,
-        "memMax": 207.8
+        "cpuAvg": 0.1215151515151515,
+        "cpuMax": 0.67,
+        "memAvg": 262.64848484848477,
+        "memMax": 273.5
       },
       "renderer": {
-        "cpuAvg": 0.4448484848484849,
-        "cpuMax": 0.54,
-        "memAvg": 108.21515151515155,
-        "memMax": 108.5
+        "cpuAvg": 0.48969696969696946,
+        "cpuMax": 1.04,
+        "memAvg": 127.530303030303,
+        "memMax": 135.1
       },
       "gpu": {
-        "cpuAvg": 1.5978787878787877,
-        "cpuMax": 1.72,
-        "memAvg": 105.5,
-        "memMax": 105.5
+        "cpuAvg": 1.6109090909090908,
+        "cpuMax": 1.75,
+        "memAvg": 114.46969696969697,
+        "memMax": 114.5
       }
     },
     {
       "label": "multi-terminal-output-5x10k",
       "samples": 33,
       "total": {
-        "cpuAvg": 2.205454545454546,
-        "cpuMax": 3.56,
-        "memAvg": 515.0878787878789,
-        "memMax": 517.4
+        "cpuAvg": 2.1499999999999995,
+        "cpuMax": 2.97,
+        "memAvg": 555.1969696969696,
+        "memMax": 557.5
       },
       "main": {
-        "cpuAvg": 0.0790909090909091,
-        "cpuMax": 0.62,
-        "memAvg": 237.53636363636355,
-        "memMax": 237.7
+        "cpuAvg": 0.04636363636363639,
+        "cpuMax": 0.31,
+        "memAvg": 254.92727272727268,
+        "memMax": 255
       },
       "renderer": {
-        "cpuAvg": 0.47212121212121194,
-        "cpuMax": 0.99,
-        "memAvg": 116.37575757575755,
-        "memMax": 116.7
+        "cpuAvg": 0.47121212121212114,
+        "cpuMax": 0.87,
+        "memAvg": 129.21212121212113,
+        "memMax": 129.3
       },
       "gpu": {
-        "cpuAvg": 1.6527272727272728,
-        "cpuMax": 1.95,
-        "memAvg": 113.3454545454545,
-        "memMax": 115.1
+        "cpuAvg": 1.6327272727272724,
+        "cpuMax": 1.79,
+        "memAvg": 123.22424242424242,
+        "memMax": 125.5
       }
     },
     {
       "label": "extreme-output-cmd-200k",
       "samples": 49,
       "total": {
-        "cpuAvg": 2.1391836734693874,
-        "cpuMax": 2.43,
-        "memAvg": 509.45918367346945,
-        "memMax": 510.1
+        "cpuAvg": 2.11469387755102,
+        "cpuMax": 2.36,
+        "memAvg": 549.8081632653059,
+        "memMax": 553.2
       },
       "main": {
-        "cpuAvg": 0.08346938775510204,
-        "cpuMax": 0.26,
-        "memAvg": 236.7244897959184,
-        "memMax": 237.1
+        "cpuAvg": 0.049183673469387776,
+        "cpuMax": 0.2,
+        "memAvg": 254.17755102040795,
+        "memMax": 255.1
       },
       "renderer": {
-        "cpuAvg": 0.44959183673469366,
+        "cpuAvg": 0.45877551020408147,
         "cpuMax": 0.58,
-        "memAvg": 113.76734693877545,
-        "memMax": 114.2
+        "memAvg": 127.25102040816328,
+        "memMax": 129.3
       },
       "gpu": {
-        "cpuAvg": 1.606530612244898,
-        "cpuMax": 1.68,
-        "memAvg": 111.19999999999992,
-        "memMax": 111.2
+        "cpuAvg": 1.605918367346939,
+        "cpuMax": 1.79,
+        "memAvg": 120.65918367346937,
+        "memMax": 121.1
       }
     },
     {
       "label": "rapid-tab-switch-50x",
       "samples": 5,
       "total": {
-        "cpuAvg": 11.886,
-        "cpuMax": 16.74,
-        "memAvg": 540.98,
-        "memMax": 553.1
+        "cpuAvg": 11.873999999999999,
+        "cpuMax": 15.35,
+        "memAvg": 562.8,
+        "memMax": 571.3
       },
       "main": {
-        "cpuAvg": 2.7019999999999995,
-        "cpuMax": 5.18,
-        "memAvg": 255.92,
-        "memMax": 262
+        "cpuAvg": 1.89,
+        "cpuMax": 2.46,
+        "memAvg": 254.64000000000001,
+        "memMax": 255.3
       },
       "renderer": {
-        "cpuAvg": 4.9959999999999996,
-        "cpuMax": 8.02,
-        "memAvg": 118.86000000000001,
-        "memMax": 121.7
+        "cpuAvg": 5.482,
+        "cpuMax": 7,
+        "memAvg": 130.66,
+        "memMax": 135.3
       },
       "gpu": {
-        "cpuAvg": 4.186,
-        "cpuMax": 6.1,
-        "memAvg": 118.4,
-        "memMax": 121.6
+        "cpuAvg": 4.502000000000001,
+        "cpuMax": 5.88,
+        "memAvg": 129.78,
+        "memMax": 133
       }
     },
     {
       "label": "post-load-idle",
       "samples": 10,
       "total": {
-        "cpuAvg": 2.6819999999999995,
-        "cpuMax": 6.87,
-        "memAvg": 547.0899999999999,
-        "memMax": 553
+        "cpuAvg": 2.4349999999999996,
+        "cpuMax": 5.42,
+        "memAvg": 565.9,
+        "memMax": 571.5
       },
       "main": {
-        "cpuAvg": 0.199,
-        "cpuMax": 0.83,
-        "memAvg": 259.06000000000006,
-        "memMax": 261.1
+        "cpuAvg": 0.08700000000000004,
+        "cpuMax": 0.5,
+        "memAvg": 255.22999999999996,
+        "memMax": 255.4
       },
       "renderer": {
-        "cpuAvg": 0.689,
-        "cpuMax": 2.81,
-        "memAvg": 120.73999999999998,
-        "memMax": 122.5
+        "cpuAvg": 0.6530000000000001,
+        "cpuMax": 2.45,
+        "memAvg": 132.61,
+        "memMax": 135.1
       },
       "gpu": {
-        "cpuAvg": 1.795,
-        "cpuMax": 3.23,
-        "memAvg": 119.50999999999999,
-        "memMax": 121.7
+        "cpuAvg": 1.693,
+        "cpuMax": 2.47,
+        "memAvg": 130.29999999999998,
+        "memMax": 133.3
       }
     },
     {
       "label": "sustained-output-5x50k-30s",
       "samples": 30,
       "total": {
-        "cpuAvg": 2.163,
-        "cpuMax": 2.83,
-        "memAvg": 546.7133333333334,
-        "memMax": 555.5
+        "cpuAvg": 2.121,
+        "cpuMax": 2.96,
+        "memAvg": 562.8600000000002,
+        "memMax": 566.8
       },
       "main": {
-        "cpuAvg": 0.09133333333333332,
-        "cpuMax": 0.81,
-        "memAvg": 254.65333333333325,
-        "memMax": 259.1
+        "cpuAvg": 0.03666666666666669,
+        "cpuMax": 0.47,
+        "memAvg": 255.42999999999986,
+        "memMax": 255.6
       },
       "renderer": {
-        "cpuAvg": 0.45733333333333326,
-        "cpuMax": 0.79,
-        "memAvg": 124.2766666666666,
-        "memMax": 125.7
+        "cpuAvg": 0.467,
+        "cpuMax": 0.78,
+        "memAvg": 132.3866666666667,
+        "memMax": 132.9
       },
       "gpu": {
-        "cpuAvg": 1.615,
-        "cpuMax": 1.72,
-        "memAvg": 119.92666666666665,
-        "memMax": 122.9
+        "cpuAvg": 1.6176666666666673,
+        "cpuMax": 1.73,
+        "memAvg": 127.34999999999994,
+        "memMax": 130.8
       }
     },
     {
       "label": "idle-50-terminals",
-      "samples": 10,
+      "samples": 6,
       "total": {
-        "cpuAvg": 2.446,
-        "cpuMax": 4.7,
-        "memAvg": 589.7299999999999,
-        "memMax": 590.5
+        "cpuAvg": 9.780000000000001,
+        "cpuMax": 11,
+        "memAvg": 595.7833333333333,
+        "memMax": 605.9
       },
       "main": {
-        "cpuAvg": 0.374,
-        "cpuMax": 2.49,
-        "memAvg": 298.54999999999995,
-        "memMax": 299.3
+        "cpuAvg": 7.32,
+        "cpuMax": 8.47,
+        "memAvg": 288.8333333333333,
+        "memMax": 299
       },
       "renderer": {
-        "cpuAvg": 0.449,
-        "cpuMax": 0.49,
-        "memAvg": 124.1,
-        "memMax": 124.1
+        "cpuAvg": 0.54,
+        "cpuMax": 0.55,
+        "memAvg": 132.36666666666667,
+        "memMax": 132.5
       },
       "gpu": {
-        "cpuAvg": 1.6260000000000001,
-        "cpuMax": 1.72,
-        "memAvg": 119.29999999999998,
-        "memMax": 119.3
+        "cpuAvg": 1.9166666666666667,
+        "cpuMax": 1.98,
+        "memAvg": 126.81666666666666,
+        "memMax": 126.9
       }
     },
     {
       "label": "contribution-grid-10-ai",
       "samples": 10,
       "total": {
-        "cpuAvg": 2.15,
-        "cpuMax": 2.26,
-        "memAvg": 589.6600000000001,
-        "memMax": 590
+        "cpuAvg": 2.6369999999999996,
+        "cpuMax": 6.99,
+        "memAvg": 605.99,
+        "memMax": 606.8
       },
       "main": {
-        "cpuAvg": 0.08499999999999999,
-        "cpuMax": 0.1,
-        "memAvg": 298.19999999999993,
-        "memMax": 298.2
+        "cpuAvg": 0.5419999999999997,
+        "cpuMax": 4.72,
+        "memAvg": 299.1,
+        "memMax": 299.8
       },
       "renderer": {
-        "cpuAvg": 0.4530000000000001,
-        "cpuMax": 0.54,
-        "memAvg": 124.35999999999999,
-        "memMax": 124.7
+        "cpuAvg": 0.465,
+        "cpuMax": 0.51,
+        "memAvg": 132.41000000000003,
+        "memMax": 132.5
       },
       "gpu": {
-        "cpuAvg": 1.611,
-        "cpuMax": 1.64,
-        "memAvg": 119.29999999999998,
-        "memMax": 119.3
+        "cpuAvg": 1.6300000000000001,
+        "cpuMax": 1.76,
+        "memAvg": 126.80999999999999,
+        "memMax": 126.9
       }
     },
     {
       "label": "pty-crash-recovery-5x",
       "samples": 5,
       "total": {
-        "cpuAvg": 2.206,
-        "cpuMax": 2.25,
-        "memAvg": 589.64,
-        "memMax": 589.8
+        "cpuAvg": 2.194,
+        "cpuMax": 2.23,
+        "memAvg": 605.78,
+        "memMax": 605.9
       },
       "main": {
-        "cpuAvg": 0.126,
-        "cpuMax": 0.13,
-        "memAvg": 298.2,
-        "memMax": 298.2
+        "cpuAvg": 0.096,
+        "cpuMax": 0.1,
+        "memAvg": 298.84000000000003,
+        "memMax": 298.9
       },
       "renderer": {
-        "cpuAvg": 0.472,
-        "cpuMax": 0.48,
-        "memAvg": 124.33999999999999,
-        "memMax": 124.5
+        "cpuAvg": 0.4779999999999999,
+        "cpuMax": 0.49,
+        "memAvg": 132.45999999999998,
+        "memMax": 132.5
       },
       "gpu": {
-        "cpuAvg": 1.6079999999999999,
-        "cpuMax": 1.64,
-        "memAvg": 119.3,
-        "memMax": 119.3
+        "cpuAvg": 1.6179999999999999,
+        "cpuMax": 1.63,
+        "memAvg": 126.8,
+        "memMax": 126.8
       }
     },
     {
       "label": "long-idle-leak-2min",
       "samples": 24,
       "total": {
-        "cpuAvg": 2.2033333333333327,
-        "cpuMax": 3.79,
-        "memAvg": 588.6999999999998,
-        "memMax": 589.6
+        "cpuAvg": 2.7379166666666666,
+        "cpuMax": 10.97,
+        "memAvg": 608.2875,
+        "memMax": 627.6
       },
       "main": {
-        "cpuAvg": 0.1937499999999999,
-        "cpuMax": 2.74,
-        "memAvg": 297.30833333333334,
-        "memMax": 298.2
+        "cpuAvg": 0.5724999999999999,
+        "cpuMax": 8.29,
+        "memAvg": 300.9874999999999,
+        "memMax": 319.9
       },
       "renderer": {
-        "cpuAvg": 0.46625,
-        "cpuMax": 1.06,
-        "memAvg": 124.31250000000001,
-        "memMax": 124.5
+        "cpuAvg": 0.5341666666666668,
+        "cpuMax": 2.08,
+        "memAvg": 132.7541666666667,
+        "memMax": 133
       },
       "gpu": {
-        "cpuAvg": 1.5420833333333333,
-        "cpuMax": 1.62,
-        "memAvg": 119.30000000000003,
-        "memMax": 119.3
+        "cpuAvg": 1.6325,
+        "cpuMax": 2.1,
+        "memAvg": 126.87083333333335,
+        "memMax": 127
       }
     },
     {
@@ -344,397 +344,405 @@
       "total": {
         "cpuAvg": 0,
         "cpuMax": 0,
-        "memAvg": 376.8,
-        "memMax": 376.8
+        "memAvg": 467.4,
+        "memMax": 467.4
       },
       "main": {
         "cpuAvg": 0,
         "cpuMax": 0,
-        "memAvg": 102.6,
-        "memMax": 102.6
+        "memAvg": 164,
+        "memMax": 164
       },
       "renderer": {
         "cpuAvg": 0,
         "cpuMax": 0,
-        "memAvg": 114.2,
-        "memMax": 114.2
+        "memAvg": 129.1,
+        "memMax": 129.1
       },
       "gpu": {
         "cpuAvg": 0,
         "cpuMax": 0,
-        "memAvg": 112.2,
-        "memMax": 112.2
+        "memAvg": 126.4,
+        "memMax": 126.4
       }
     }
   ],
   "memoryGrowthCurve": [
     {
       "terminals": 1,
-      "totalMB": 380.6,
+      "totalMB": 470.3,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 0.02,
-          "memoryMB": 106.5,
-          "peakMemoryMB": 106.5
+          "cpuPercent": 0.01,
+          "memoryMB": 166.1,
+          "peakMemoryMB": 166.3
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.68,
-          "memoryMB": 110.9,
-          "peakMemoryMB": 113.9
+          "cpuPercent": 1.65,
+          "memoryMB": 122.8,
+          "peakMemoryMB": 123.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
-          "memoryMB": 47.9,
-          "peakMemoryMB": 47.9
+          "memoryMB": 47.8,
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
           "cpuPercent": 0.49,
-          "memoryMB": 115.2,
-          "peakMemoryMB": 115.2
+          "memoryMB": 133.5,
+          "peakMemoryMB": 134.3
         }
       ]
     },
     {
       "terminals": 5,
-      "totalMB": 418.8,
+      "totalMB": 510.8,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 5.47,
-          "memoryMB": 147.7,
-          "peakMemoryMB": 147.7
+          "cpuPercent": 5.41,
+          "memoryMB": 210.3,
+          "peakMemoryMB": 210.3
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.87,
-          "memoryMB": 107.7,
-          "peakMemoryMB": 113.9
+          "cpuPercent": 1.84,
+          "memoryMB": 118.7,
+          "peakMemoryMB": 123.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
-          "memoryMB": 47.9,
-          "peakMemoryMB": 47.9
+          "memoryMB": 47.8,
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
-          "cpuPercent": 0.54,
-          "memoryMB": 115.5,
-          "peakMemoryMB": 115.5
+          "cpuPercent": 0.55,
+          "memoryMB": 133.9,
+          "peakMemoryMB": 134.3
         }
       ]
     },
     {
       "terminals": 10,
-      "totalMB": 426.6,
+      "totalMB": 520.3,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 7.17,
-          "memoryMB": 157.7,
-          "peakMemoryMB": 158.3
+          "cpuPercent": 6.7,
+          "memoryMB": 223.7,
+          "peakMemoryMB": 223.7
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.95,
-          "memoryMB": 105.4,
-          "peakMemoryMB": 113.9
+          "cpuPercent": 1.94,
+          "memoryMB": 114.7,
+          "peakMemoryMB": 123.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
-          "memoryMB": 47.9,
-          "peakMemoryMB": 47.9
+          "memoryMB": 47.8,
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
           "cpuPercent": 0.58,
-          "memoryMB": 115.6,
-          "peakMemoryMB": 115.6
+          "memoryMB": 134.1,
+          "peakMemoryMB": 134.3
         }
       ]
     },
     {
       "terminals": 15,
-      "totalMB": 437.8,
+      "totalMB": 532.7,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 7.65,
-          "memoryMB": 168.8,
-          "peakMemoryMB": 169
+          "cpuPercent": 8.14,
+          "memoryMB": 236,
+          "peakMemoryMB": 236.2
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.97,
-          "memoryMB": 105.4,
-          "peakMemoryMB": 113.9
+          "cpuPercent": 1.98,
+          "memoryMB": 114.7,
+          "peakMemoryMB": 123.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
-          "memoryMB": 47.9,
-          "peakMemoryMB": 47.9
+          "memoryMB": 47.8,
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
           "cpuPercent": 0.59,
-          "memoryMB": 115.6,
-          "peakMemoryMB": 115.6
+          "memoryMB": 134.1,
+          "peakMemoryMB": 134.3
         }
       ]
     },
     {
       "terminals": 20,
-      "totalMB": 449.2,
+      "totalMB": 542.4,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 7.35,
-          "memoryMB": 180,
-          "peakMemoryMB": 180.2
+          "cpuPercent": 7.74,
+          "memoryMB": 245.9,
+          "peakMemoryMB": 246.1
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.9,
-          "memoryMB": 105.5,
-          "peakMemoryMB": 113.9
+          "cpuPercent": 2,
+          "memoryMB": 114.5,
+          "peakMemoryMB": 123.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
-          "memoryMB": 47.9,
-          "peakMemoryMB": 47.9
+          "memoryMB": 47.8,
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
-          "cpuPercent": 0.56,
-          "memoryMB": 115.7,
-          "peakMemoryMB": 115.7
+          "cpuPercent": 0.6,
+          "memoryMB": 134.2,
+          "peakMemoryMB": 134.3
         }
       ]
     },
     {
       "terminals": 25,
-      "totalMB": 467.7,
+      "totalMB": 553.2,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 6.92,
-          "memoryMB": 198.4,
-          "peakMemoryMB": 198.6
+          "cpuPercent": 8.45,
+          "memoryMB": 256.6,
+          "peakMemoryMB": 256.8
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.9,
-          "memoryMB": 105.5,
-          "peakMemoryMB": 113.9
+          "cpuPercent": 1.92,
+          "memoryMB": 114.5,
+          "peakMemoryMB": 123.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
-          "memoryMB": 47.9,
-          "peakMemoryMB": 47.9
+          "memoryMB": 47.8,
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
-          "cpuPercent": 0.55,
-          "memoryMB": 115.8,
-          "peakMemoryMB": 115.8
+          "cpuPercent": 0.58,
+          "memoryMB": 134.2,
+          "peakMemoryMB": 134.3
         }
       ]
     },
     {
       "terminals": 30,
-      "totalMB": 476.5,
+      "totalMB": 561,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 6.47,
-          "memoryMB": 207.2,
-          "peakMemoryMB": 207.4
+          "cpuPercent": 8.31,
+          "memoryMB": 264.3,
+          "peakMemoryMB": 264.4
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.88,
-          "memoryMB": 105.5,
-          "peakMemoryMB": 113.9
+          "cpuPercent": 1.94,
+          "memoryMB": 114.4,
+          "peakMemoryMB": 123.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
-          "memoryMB": 47.9,
-          "peakMemoryMB": 47.9
+          "memoryMB": 47.8,
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
-          "cpuPercent": 0.56,
-          "memoryMB": 115.9,
-          "peakMemoryMB": 115.9
+          "cpuPercent": 0.59,
+          "memoryMB": 134.4,
+          "peakMemoryMB": 134.4
         }
       ]
     },
     {
       "terminals": 40,
-      "totalMB": 553,
+      "totalMB": 571.9,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 4.96,
-          "memoryMB": 261.7,
-          "peakMemoryMB": 263.2
+          "cpuPercent": 5.23,
+          "memoryMB": 265,
+          "peakMemoryMB": 274.5
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.81,
-          "memoryMB": 119.2,
-          "peakMemoryMB": 124.1
+          "cpuPercent": 1.88,
+          "memoryMB": 126.8,
+          "peakMemoryMB": 133.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
-          "memoryMB": 47.8,
-          "peakMemoryMB": 47.9
+          "memoryMB": 47.7,
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
-          "cpuPercent": 0.53,
-          "memoryMB": 124.4,
-          "peakMemoryMB": 126.4
+          "cpuPercent": 0.55,
+          "memoryMB": 132.5,
+          "peakMemoryMB": 136.4
         }
       ]
     },
     {
       "terminals": 50,
-      "totalMB": 589.7,
+      "totalMB": 587.5,
       "processes": [
         {
-          "pid": 31840,
+          "pid": 22176,
           "type": "Browser",
-          "cpuPercent": 6.45,
-          "memoryMB": 298.5,
-          "peakMemoryMB": 298.6
+          "cpuPercent": 7.7,
+          "memoryMB": 280.5,
+          "peakMemoryMB": 280.5
         },
         {
-          "pid": 33716,
+          "pid": 24892,
           "type": "GPU",
-          "cpuPercent": 1.9,
-          "memoryMB": 119.3,
-          "peakMemoryMB": 124.1
+          "cpuPercent": 1.94,
+          "memoryMB": 126.8,
+          "peakMemoryMB": 133.7
         },
         {
-          "pid": 34040,
+          "pid": 25084,
           "type": "Utility",
           "cpuPercent": 0,
           "memoryMB": 47.7,
-          "peakMemoryMB": 47.9
+          "peakMemoryMB": 47.8
         },
         {
-          "pid": 11424,
+          "pid": 31672,
           "type": "Tab",
-          "cpuPercent": 0.53,
-          "memoryMB": 124.1,
-          "peakMemoryMB": 126.4
+          "cpuPercent": 0.58,
+          "memoryMB": 132.5,
+          "peakMemoryMB": 136.4
         }
       ]
     }
   ],
   "finalProcessBreakdown": {
-    "timestamp": 1782308396361,
+    "timestamp": 1782311093670,
     "processes": [
       {
-        "pid": 6140,
+        "pid": 31024,
         "type": "Browser",
-        "cpuPercent": 0.18,
-        "memoryMB": 102.7,
-        "peakMemoryMB": 102.7
+        "cpuPercent": 0.42,
+        "memoryMB": 164.1,
+        "peakMemoryMB": 164.1
       },
       {
-        "pid": 22272,
+        "pid": 28884,
         "type": "GPU",
-        "cpuPercent": 1.71,
-        "memoryMB": 112.2,
-        "peakMemoryMB": 113.3
+        "cpuPercent": 5.73,
+        "memoryMB": 126.9,
+        "peakMemoryMB": 130
       },
       {
-        "pid": 34396,
+        "pid": 31012,
         "type": "Utility",
         "cpuPercent": 0,
-        "memoryMB": 47.7,
-        "peakMemoryMB": 47.7
+        "memoryMB": 47.9,
+        "peakMemoryMB": 47.9
       },
       {
-        "pid": 16340,
+        "pid": 20536,
         "type": "Tab",
-        "cpuPercent": 0.55,
-        "memoryMB": 114.3,
-        "peakMemoryMB": 114.5
+        "cpuPercent": 1.19,
+        "memoryMB": 129.9,
+        "peakMemoryMB": 130.5
       }
     ],
     "totals": {
-      "cpuPercent": 2.44,
-      "memoryMB": 376.9,
-      "gpuPercent": 1.709354007660308
+      "cpuPercent": 7.34,
+      "memoryMB": 468.7,
+      "gpuPercent": 5.733459668846388
     }
   },
   "rendererHeap": {
-    "used": 15.4,
-    "total": 24.8
+    "used": 19.6,
+    "total": 26.3
   },
   "speedMetrics": {
-    "app:whenReady": 51,
-    "app:hook-server": 10,
+    "app:whenReady": 52,
+    "app:hook-server": 13,
     "app:hooks-install": 3,
-    "app:create-window-to-show": 304,
-    "app:total-startup": 373,
-    "shell:findPwsh": 130,
-    "pty:create": 207,
-    "counter:pty:data:ipc": 4
+    "app:create-window-to-show": 330,
+    "app:total-startup": 402,
+    "shell:findPwsh": 142,
+    "pty:create": 117,
+    "counter:pty:data:ipc": 12
   },
   "rawPerfLogs": [
-    "[perf] app:whenReady: 51.00ms",
-    "[perf] app:hook-server: 10.00ms",
+    "[perf] app:whenReady: 52.00ms",
+    "[perf] app:hook-server: 13.00ms",
     "[perf] app:hooks-install: 3.00ms",
-    "[perf] memory[startup] rss=84.6MB heap=4.4/9.0MB external=2.5MB",
-    "[perf] app:create-window-to-show: 304.00ms",
-    "[perf] app:total-startup: 373.00ms",
-    "[perf] shell:findPwsh: 130.00ms",
-    "[perf] pty:create: 207.00ms"
+    "[perf] memory[startup] rss=84.3MB heap=4.4/8.8MB external=2.5MB",
+    "[perf] app:create-window-to-show: 330.00ms",
+    "[perf] app:total-startup: 402.00ms",
+    "[perf] shell:findPwsh: 142.00ms",
+    "[perf] pty:create: 218.00ms",
+    "[perf] pty:create: 85.00ms",
+    "[perf] pty:create: 93.00ms",
+    "[perf] pty:create: 102.00ms",
+    "[perf] pty:create: 104.00ms",
+    "[perf] pty:create: 111.00ms",
+    "[perf] pty:create: 112.00ms",
+    "[perf] pty:create: 110.00ms",
+    "[perf] pty:create: 117.00ms"
   ]
 }
