@@ -109,18 +109,21 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     // xterm.js's intended coordinates into a visual-only transform.
     // No inline values are cleared — CSS !important already suppresses their
     // layout effect, and clearing would re-trigger the observer (infinite loop).
+    //
+    // During active IME composition the observer is frozen: xterm.js may
+    // reposition the textarea due to terminal output (onRender), but we must
+    // keep the transform locked to where the user started composing.
     const textarea = containerRef.current?.querySelector(
       'textarea.xterm-helper-textarea'
     ) as HTMLElement | null
 
     let imeObserver: MutationObserver | null = null
+    let isComposing = false
 
-    // Handler reference stored for cleanup (term.dispose() won't remove DOM listeners)
     const onCompositionStart = () => {
-      // xterm.js updates textarea position on render, but when the cursor moves
-      // back to the input line there's no style mutation — the transform stays
-      // stale at the last rendered position. Force a correction at the moment
-      // the user actually starts composing, using the real buffer cursor coords.
+      isComposing = true
+      // Correct stale transform — cursor may have moved back to input line
+      // without triggering a style mutation.
       const dims = (term as any)._core?._renderService?.dimensions
       if (!dims?.css?.cell) return
       const cursorX = term.buffer.active.cursorX
@@ -129,17 +132,22 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
         `translate(${cursorX * dims.css.cell.width}px, ${cursorY * dims.css.cell.height}px)`
     }
 
+    const onCompositionEnd = () => {
+      isComposing = false
+    }
+
     if (textarea) {
       // MutationObserver: track xterm.js's inline left/top → visual transform
       imeObserver = new MutationObserver(() => {
+        if (isComposing) return // Freeze during composition — position locked
         const x = parseFloat(textarea.style.left) || 0
         const y = parseFloat(textarea.style.top) || 0
         textarea.style.transform = `translate(${x}px, ${y}px)`
       })
       imeObserver.observe(textarea, { attributes: true, attributeFilter: ['style'] })
 
-      // compositionstart: correct stale transform at the instant IME input begins
       textarea.addEventListener('compositionstart', onCompositionStart)
+      textarea.addEventListener('compositionend', onCompositionEnd)
     }
 
     // Prevent xterm.js built-in paste handler from firing alongside our custom
@@ -212,6 +220,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
       if (ptyReadyTimerRef.current) clearTimeout(ptyReadyTimerRef.current)
       imeObserver?.disconnect()
       textarea?.removeEventListener('compositionstart', onCompositionStart)
+      textarea?.removeEventListener('compositionend', onCompositionEnd)
       window.terminalAPI.kill(session.id)
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
