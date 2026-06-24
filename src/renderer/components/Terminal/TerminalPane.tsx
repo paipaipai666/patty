@@ -192,43 +192,38 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     termRef.current = term
     fitAddonRef.current = fitAddon
 
-    // Initial fit — skip PTY resize to avoid double prompt
-    initTimerRef.current = setTimeout(() => {
-      fitAddon.fit()
-      // Create PTY session with fitted dimensions
-      const cols = term.cols
-      const rows = term.rows
-      window.terminalAPI
-        .createSession(session.id, session.cwd, session.shell, cols, rows)
-        .then((result) => {
-          if (result.success && result.pid) {
-            updatePid(session.id, result.pid)
-          }
-        })
-      // Delay allowing ResizeObserver-triggered resizes to avoid ConPTY double prompt
-      ptyReadyTimerRef.current = setTimeout(() => {
-        ptyCreatedRef.current = true
-      }, 200)
-    }, 50)
-
     // Forward keyboard input to PTY and reset attention
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
       useSessionStore.getState().resetAttention(session.id)
     })
 
-    // Receive PTY output
-    const cleanupData = window.terminalAPI.onData(session.id, (data) => {
-      term.write(data)
-    })
-    cleanupDataRef.current = cleanupData
-
-    // Handle PTY exit
-    const cleanupExit = window.terminalAPI.onExit(session.id, () => {
-      ptyCreatedRef.current = false
-      term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
-    })
-    cleanupExitRef.current = cleanupExit
+    // Handle PTY exit — restart shell automatically (standard terminal behavior)
+    const startPty = () => {
+      cleanupDataRef.current?.()
+      cleanupExitRef.current?.()
+      window.terminalAPI
+        .createSession(session.id, session.cwd, session.shell, term.cols, term.rows)
+        .then((result) => {
+          if (result.success && result.pid) {
+            updatePid(session.id, result.pid)
+            ptyCreatedRef.current = true
+            cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
+              term.write(data)
+            })
+            cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
+              ptyCreatedRef.current = false
+              term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
+              setTimeout(() => startPty(), 500)
+            })
+          }
+        })
+    }
+    // Delay PTY creation to allow initial fit
+    initTimerRef.current = setTimeout(() => {
+      fitAddon.fit()
+      startPty()
+    }, 50)
 
     return () => {
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
