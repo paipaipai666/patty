@@ -165,11 +165,9 @@ export function CollectionItem({ collection, depth, children, onCloseSession, on
         </button>
       </div>
 
-      {!collection.collapsed && (
-        <div className={styles.collectionChildren}>
-          {children}
-        </div>
-      )}
+      <div className={`${styles.collectionChildren} ${collection.collapsed ? styles.collectionCollapsed : ''}`}>
+        {children}
+      </div>
     </div>
   )
 }

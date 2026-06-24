@@ -16,9 +16,27 @@
   to { opacity: 1; }
 }
 
+.overlayExit {
+  animation: fadeOut 150ms var(--ease-out) forwards;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(-6px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modalExit {
+  animation: slideOut 200ms var(--ease-out) forwards;
+}
+
+@keyframes slideOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-6px) scale(0.98); }
 }
 
 .modal {

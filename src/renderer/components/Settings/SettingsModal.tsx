@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSettingsStore } from '../../store/settingsStore'
+import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import type { AppSettings, CustomTheme, ShortcutMap } from '../../../shared/settingsTypes'
 import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS } from '../../styles/themes'
 import styles from './SettingsModal.module.css'
@@ -57,6 +58,7 @@ function formatShortcut(e: KeyboardEvent): string {
 
 export function SettingsModal() {
   const { settings, settingsOpen, closeSettings, updateSetting } = useSettingsStore()
+  const { mounted, exiting } = useAnimatedMount(settingsOpen, 200)
   const [activeCategory, setActiveCategory] = useState<Category>('appearance')
   const [capturingShortcut, setCapturingShortcut] = useState<keyof ShortcutMap | null>(null)
   const captureRef = useRef<keyof ShortcutMap | null>(null)
@@ -106,13 +108,13 @@ export function SettingsModal() {
     captureRef.current = key
   }
 
-  if (!settingsOpen) return null
+  if (!mounted) return null
 
   return (
-    <div className={styles.overlay} onMouseDown={(e) => {
+    <div className={`${styles.overlay} ${exiting ? styles.overlayExit : ''}`} onMouseDown={(e) => {
       if (e.target === e.currentTarget) closeSettings()
     }}>
-      <div className={styles.modal}>
+      <div className={`${styles.modal} ${exiting ? styles.modalExit : ''}`}>
         <div className={styles.header}>
           <span className={styles.title}>Settings</span>
           <button className={styles.closeBtn} onClick={closeSettings}>

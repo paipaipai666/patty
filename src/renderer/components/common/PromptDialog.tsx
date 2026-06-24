@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import styles from './PromptDialog.module.css'
 
 export interface PromptOptions {
@@ -9,16 +10,19 @@ export interface PromptOptions {
 }
 
 interface PromptDialogProps {
+  show: boolean
   options: PromptOptions
 }
 
-export function PromptDialog({ options }: PromptDialogProps) {
+export function PromptDialog({ show, options }: PromptDialogProps) {
+  const { mounted, exiting } = useAnimatedMount(show, 200)
   const [value, setValue] = useState(options.defaultValue || '')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    setValue(options.defaultValue || '')
     inputRef.current?.select()
-  }, [])
+  }, [options.defaultValue])
 
   const handleSubmit = () => {
     options.onSubmit(value)
@@ -33,9 +37,11 @@ export function PromptDialog({ options }: PromptDialogProps) {
     if (e.key === 'Escape') handleCancel()
   }
 
+  if (!mounted) return null
+
   return (
-    <div className={styles.overlay}>
-      <div className={styles.dialog}>
+    <div className={`${styles.overlay} ${exiting ? styles.overlayExit : ''}`}>
+      <div className={`${styles.dialog} ${exiting ? styles.dialogExit : ''}`}>
         <div className={styles.title}>{options.title}</div>
         <input
           ref={inputRef}

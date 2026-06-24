@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import styles from './ContextMenu.module.css'
 
 export interface MenuItem {
@@ -9,13 +10,15 @@ export interface MenuItem {
 }
 
 interface ContextMenuProps {
+  show: boolean
   x: number
   y: number
   items: MenuItem[]
   onClose: () => void
 }
 
-export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
+export function ContextMenu({ show, x, y, items, onClose }: ContextMenuProps) {
+  const { mounted, exiting } = useAnimatedMount(show, 120)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -49,8 +52,10 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     }
   }, [x, y])
 
+  if (!mounted) return null
+
   return (
-    <div ref={menuRef} className={styles.menu} style={{ left: x, top: y }}>
+    <div ref={menuRef} className={`${styles.menu} ${exiting ? styles.menuExit : ''}`} style={{ left: x, top: y }}>
       {items.map((item, i) =>
         item.separator ? (
           <div key={i} className={styles.separator} />

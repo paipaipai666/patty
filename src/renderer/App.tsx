@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState, useRef } from 'react'
 import { useSessionStore, type SessionColor } from './store/sessionStore'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
@@ -8,7 +8,6 @@ import { StatusBar } from './components/StatusBar/StatusBar'
 import { ContextMenu, type MenuItem } from './components/common/ContextMenu'
 import { PromptDialog, type PromptOptions } from './components/common/PromptDialog'
 import { SettingsModal } from './components/Settings/SettingsModal'
-import { useState } from 'react'
 import styles from './App.module.css'
 
 interface ContextMenuState {
@@ -32,6 +31,7 @@ export default function App() {
   const renameSession = useSessionStore((s) => s.renameSession)
   const setColor = useSessionStore((s) => s.setColor)
   const sidebarVisible = useSessionStore((s) => s.sidebarVisible)
+  const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const toggleSidebar = useSessionStore((s) => s.toggleSidebar)
   const navigateNext = useSessionStore((s) => s.navigateNext)
   const navigatePrev = useSessionStore((s) => s.navigatePrev)
@@ -49,6 +49,8 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [collectionContextMenu, setCollectionContextMenu] = useState<CollectionContextMenuState | null>(null)
   const [promptOptions, setPromptOptions] = useState<PromptOptions | null>(null)
+  const lastContextMenuItems = useRef<MenuItem[]>([])
+  const lastCollectionMenuItems = useRef<MenuItem[]>([])
 
   const showPrompt = useCallback((title: string, defaultValue: string = ''): Promise<{ canceled: boolean; value: string }> => {
     return new Promise((resolve) => {
@@ -234,9 +236,9 @@ export default function App() {
     <div className={styles.app}>
       <TitleBar onOpenSettings={openSettings} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
-        {sidebarVisible && (
+        <div className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
           <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} onCollectionContextMenu={handleCollectionContextMenu} />
-        )}
+        </div>
         <div
           className={styles.content}
           style={{ [sidebarOnRight ? 'borderRight' : 'borderLeft']: '1px solid var(--border-subtle)' }}
@@ -249,23 +251,21 @@ export default function App() {
           <StatusBar />
         </div>
       </div>
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={getContextMenuItems()}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
-      {collectionContextMenu && (
-        <ContextMenu
-          x={collectionContextMenu.x}
-          y={collectionContextMenu.y}
-          items={getCollectionContextMenuItems()}
-          onClose={() => setCollectionContextMenu(null)}
-        />
-      )}
-      {promptOptions && <PromptDialog options={promptOptions} />}
+      <ContextMenu
+        show={!!contextMenu}
+        x={contextMenu?.x ?? 0}
+        y={contextMenu?.y ?? 0}
+        items={contextMenu ? (lastContextMenuItems.current = getContextMenuItems()) : lastContextMenuItems.current}
+        onClose={() => setContextMenu(null)}
+      />
+      <ContextMenu
+        show={!!collectionContextMenu}
+        x={collectionContextMenu?.x ?? 0}
+        y={collectionContextMenu?.y ?? 0}
+        items={collectionContextMenu ? (lastCollectionMenuItems.current = getCollectionContextMenuItems()) : lastCollectionMenuItems.current}
+        onClose={() => setCollectionContextMenu(null)}
+      />
+      <PromptDialog show={!!promptOptions} options={promptOptions ?? { title: '', defaultValue: '', onSubmit: () => {}, onCancel: () => {}}} />
       <SettingsModal />
     </div>
   )
