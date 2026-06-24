@@ -75,7 +75,16 @@ input {
   border-radius: 4px;
 }
 
-/* Fix IME composition window causing viewport shift on Windows */
+/*
+ * IME helper textarea positioning (xterm v5.5)
+ *
+ * Pin the textarea at layout position (0, 0) so the browser never tries to
+ * scroll it into view (which causes the viewport shift bug on Windows).
+ *
+ * The visual position is updated via transform: translate() in TerminalPane.tsx
+ * so the IME composition window follows the cursor. transform does not affect
+ * layout, so it never triggers scroll-into-view.
+ */
 .xterm .xterm-helper-textarea {
   left: 0 !important;
   top: 0 !important;

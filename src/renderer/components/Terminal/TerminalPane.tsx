@@ -102,6 +102,33 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     term.loadAddon(webLinksAddon)
     term.open(containerRef.current)
 
+    // --- IME composition window tracking (xterm v5.5) ---
+    // CSS pins the textarea at layout (0, 0) via !important (see global.css),
+    // preventing the browser from scrolling it into view (viewport shift bug).
+    // We use transform: translate() to move it VISUALLY to the cursor position —
+    // transform does not affect layout, so it never triggers scroll-into-view.
+    const textarea = containerRef.current?.querySelector(
+      'textarea.xterm-helper-textarea'
+    ) as HTMLElement | null
+
+    if (textarea) {
+      const updateImePosition = () => {
+        // Re-read dimensions each call — not cached, since renderer can change on resize.
+        // _renderService is private API (xterm v5.5); guarded with optional chaining.
+        const dims = (term as any)._core?._renderService?.dimensions
+        if (!dims?.css?.cell) return
+
+        // cursorY is already viewport-relative (0..rows-1), do NOT subtract viewportY.
+        const cursorX = term.buffer.active.cursorX
+        const cursorY = term.buffer.active.cursorY
+
+        textarea.style.transform =
+          `translate(${cursorX * dims.css.cell.width}px, ${cursorY * dims.css.cell.height}px)`
+      }
+
+      term.onCursorMove(updateImePosition)
+    }
+
     // Prevent xterm.js built-in paste handler from firing alongside our custom
     // Ctrl+Shift+V handler. Without this, both handlers write the same text
     // to PTY, causing duplicated output (e.g. "echo" → "echoecho").
