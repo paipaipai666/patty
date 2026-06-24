@@ -8,24 +8,30 @@ import { loadSettings } from './settingsHandler'
 
 let mainWindow: BrowserWindow | null = null
 
-// 映射原始事件到注意力类型
-function mapEventToAttentionType(event: string): string | null {
-  // 权限请求/询问问题 → 蓝色
-  if (event === 'permission_prompt' || event === 'elicitation_dialog' ||
-      event.includes('permission') || event.includes('question')) {
-    return 'permission'
+  // 映射原始事件到注意力类型
+  function mapEventToAttentionType(event: string): string | null {
+    // 权限请求/询问问题 → 蓝色
+    if (event === 'permission_prompt' || event === 'elicitation_dialog' ||
+        event.includes('permission') || event.includes('question')) {
+      return 'permission'
+    }
+    // 回答完毕 → 绿色
+    if (event === 'idle' || event === 'stop') {
+      return 'complete'
+    }
+    // 执行出错 → 红色
+    if (event === 'error' || event.startsWith('error_')) {
+      return 'error'
+    }
+    // 未知事件，不处理
+    return null
   }
-  // 回答完毕 → 绿色
-  if (event === 'idle' || event === 'stop') {
-    return 'complete'
+
+  function mapSourceToAiType(source: string): 'claude' | 'opencode' | null {
+    if (source === 'claude-code') return 'claude'
+    if (source === 'opencode') return 'opencode'
+    return null
   }
-  // 执行出错 → 红色
-  if (event === 'error' || event.startsWith('error_')) {
-    return 'error'
-  }
-  // 未知事件，不处理
-  return null
-}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -90,9 +96,27 @@ app.whenReady().then(async () => {
     if (source === 'claude-code' && !settings.notifications.claudeCode) return
     if (source === 'opencode' && !settings.notifications.openCode) return
 
+    const aiType = mapSourceToAiType(source)
+
+    // 会话开始 → 设置 aiType
+    if (event === 'session_start' || event === 'session_created') {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty:attn', paneId, null, aiType)
+      }
+      return
+    }
+
+    // 会话结束 → 清除 aiType
+    if (event === 'session_end' || event === 'session_deleted') {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty:attn', paneId, null, null)
+      }
+      return
+    }
+
     const attentionType = mapEventToAttentionType(event)
     if (attentionType && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('pty:attn', paneId, attentionType)
+      mainWindow.webContents.send('pty:attn', paneId, attentionType, aiType)
     }
   })
   console.log(`Hook server listening on port ${hookPort}`)

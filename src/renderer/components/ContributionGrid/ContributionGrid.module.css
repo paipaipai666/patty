@@ -1,0 +1,63 @@
+.grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  display: grid;
+  gap: 3.5px;
+  align-content: center;
+  justify-content: start;
+  padding: 3px 6px;
+  opacity: 0.60;
+  transition: opacity 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.grid:hover {
+  opacity: 0.90;
+}
+
+.cell {
+  border-radius: 2px;
+  transition: background-color 240ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.grid[data-type="claude"] .glow-3 {
+  box-shadow: 0 0 4px rgba(204, 120, 92, 0.25);
+}
+
+.grid[data-type="claude"] .glow-4 {
+  box-shadow: 0 0 8px rgba(204, 120, 92, 0.5);
+}
+
+.grid[data-type="opencode"] .glow-3 {
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.25);
+}
+
+.grid[data-type="opencode"] .glow-4 {
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+.grid::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 60%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.grid:hover::after {
+  opacity: 1;
+}
+
+.grid[data-type="claude"]::after {
+  background: linear-gradient(90deg, transparent 0%, rgba(204, 120, 92, 0.10) 40%, rgba(204, 120, 92, 0.22) 100%);
+}
+
+.grid[data-type="opencode"]::after {
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0.18) 100%);
+}

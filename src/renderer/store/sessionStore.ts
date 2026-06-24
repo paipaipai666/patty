@@ -21,6 +21,7 @@ export interface TerminalSession {
   pid: number
   createdAt: number
   collectionId: string | null
+  aiType?: 'claude' | 'opencode' | null
 }
 
 const COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
@@ -60,6 +61,7 @@ interface SessionStore {
 
   setAttention: (id: string, eventType: string | null) => void
   resetAttention: (id: string) => void
+  setAiType: (id: string, aiType: 'claude' | 'opencode' | null) => void
 
   loadState: () => Promise<void>
   saveState: () => Promise<void>
@@ -74,7 +76,7 @@ function debouncedSave(getState: () => SessionStore) {
     const state = getState()
     if (!state.loaded) return
     const persistedState: PersistedState = {
-      sessions: state.sessions.map(({ pid, ...rest }) => rest),
+      sessions: state.sessions.map(({ pid, aiType, ...rest }) => rest),
       collections: state.collections,
       activeSessionId: state.activeSessionId,
       sidebarVisible: state.sidebarVisible,
@@ -97,7 +99,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     try {
       const state = await window.terminalAPI.stateLoad()
       set({
-        sessions: state.sessions.map((s) => ({ ...s, pid: 0 })),
+        sessions: state.sessions.map((s) => ({ ...s, pid: 0, aiType: null })),
         collections: state.collections,
         activeSessionId: state.activeSessionId,
         sidebarVisible: state.sidebarVisible,
@@ -106,8 +108,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
 
       // Listen for attention changes from hook server
-      window.terminalAPI.onAttentionChange((paneId, eventType) => {
+      window.terminalAPI.onAttentionChange((paneId, eventType, aiType) => {
         get().setAttention(paneId, eventType)
+        // aiType 参数非 undefined 时同步设置/清除
+        if (aiType !== undefined) {
+          get().setAiType(paneId, aiType ?? null)
+        }
       })
 
       // Listen for PTY exit to cleanup attention state
@@ -125,7 +131,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   saveState: async () => {
     const state = get()
     const persistedState: PersistedState = {
-      sessions: state.sessions.map(({ pid, ...rest }) => rest),
+      sessions: state.sessions.map(({ pid, aiType, ...rest }) => rest),
       collections: state.collections,
       activeSessionId: state.activeSessionId,
       sidebarVisible: state.sidebarVisible,
@@ -349,5 +355,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   resetAttention: (id: string) => {
     get().setAttention(id, null)
     window.terminalAPI.resetAttention(id)
+  },
+
+  setAiType: (id: string, aiType: 'claude' | 'opencode' | null) => {
+    set((state) => ({
+      sessions: state.sessions.map((s) =>
+        s.id === id ? { ...s, aiType } : s
+      )
+    }))
   }
 }))

@@ -33,6 +33,14 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
   return {
     event: async ({ event }) => {
       switch (event.type) {
+        case 'session.created':
+          await notifyPatty('session_created')
+          break
+
+        case 'session.deleted':
+          await notifyPatty('session_deleted')
+          break
+
         case 'permission.asked':
         case 'question.asked':
           await notifyPatty('permission_prompt')

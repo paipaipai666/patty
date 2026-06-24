@@ -43,6 +43,7 @@ function ensureHookScriptExists(): string {
 interface HookEntry {
   type: string
   command: string
+  args?: string[]
 }
 
 interface NotificationHook {
@@ -55,6 +56,8 @@ interface ClaudeSettings {
     Notification?: NotificationHook[]
     Stop?: NotificationHook[]
     StopFailure?: NotificationHook[]
+    SessionStart?: NotificationHook[]
+    SessionEnd?: NotificationHook[]
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -159,6 +162,58 @@ export async function ensureClaudeCodeHook(hookPort: number): Promise<void> {
     }
 
     settings.hooks.StopFailure = stopFailureHooks
+
+    // SessionStart hook — detect when Claude Code session begins
+    const sessionStartHooks = settings.hooks.SessionStart || []
+    const existingStartPattyIndex = sessionStartHooks.findIndex(
+      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
+    )
+    const newSessionStartHookEntry: NotificationHook = {
+      matcher: 'startup|resume',
+      hooks: [
+        {
+          type: 'command',
+          command: 'powershell',
+          args: [
+            '-ExecutionPolicy', 'Bypass',
+            '-File', hookScriptPath,
+            '-EventType', 'session_start'
+          ]
+        }
+      ]
+    }
+    if (existingStartPattyIndex >= 0) {
+      sessionStartHooks[existingStartPattyIndex] = newSessionStartHookEntry
+    } else {
+      sessionStartHooks.push(newSessionStartHookEntry)
+    }
+    settings.hooks.SessionStart = sessionStartHooks
+
+    // SessionEnd hook — detect when Claude Code session ends
+    const sessionEndHooks = settings.hooks.SessionEnd || []
+    const existingEndPattyIndex = sessionEndHooks.findIndex(
+      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
+    )
+    const newSessionEndHookEntry: NotificationHook = {
+      matcher: '',
+      hooks: [
+        {
+          type: 'command',
+          command: 'powershell',
+          args: [
+            '-ExecutionPolicy', 'Bypass',
+            '-File', hookScriptPath,
+            '-EventType', 'session_end'
+          ]
+        }
+      ]
+    }
+    if (existingEndPattyIndex >= 0) {
+      sessionEndHooks[existingEndPattyIndex] = newSessionEndHookEntry
+    } else {
+      sessionEndHooks.push(newSessionEndHookEntry)
+    }
+    settings.hooks.SessionEnd = sessionEndHooks
 
     // Ensure settings directory exists
     const settingsDir = path.dirname(settingsPath)

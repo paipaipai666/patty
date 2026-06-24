@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
+import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
 interface SessionItemProps {
@@ -73,6 +74,21 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
     e.dataTransfer.effectAllowed = 'move'
   }
 
+  const isAi = !!session.aiType
+
+  const AI_ICONS: Record<string, JSX.Element> = {
+    claude: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z" />
+      </svg>
+    ),
+    opencode: (
+      <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor">
+        <path fill-rule="evenodd" clip-rule="evenodd" d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z" />
+      </svg>
+    )
+  }
+
   return (
     <div
       className={`${styles.item} ${isActive ? styles.itemActive : ''} ${getAttentionClass()}`}
@@ -82,36 +98,45 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
       draggable
       onDragStart={handleDragStart}
     >
-      <span
-        className={styles.colorDot}
-        style={{ backgroundColor: COLOR_MAP[session.color] || COLOR_MAP.blue }}
-      />
-      {isEditing ? (
-        <input
-          ref={inputRef}
-          className={styles.renameInput}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleRename}
-          onKeyDown={handleKeyDown}
-          onClick={(e) => e.stopPropagation()}
-          autoFocus
-        />
-      ) : (
-        <span className={styles.itemTitle}>{session.title}</span>
-      )}
-      <button
-        className={styles.closeBtn}
-        onClick={(e) => {
-          e.stopPropagation()
-          onClose(session.id)
-        }}
-        aria-label={`Close ${session.title}`}
-      >
-        <svg width="8" height="8" viewBox="0 0 8 8">
-          <path d="M0.5 0.5L7.5 7.5M7.5 0.5L0.5 7.5" stroke="currentColor" strokeWidth="1" />
-        </svg>
-      </button>
+      {isAi && <ContributionGrid aiType={session.aiType!} />}
+      <div className={styles.itemContent}>
+        {isAi ? (
+          <span className={`${styles.aiIcon} ${session.aiType === 'claude' ? styles.aiIconClaude : styles.aiIconOpencode}`}>
+            {AI_ICONS[session.aiType!]}
+          </span>
+        ) : (
+          <span
+            className={styles.colorDot}
+            style={{ backgroundColor: COLOR_MAP[session.color] || COLOR_MAP.blue }}
+          />
+        )}
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            className={styles.renameInput}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleRename}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            autoFocus
+          />
+        ) : (
+          <span className={styles.itemTitle}>{session.title}</span>
+        )}
+        <button
+          className={styles.closeBtn}
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose(session.id)
+          }}
+          aria-label={`Close ${session.title}`}
+        >
+          <svg width="8" height="8" viewBox="0 0 8 8">
+            <path d="M0.5 0.5L7.5 7.5M7.5 0.5L0.5 7.5" stroke="currentColor" strokeWidth="1" />
+          </svg>
+        </button>
+      </div>
     </div>
   )
 }

@@ -38,7 +38,9 @@
 .searchInput:focus {
   border-color: var(--accent);
   background: var(--accent-alpha);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    0 0 12px rgba(99, 102, 241, 0.06);
 }
 
 .newBtn {
@@ -54,13 +56,19 @@
   font-family: var(--font-ui);
   font-size: 15px;
   font-weight: 500;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .newBtn:hover {
   color: var(--accent);
   background: var(--accent-alpha);
   border-color: rgba(99, 102, 241, 0.15);
+  transform: scale(1.04);
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.08);
+}
+
+.newBtn:active {
+  transform: scale(0.97);
 }
 
 .list {
@@ -83,21 +91,70 @@
   background: var(--accent);
 }
 
+.colorDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+  transition: box-shadow var(--transition-fast);
+}
+
+.aiIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.aiIcon svg {
+  display: block;
+}
+
+.aiIconClaude {
+  color: #d97757;
+  background: rgba(217,119,87,0.12);
+}
+
+.aiIconOpencode {
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.06);
+}
+
 .item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 28px;
+  height: 42px;
   padding: 0 8px;
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-fast);
   position: relative;
   border-radius: var(--radius-sm);
   margin: 0;
+  will-change: transform, background;
+  overflow: hidden;
+}
+
+.itemContent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
 }
 
 .item:hover {
   background: var(--bg-item-hover);
+  transform: translateX(1px);
+}
+
+.item:active {
+  transform: scale(0.98);
 }
 
 .itemActive {
@@ -114,6 +171,32 @@
   background: var(--accent);
   border-radius: 0 3px 3px 0;
   box-shadow: 0 0 6px var(--accent-glow);
+}
+
+.itemActive .colorDot {
+  box-shadow: 0 0 5px var(--accent-glow);
+}
+
+.itemActive .colorDot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-alpha);
+  animation: ripple 2s var(--ease-out) infinite;
+}
+
+.itemActive .aiIconClaude {
+  box-shadow: 0 0 6px rgba(217,119,87,0.25);
+}
+
+.itemActive .aiIconOpencode {
+  box-shadow: 0 0 6px rgba(255,255,255,0.12);
+}
+
+@keyframes ripple {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 0; transform: scale(1.5); }
 }
 
 /* 整行高亮样式 - 权限请求/询问问题 (accent) */
@@ -380,6 +463,25 @@
 .collectionChildren {
   display: flex;
   flex-direction: column;
+  max-height: 500px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height var(--transition-normal), opacity var(--transition-fast);
+}
+
+.collectionCollapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collectionChildren {
+    transition: none;
+  }
+  .collectionCollapsed {
+    max-height: 0;
+    opacity: 0;
+  }
 }
 
 .dragOver {
