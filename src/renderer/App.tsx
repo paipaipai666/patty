@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useState, useRef } from 'react'
-import { useSessionStore, type SessionColor } from './store/sessionStore'
+import { useEffect, useCallback, useState } from 'react'
+import { useSessionStore, teardownSessionIPC, SESSION_COLORS } from './store/sessionStore'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
@@ -22,8 +22,6 @@ interface CollectionContextMenuState {
   collectionId: string
 }
 
-const COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
-
 export default function App() {
   const addSession = useSessionStore((s) => s.addSession)
   const removeSession = useSessionStore((s) => s.removeSession)
@@ -36,21 +34,20 @@ export default function App() {
   const navigateNext = useSessionStore((s) => s.navigateNext)
   const navigatePrev = useSessionStore((s) => s.navigatePrev)
   const navigateToIndex = useSessionStore((s) => s.navigateToIndex)
-  const sessions = useSessionStore((s) => s.sessions)
   const loadState = useSessionStore((s) => s.loadState)
   const addCollection = useSessionStore((s) => s.addCollection)
   const removeCollection = useSessionStore((s) => s.removeCollection)
   const renameCollection = useSessionStore((s) => s.renameCollection)
 
   const settingsInit = useSettingsStore((s) => s.init)
-  const settings = useSettingsStore((s) => s.settings)
+  const defaultShell = useSettingsStore((s) => s.settings.defaultShell)
+  const shortcuts = useSettingsStore((s) => s.settings.shortcuts)
+  const sidebarPosition = useSettingsStore((s) => s.settings.sidebarPosition)
   const openSettings = useSettingsStore((s) => s.openSettings)
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [collectionContextMenu, setCollectionContextMenu] = useState<CollectionContextMenuState | null>(null)
   const [promptOptions, setPromptOptions] = useState<PromptOptions | null>(null)
-  const lastContextMenuItems = useRef<MenuItem[]>([])
-  const lastCollectionMenuItems = useRef<MenuItem[]>([])
 
   const showPrompt = useCallback((title: string, defaultValue: string = ''): Promise<{ canceled: boolean; value: string }> => {
     return new Promise((resolve) => {
@@ -77,17 +74,18 @@ export default function App() {
   // Load session state on mount
   useEffect(() => {
     loadState()
+    return () => teardownSessionIPC()
   }, [loadState])
 
   const handleNewTerminal = useCallback(async () => {
     try {
       const result = await window.terminalAPI.selectDirectory()
       if (result.canceled) return
-      addSession({ cwd: result.directory || undefined, shell: settings.defaultShell })
+      addSession({ cwd: result.directory || undefined, shell: defaultShell })
     } catch (err) {
       console.error('Failed to create terminal:', err)
     }
-  }, [addSession, settings.defaultShell])
+  }, [addSession, defaultShell])
 
   const handleCloseSession = useCallback(
     (id: string) => {
@@ -109,24 +107,25 @@ export default function App() {
 
   // Keyboard shortcuts
   useEffect(() => {
-    const shortcuts = settings.shortcuts
+    const sc = shortcuts
 
     const shortcutActions: Record<string, () => void> = {
-      [shortcuts.newTerminal.toLowerCase()]: handleNewTerminal,
-      [shortcuts.closeTerminal.toLowerCase()]: () => {
+      [sc.newTerminal.toLowerCase()]: handleNewTerminal,
+      [sc.closeTerminal.toLowerCase()]: () => {
         const activeId = useSessionStore.getState().activeSessionId
         if (activeId) handleCloseSession(activeId)
       },
-      [shortcuts.nextTab.toLowerCase()]: navigateNext,
-      [shortcuts.prevTab.toLowerCase()]: navigatePrev,
-      [shortcuts.toggleSidebar.toLowerCase()]: toggleSidebar,
-      [shortcuts.settings.toLowerCase()]: openSettings
+      [sc.nextTab.toLowerCase()]: navigateNext,
+      [sc.prevTab.toLowerCase()]: navigatePrev,
+      [sc.toggleSidebar.toLowerCase()]: toggleSidebar,
+      [sc.settings.toLowerCase()]: openSettings
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip global shortcuts when focus is inside terminal
+      // Skip global shortcuts when focus is inside terminal or form controls
       const activeEl = document.activeElement
       if (activeEl?.closest('.xterm')) return
+      if (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement) return
 
       const parts: string[] = []
       if (e.ctrlKey) parts.push('ctrl')
@@ -155,7 +154,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleNewTerminal, handleCloseSession, navigateNext, navigatePrev, toggleSidebar, navigateToIndex, settings.shortcuts, openSettings])
+  }, [handleNewTerminal, handleCloseSession, navigateNext, navigatePrev, toggleSidebar, navigateToIndex, shortcuts, openSettings])
 
   const getContextMenuItems = (): MenuItem[] => {
     if (!contextMenu) return []
@@ -172,7 +171,7 @@ export default function App() {
         }
       },
       { separator: true, label: '', action: () => {} },
-      ...COLORS.map(
+      ...SESSION_COLORS.map(
         (color): MenuItem => ({
           label: `Color: ${color}`,
           action: () => setColor(sessionId, color)
@@ -220,7 +219,7 @@ export default function App() {
           try {
             const result = await window.terminalAPI.selectDirectory()
             if (!result.canceled) {
-              addSession({ cwd: result.directory || undefined, collectionId, shell: settings.defaultShell })
+              addSession({ cwd: result.directory || undefined, collectionId, shell: defaultShell })
             }
           } catch (err) {
             console.error('Failed to create terminal:', err)
@@ -230,7 +229,7 @@ export default function App() {
     ]
   }
 
-  const sidebarOnRight = settings.sidebarPosition === 'right'
+  const sidebarOnRight = sidebarPosition === 'right'
 
   return (
     <div className={styles.app}>
@@ -255,14 +254,14 @@ export default function App() {
         show={!!contextMenu}
         x={contextMenu?.x ?? 0}
         y={contextMenu?.y ?? 0}
-        items={contextMenu ? (lastContextMenuItems.current = getContextMenuItems()) : lastContextMenuItems.current}
+        items={contextMenu ? getContextMenuItems() : []}
         onClose={() => setContextMenu(null)}
       />
       <ContextMenu
         show={!!collectionContextMenu}
         x={collectionContextMenu?.x ?? 0}
         y={collectionContextMenu?.y ?? 0}
-        items={collectionContextMenu ? (lastCollectionMenuItems.current = getCollectionContextMenuItems()) : lastCollectionMenuItems.current}
+        items={collectionContextMenu ? getCollectionContextMenuItems() : []}
         onClose={() => setCollectionContextMenu(null)}
       />
       <PromptDialog show={!!promptOptions} options={promptOptions ?? { title: '', defaultValue: '', onSubmit: () => {}, onCancel: () => {}}} />

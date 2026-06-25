@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSAP 炫酷动画</title>
+<script src="https://unpkg.com/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; padding: 40px; min-height: 100vh; }
+h1 { font-size: 24px; margin-bottom: 40px; text-align: center; background: linear-gradient(135deg, #6366f1, #ec4899, #14b8a6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+.demo { margin-bottom: 80px; }
+.demo-title { font-size: 13px; text-transform: uppercase; letter-spacing: 2px; color: #555; margin-bottom: 20px; }
+
+/* ===== DEMO 1: 粒子入场 ===== */
+.particle-grid { display: flex; flex-wrap: wrap; gap: 4px; width: 420px; justify-content: center; }
+.dot { width: 12px; height: 12px; border-radius: 50%; opacity: 0; }
+
+/* ===== DEMO 2: 卡片展开 ===== */
+.card-container { display: flex; gap: 16px; perspective: 1200px; }
+.card { width: 180px; height: 240px; border-radius: 16px; background: linear-gradient(145deg, #1a1a2e, #16213e); border: 1px solid #2a2a4e; padding: 20px; display: flex; flex-direction: column; justify-content: flex-end; position: relative; overflow: hidden; cursor: pointer; }
+.card::before { content: ''; position: absolute; inset: 0; border-radius: 16px; background: linear-gradient(135deg, transparent 30%, rgba(99,102,241,0.1)); opacity: 0; }
+.card-icon { font-size: 28px; margin-bottom: 12px; }
+.card h4 { font-size: 15px; font-weight: 600; }
+.card p { font-size: 11px; color: #666; margin-top: 4px; }
+.card-tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(99,102,241,0.15); color: #818cf8; display: inline-block; margin-bottom: 8px; width: fit-content; }
+
+/* ===== DEMO 3: 波纹扩散 ===== */
+ripple-wrap { position: relative; display: flex; align-items: center; justify-content: center; width: 300px; height: 300px; }
+ripple-ring { position: absolute; width: 80px; height: 80px; border-radius: 50%; border: 2px solid #6366f1; opacity: 0; }
+ripple-core { width: 16px; height: 16px; border-radius: 50%; background: #6366f1; position: relative; z-index: 1; }
+
+/* ===== DEMO 4: 弹跳文字 ===== */
+bounce-text { display: flex; gap: 4px; font-size: 48px; font-weight: 800; }
+bounce-text span { display: inline-block; cursor: default; }
+bounce-text span:nth-child(1) { color: #6366f1; }
+bounce-text span:nth-child(2) { color: #8b5cf6; }
+bounce-text span:nth-child(3) { color: #ec4899; }
+bounce-text span:nth-child(4) { color: #f43f5e; }
+bounce-text span:nth-child(5) { color: #f59e0b; }
+bounce-text span:nth-child(6) { color: #14b8a6; }
+bounce-text span:nth-child(7) { color: #10b981; }
+bounce-text span:nth-child(8) { color: #3b82f6; }
+
+/* ===== DEMO 5: 浮动徽章 ===== */
+.badge-wall { display: flex; gap: 12px; flex-wrap: wrap; width: 500px; }
+.badge { padding: 8px 18px; border-radius: 100px; font-size: 13px; background: linear-gradient(135deg, #1a1a2e, #16213e); border: 1px solid #2a2a4e; cursor: pointer; opacity: 0; }
+
+.btn { padding: 10px 28px; border: none; border-radius: 100px; font-size: 14px; cursor: pointer; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font-weight: 500; margin-top: 20px; transition: transform 0.15s; }
+.btn:hover { transform: scale(1.04); }
+.btn-outline { background: transparent; border: 1px solid #333; color: #aaa; }
+</style>
+</head>
+<body>
+
+<h1>✦ GSAP 炫酷动画集</h1>
+
+<!-- DEMO 1: 粒子入场 -->
+<div class="demo">
+  <div class="demo-title">01 · 粒子渐次入场</div>
+  <div class="btn" onclick="enterParticles()">▶ 播放</div>
+  <div class="btn btn-outline" onclick="resetParticles()">重置</div>
+  <div class="particle-grid" id="particleGrid" style="margin-top:20px;"></div>
+</div>
+
+<!-- DEMO 2: 3D 卡片展开 -->
+<div class="demo">
+  <div class="demo-title">02 · 3D 卡片翻转展开</div>
+  <div class="btn" onclick="enterCards()">▶ 播放</div>
+  <div class="btn btn-outline" onclick="resetCards()">重置</div>
+  <div class="card-container" style="margin-top:20px;" id="cardContainer"></div>
+</div>
+
+<!-- DEMO 3: 波纹扩散 -->
+<div class="demo">
+  <div class="demo-title">03 · 脉冲波纹</div>
+  <div class="btn" onclick="pulseRipple()">▶ 播放</div>
+  <ripple-wrap id="rippleWrap"><ripple-core></ripple-core></ripple-wrap>
+</div>
+
+<!-- DEMO 4: 弹跳文字 -->
+<div class="demo">
+  <div class="demo-title">04 · 弹跳文字</div>
+  <div class="btn" onclick="bounceLetters()">▶ 播放</div>
+  <bounce-text id="bounceText" style="margin-top:20px;"></bounce-text>
+</div>
+
+<!-- DEMO 5: 浮动徽章 -->
+<div class="demo">
+  <div class="demo-title">05 · 浮动徽章墙</div>
+  <div class="btn" onclick="floatBadges()">▶ 播放</div>
+  <div class="btn btn-outline" onclick="resetBadges()">重置</div>
+  <div class="badge-wall" id="badgeWall" style="margin-top:20px;"></div>
+</div>
+
+<script>
+// =============================================
+// 1. 粒子入场
+// =============================================
+const COLORS = ['#6366f1','#8b5cf6','#ec4899','#f43f5e','#f59e0b','#14b8a6','#10b981','#3b82f6'];
+
+function buildParticles() {
+  const grid = document.getElementById('particleGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 120; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    dot.style.background = COLORS[Math.floor(Math.random() * COLORS.length)];
+    dot.style.width = dot.style.height = (6 + Math.random() * 10) + 'px';
+    grid.appendChild(dot);
+  }
+}
+buildParticles();
+
+function enterParticles() {
+  const dots = document.querySelectorAll('.dot');
+  gsap.set(dots, { opacity: 0, scale: 0, y: 20 });
+  gsap.to(dots, {
+    opacity: 1, scale: 1, y: 0,
+    duration: 0.6,
+    stagger: { each: 0.008, from: 'random' },
+    ease: 'back.out(2)'
+  });
+}
+
+function resetParticles() {
+  gsap.set('.dot', { opacity: 0, scale: 0, y: 20 });
+}
+
+// =============================================
+// 2. 3D 卡片展开
+// =============================================
+const cardData = [
+  { icon: '🎨', tag: 'Design', title: 'UI / UX', desc: '界面与体验设计' },
+  { icon: '⚡', tag: 'Motion', title: 'Animation', desc: '交互动效' },
+  { icon: '🚀', tag: 'Dev', title: 'Frontend', desc: '前端工程化' },
+  { icon: '✨', tag: 'AI', title: 'Creative', desc: 'AI 创意工具' },
+];
+
+function buildCards() {
+  const c = document.getElementById('cardContainer');
+  c.innerHTML = cardData.map(d => `
+    <div class="card">
+      <div class="card-icon">${d.icon}</div>
+      <span class="card-tag">${d.tag}</span>
+      <h4>${d.title}</h4>
+      <p>${d.desc}</p>
+    </div>`).join('');
+}
+buildCards();
+
+function enterCards() {
+  gsap.set('.card', { opacity: 0, rotationY: 60, z: -200, y: 40 });
+  gsap.to('.card', {
+    opacity: 1, rotationY: 0, z: 0, y: 0,
+    duration: 0.7,
+    stagger: 0.15,
+    ease: 'power3.out'
+  });
+  gsap.to('.card::before', { opacity: 1, duration: 0.3 });
+}
+
+function resetCards() {
+  gsap.set('.card', { opacity: 0, rotationY: 60, z: -200, y: 40 });
+}
+
+// =============================================
+// 3. 脉冲波纹
+// =============================================
+function pulseRipple() {
+  const wrap = document.getElementById('rippleWrap');
+  wrap.querySelectorAll('ripple-ring').forEach(r => r.remove());
+
+  for (let i = 0; i < 5; i++) {
+    const ring = document.createElement('ripple-ring');
+    wrap.insertBefore(ring, wrap.firstChild);
+    gsap.set(ring, { scale: 0, opacity: 0.7 });
+    gsap.to(ring, {
+      scale: 4 + i * 0.8,
+      opacity: 0,
+      duration: 1.8,
+      delay: i * 0.25,
+      ease: 'power2.out'
+    });
+  }
+}
+
+// =============================================
+// 4. 弹跳文字
+// =============================================
+(function initBounceText() {
+  const el = document.getElementById('bounceText');
+  el.textContent = 'ANIMATE';
+  el.innerHTML = el.textContent.split('').map(l => `<span>${l === ' ' ? '&nbsp;' : l}</span>`).join('');
+})();
+
+function bounceLetters() {
+  const letters = document.querySelectorAll('#bounceText span');
+  gsap.set(letters, { y: 0, scale: 1, rotation: 0 });
+  gsap.to(letters, {
+    y: -30,
+    scale: 1.3,
+    rotation: 10,
+    duration: 0.35,
+    stagger: 0.05,
+    ease: 'power2.out',
+    yoyo: true,
+    repeat: 1,
+    onComplete: () => gsap.set(letters, { y: 0, scale: 1, rotation: 0 })
+  });
+}
+
+// =============================================
+// 5. 浮动徽章
+// =============================================
+const tags = ['React','Vue','Svelte','Astro','Next.js','Nuxt','SvelteKit','GSAP','Framer','Three.js','Tailwind','CSS','TypeScript','Rust','Go','Python'];
+
+function buildBadges() {
+  const w = document.getElementById('badgeWall');
+  w.innerHTML = tags.map(t => `<div class="badge">${t}</div>`).join('');
+}
+buildBadges();
+
+function floatBadges() {
+  const badges = document.querySelectorAll('.badge');
+  gsap.set(badges, { opacity: 0, y: 30, scale: 0.8 });
+  gsap.to(badges, {
+    opacity: 1, y: 0, scale: 1,
+    duration: 0.5,
+    stagger: { each: 0.03, from: 'random' },
+    ease: 'back.out(1.7)',
+    onComplete: () => {
+      badges.forEach((b, i) => {
+        gsap.to(b, {
+          y: -4 + Math.random() * 8,
+          duration: 2 + Math.random() * 2,
+          repeat: -1,
+          yoyo: true,
+          ease: 'sine.inOut',
+          delay: Math.random() * 0.5
+        });
+      });
+    }
+  });
+}
+
+function resetBadges() {
+  gsap.set('.badge', { opacity: 0, y: 30, scale: 0.8 });
+}
+</script>
+
+</body>
+</html>

@@ -1,7 +1,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay-bg);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   display: flex;
@@ -46,6 +46,7 @@
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
   width: 580px;
+  max-width: calc(100vw - 32px);
   max-height: 70vh;
   display: flex;
   flex-direction: column;
@@ -70,7 +71,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent 5%, var(--accent-alpha) 30%, rgba(34, 211, 238, 0.06) 60%, transparent 95%);
+  background: linear-gradient(90deg, transparent 5%, var(--accent-alpha) 30%, var(--cyan-glow-light) 60%, transparent 95%);
   pointer-events: none;
 }
 
@@ -96,7 +97,7 @@
 }
 
 .closeBtn:hover {
-  background: rgba(128,128,128,0.08);
+  background: var(--neutral-8);
   color: var(--text-primary);
 }
 
@@ -259,6 +260,7 @@
   position: relative;
   width: 36px;
   height: 20px;
+  padding: 0;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
@@ -336,7 +338,7 @@
 
 .segmentBtnActive {
   background: var(--accent);
-  color: #ffffff;
+  color: var(--btn-active-text);
 }
 
 .shortcutRow {
@@ -403,6 +405,12 @@
 .fontPickerItemActive { background: var(--bg-item-active); color: var(--accent); }
 .fontPickerEmpty { padding: 8px 10px; font-size: 12px; color: var(--text-muted); text-align: center; }
 
+/* Theme group label in dropdown */
+.themeGroupLabel { padding: 4px 10px 2px; font-family: var(--font-ui); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+
+/* Theme actions row (below dropdown) */
+.themeActions { display: flex; gap: 6px; }
+
 /* Theme Editor */
 .themeEditor { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
 .themeList { display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 4px; }
@@ -433,7 +441,7 @@
 .jsonEditor { display: flex; flex-direction: column; gap: 8px; }
 .jsonTextarea { width: 100%; min-height: 200px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; padding: 8px; outline: none; resize: vertical; box-sizing: border-box; tab-size: 2; transition: border-color var(--transition-fast); }
 .jsonTextarea:focus { border-color: var(--accent); }
-.jsonError { color: var(--red); font-family: var(--font-ui); font-size: 11px; padding: 4px 8px; background: rgba(248, 113, 113, 0.1); border-radius: var(--radius-sm); }
+.jsonError { color: var(--red); font-family: var(--font-ui); font-size: 11px; padding: 4px 8px; background: var(--bg-error); border-radius: var(--radius-sm); }
 .jsonActions { display: flex; gap: 6px; }
 
 @media (prefers-reduced-motion: reduce) {

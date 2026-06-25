@@ -19,9 +19,9 @@ function formatCwd(cwd: string): string {
 }
 
 export function StatusBar() {
-  const sessions = useSessionStore((s) => s.sessions)
-  const activeSessionId = useSessionStore((s) => s.activeSessionId)
-  const activeSession = sessions.find((s) => s.id === activeSessionId)
+  const activeSession = useSessionStore((s) =>
+    s.sessions.find((x) => x.id === s.activeSessionId) ?? null
+  )
 
   if (!activeSession) {
     return (
@@ -32,13 +32,14 @@ export function StatusBar() {
   }
 
   return (
-    <div className={styles.statusbar}>
+    <div className={styles.statusbar} role="status" aria-live="polite">
       <span className={styles.item}>
         <span
           className={styles.dot}
           style={{
             backgroundColor: `var(--color-${activeSession.color})`
           }}
+          aria-label={activeSession.color}
         />
         {activeSession.title}
       </span>

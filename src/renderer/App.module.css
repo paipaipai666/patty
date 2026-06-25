@@ -15,8 +15,8 @@
   background: linear-gradient(
     105deg,
     transparent 25%,
-    rgba(99, 102, 241, 0.04) 42%,
-    rgba(34, 211, 238, 0.02) 50%,
+    var(--accent-glow-soft) 42%,
+    var(--cyan-glow-soft) 50%,
     transparent 65%
   );
   pointer-events: none;

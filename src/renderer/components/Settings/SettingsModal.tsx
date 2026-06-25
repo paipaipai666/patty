@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import gsap from 'gsap'
+import { themeRipple } from '../../utils/themeRipple'
+import { getThemeColors } from '../../styles/themes'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import type { AppSettings, CustomTheme, ShortcutMap } from '../../../shared/settingsTypes'
-import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS } from '../../styles/themes'
+import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS, BUILTIN_THEMES } from '../../styles/themes'
 import styles from './SettingsModal.module.css'
 
 const FALLBACK_FONTS = [
@@ -57,11 +60,66 @@ function formatShortcut(e: KeyboardEvent): string {
 }
 
 export function SettingsModal() {
-  const { settings, settingsOpen, closeSettings, updateSetting } = useSettingsStore()
+  const settings = useSettingsStore((s) => s.settings)
+  const settingsOpen = useSettingsStore((s) => s.settingsOpen)
+  const closeSettings = useSettingsStore((s) => s.closeSettings)
+  const updateSetting = useSettingsStore((s) => s.updateSetting)
   const { mounted, exiting } = useAnimatedMount(settingsOpen, 200)
   const [activeCategory, setActiveCategory] = useState<Category>('appearance')
   const [capturingShortcut, setCapturingShortcut] = useState<keyof ShortcutMap | null>(null)
   const captureRef = useRef<keyof ShortcutMap | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+  const navRef = useRef<HTMLElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const prevCategory = useRef<Category>('appearance')
+  const previouslyFocused = useRef<HTMLElement | null>(null)
+
+  // Modal entrance animation (after mount, not useLayoutEffect)
+  useEffect(() => {
+    if (!mounted || !modalRef.current) return
+    const panel = modalRef.current
+    const navItems = navRef.current?.children
+    const fields = contentRef.current?.children
+
+    const tl = gsap.timeline()
+    tl.from(panel, {
+      y: 24, scale: 0.96, opacity: 0,
+      duration: 0.45, ease: 'back.out(1.2)',
+      clearProps: 'transform,opacity'
+    })
+    if (navItems && navItems.length > 0) {
+      tl.from(Array.from(navItems), {
+        x: -12, opacity: 0,
+        duration: 0.3, stagger: 0.04,
+        ease: 'power2.out',
+        clearProps: 'transform,opacity'
+      }, '-=0.2')
+    }
+    if (fields && fields.length > 0) {
+      tl.from(Array.from(fields), {
+        y: 12, opacity: 0,
+        duration: 0.3, stagger: 0.04,
+        ease: 'power2.out',
+        clearProps: 'transform,opacity'
+      }, '-=0.2')
+    }
+
+    return () => { tl.kill() }
+  }, [mounted])
+
+  // Tab content crossfade animation
+  useEffect(() => {
+    if (!contentRef.current || prevCategory.current === activeCategory) return
+    const children = contentRef.current.children
+    if (children.length > 0) {
+      gsap.from(Array.from(children), {
+        y: 8, opacity: 0,
+        duration: 0.3, ease: 'power2.out',
+        clearProps: 'transform,opacity'
+      })
+    }
+    prevCategory.current = activeCategory
+  }, [activeCategory])
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -103,6 +161,41 @@ export function SettingsModal() {
     }
   }, [settingsOpen, handleKeyDown])
 
+  // Focus trap: save/restore focus, keep Tab inside the modal
+  useEffect(() => {
+    if (!settingsOpen) return
+    previouslyFocused.current = document.activeElement as HTMLElement | null
+    const modal = modalRef.current
+    if (modal) {
+      const focusable = modal.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      focusable?.focus()
+    }
+
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !modalRef.current) return
+      const focusables = modalRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', trap)
+    return () => {
+      window.removeEventListener('keydown', trap)
+      previouslyFocused.current?.focus?.()
+    }
+  }, [settingsOpen])
+
   const startCapture = (key: keyof ShortcutMap) => {
     setCapturingShortcut(key)
     captureRef.current = key
@@ -114,10 +207,10 @@ export function SettingsModal() {
     <div className={`${styles.overlay} ${exiting ? styles.overlayExit : ''}`} onMouseDown={(e) => {
       if (e.target === e.currentTarget) closeSettings()
     }}>
-      <div className={`${styles.modal} ${exiting ? styles.modalExit : ''}`}>
+      <div ref={modalRef} className={`${styles.modal} ${exiting ? styles.modalExit : ''}`} role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div className={styles.header}>
-          <span className={styles.title}>Settings</span>
-          <button className={styles.closeBtn} onClick={closeSettings}>
+          <span id="settings-title" className={styles.title}>Settings</span>
+          <button type="button" className={styles.closeBtn} onClick={closeSettings}>
             <svg width="10" height="10" viewBox="0 0 10 10">
               <path d="M0.5 0.5L9.5 9.5M9.5 0.5L0.5 9.5" stroke="currentColor" strokeWidth="1" />
             </svg>
@@ -125,9 +218,10 @@ export function SettingsModal() {
         </div>
 
         <div className={styles.body}>
-          <nav className={styles.nav}>
+          <nav className={styles.nav} ref={navRef}>
             {CATEGORIES.map((cat) => (
               <button
+                type="button"
                 key={cat.key}
                 className={`${styles.navItem} ${activeCategory === cat.key ? styles.navItemActive : ''}`}
                 onClick={() => setActiveCategory(cat.key)}
@@ -137,7 +231,7 @@ export function SettingsModal() {
             ))}
           </nav>
 
-          <div className={styles.content}>
+          <div className={styles.content} ref={contentRef}>
             {activeCategory === 'appearance' && (
               <AppearanceSection settings={settings} updateSetting={updateSetting} />
             )}
@@ -160,6 +254,80 @@ export function SettingsModal() {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ThemePicker({
+  value,
+  customThemes,
+  onChange
+}: {
+  value: string
+  customThemes: CustomTheme[]
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  const builtinEntries = Object.entries(BUILTIN_THEMES)
+  const currentName = BUILTIN_THEMES[value]?.name ?? customThemes.find((t) => t.id === value)?.name ?? value
+
+  const handleSelect = (id: string, e: React.MouseEvent) => {
+    if (id !== value) {
+      // Trigger ripple from click position
+      const theme = getThemeColors(id, customThemes)
+      themeRipple(e.clientX, e.clientY, theme.ui['--bg-app'])
+    }
+    onChange(id)
+    setOpen(false)
+  }
+
+  return (
+    <div className={styles.fontPicker} ref={containerRef}>
+      <input
+        className={styles.fontPickerInput}
+        value={currentName}
+        readOnly
+        onClick={() => setOpen(!open)}
+      />
+      {open && (
+        <div className={styles.fontPickerList}>
+          <div className={styles.themeGroupLabel}>Built-in</div>
+          {builtinEntries.map(([id, theme]) => (
+            <div
+              key={id}
+              className={`${styles.fontPickerItem} ${id === value ? styles.fontPickerItemActive : ''}`}
+              onClick={(e) => handleSelect(id, e)}
+            >
+              {theme.name}
+            </div>
+          ))}
+          {customThemes.length > 0 && (
+            <>
+              <div className={styles.themeGroupLabel}>Custom</div>
+              {customThemes.map((t) => (
+                <div
+                  key={t.id}
+                  className={`${styles.fontPickerItem} ${t.id === value ? styles.fontPickerItemActive : ''}`}
+                  onClick={(e) => handleSelect(t.id, e)}
+                >
+                  {t.name}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -235,13 +403,6 @@ function ThemeEditor({
 
   const editingTheme = customThemes.find((t) => t.id === editingId)
 
-  const handleNew = () => {
-    const theme = createDefaultCustomTheme(`Theme ${customThemes.length + 1}`)
-    onUpdateThemes([...customThemes, theme])
-    setEditingId(theme.id)
-    onSelectTheme(theme.id)
-  }
-
   const handleDelete = (id: string) => {
     onUpdateThemes(customThemes.filter((t) => t.id !== id))
     if (editingId === id) setEditingId(null)
@@ -259,15 +420,6 @@ function ThemeEditor({
     onUpdateThemes([...customThemes, copy])
     setEditingId(copy.id)
     onSelectTheme(copy.id)
-  }
-
-  const handleImport = async () => {
-    const result = await window.terminalAPI.themeImport()
-    if (result.success && result.theme) {
-      onUpdateThemes([...customThemes, result.theme])
-      setEditingId(result.theme.id)
-      onSelectTheme(result.theme.id)
-    }
   }
 
   const handleExport = (theme: CustomTheme) => {
@@ -313,17 +465,13 @@ function ThemeEditor({
           >
             <span className={styles.themeItemName}>{theme.name}</span>
             <div className={styles.themeItemActions}>
-              <button className={styles.themeActionBtn} title="Apply" onClick={() => onSelectTheme(theme.id)}>✓</button>
-              <button className={styles.themeActionBtn} title="Duplicate" onClick={(e) => { e.stopPropagation(); handleDuplicate(theme) }}>⧉</button>
-              <button className={styles.themeActionBtn} title="Export" onClick={(e) => { e.stopPropagation(); handleExport(theme) }}>↓</button>
-              <button className={styles.themeActionBtn} title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(theme.id) }}>✕</button>
+              <button type="button" className={styles.themeActionBtn} title="Apply" aria-label="Apply theme" onClick={() => onSelectTheme(theme.id)}>✓</button>
+              <button type="button" className={styles.themeActionBtn} title="Duplicate" aria-label="Duplicate theme" onClick={(e) => { e.stopPropagation(); handleDuplicate(theme) }}>⧉</button>
+              <button type="button" className={styles.themeActionBtn} title="Export" aria-label="Export theme" onClick={(e) => { e.stopPropagation(); handleExport(theme) }}>↓</button>
+              <button type="button" className={styles.themeActionBtn} title="Delete" aria-label="Delete theme" onClick={(e) => { e.stopPropagation(); handleDelete(theme.id) }}>✕</button>
             </div>
           </div>
         ))}
-        <div className={styles.themeListActions}>
-          <button className={styles.themeBtn} onClick={handleNew}>+ New Theme</button>
-          <button className={styles.themeBtn} onClick={handleImport}>Import</button>
-        </div>
       </div>
 
       {editingTheme && (
@@ -336,12 +484,14 @@ function ThemeEditor({
             />
             <div className={styles.segmentGroup}>
               <button
+                type="button"
                 className={`${styles.segmentBtn} ${editorMode === 'visual' ? styles.segmentBtnActive : ''}`}
                 onClick={() => setEditorMode('visual')}
               >
                 Visual
               </button>
               <button
+                type="button"
                 className={`${styles.segmentBtn} ${editorMode === 'json' ? styles.segmentBtnActive : ''}`}
                 onClick={startJsonEdit}
               >
@@ -395,8 +545,8 @@ function ThemeEditor({
               />
               {jsonError && <div className={styles.jsonError}>{jsonError}</div>}
               <div className={styles.jsonActions}>
-                <button className={styles.themeBtn} onClick={applyJsonEdit}>Apply</button>
-                <button className={styles.themeBtn} onClick={() => setEditorMode('visual')}>Cancel</button>
+                <button type="button" className={styles.themeBtn} onClick={applyJsonEdit}>Apply</button>
+                <button type="button" className={styles.themeBtn} onClick={() => setEditorMode('visual')}>Cancel</button>
               </div>
             </div>
           )}
@@ -413,41 +563,37 @@ function AppearanceSection({
   settings: AppSettings
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
 }) {
-  const isCustom = settings.theme !== 'dark' && settings.theme !== 'light'
+  const isBuiltin = settings.theme in BUILTIN_THEMES
+  const isCustom = !isBuiltin
+
+  const handleImport = async () => {
+    const result = await window.terminalAPI.themeImport()
+    if (result.success && result.theme) {
+      updateSetting('customThemes', [...settings.customThemes, result.theme])
+      updateSetting('theme', result.theme.id)
+    }
+  }
+
+  const handleNew = () => {
+    const theme = createDefaultCustomTheme(`Theme ${settings.customThemes.length + 1}`)
+    updateSetting('customThemes', [...settings.customThemes, theme])
+    updateSetting('theme', theme.id)
+  }
 
   return (
     <div className={styles.section}>
       <div className={styles.sectionTitle}>Theme</div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Color Theme</span>
-        <div className={styles.segmentGroup}>
-          <button
-            className={`${styles.segmentBtn} ${settings.theme === 'dark' ? styles.segmentBtnActive : ''}`}
-            onClick={() => updateSetting('theme', 'dark')}
-          >
-            Dark
-          </button>
-          <button
-            className={`${styles.segmentBtn} ${settings.theme === 'light' ? styles.segmentBtnActive : ''}`}
-            onClick={() => updateSetting('theme', 'light')}
-          >
-            Light
-          </button>
-          <button
-            className={`${styles.segmentBtn} ${isCustom ? styles.segmentBtnActive : ''}`}
-            onClick={() => {
-              if (settings.customThemes.length > 0) {
-                updateSetting('theme', settings.customThemes[0].id)
-              } else {
-                const theme = createDefaultCustomTheme('My Theme')
-                updateSetting('customThemes', [theme])
-                updateSetting('theme', theme.id)
-              }
-            }}
-          >
-            Custom
-          </button>
-        </div>
+        <ThemePicker
+          value={settings.theme}
+          customThemes={settings.customThemes}
+          onChange={(id) => updateSetting('theme', id)}
+        />
+      </div>
+      <div className={styles.themeActions}>
+        <button type="button" className={styles.themeBtn} onClick={handleImport}>Import</button>
+        <button type="button" className={styles.themeBtn} onClick={handleNew}>New</button>
       </div>
 
       {isCustom && (
@@ -467,7 +613,7 @@ function AppearanceSection({
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Font Size</span>
         <div className={styles.stepper}>
-          <button className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.max(8, settings.fontSize - 1))}>-</button>
+          <button type="button" className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.max(8, settings.fontSize - 1))}>-</button>
           <input
             type="number"
             className={styles.numberInput}
@@ -476,7 +622,7 @@ function AppearanceSection({
             max={32}
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 8 && v <= 32) updateSetting('fontSize', v) }}
           />
-          <button className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.min(32, settings.fontSize + 1))}>+</button>
+          <button type="button" className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.min(32, settings.fontSize + 1))}>+</button>
         </div>
       </div>
     </div>
@@ -498,6 +644,7 @@ function TerminalSection({
         <div className={styles.segmentGroup}>
           {(['block', 'underline', 'bar'] as const).map((style) => (
             <button
+              type="button"
               key={style}
               className={`${styles.segmentBtn} ${settings.cursorStyle === style ? styles.segmentBtnActive : ''}`}
               onClick={() => updateSetting('cursorStyle', style)}
@@ -512,12 +659,15 @@ function TerminalSection({
           <span className={styles.settingLabel}>Cursor Blink</span>
           <div className={styles.settingDesc}>Animate cursor blinking</div>
         </div>
-        <div
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.cursorBlink}
           className={`${styles.toggle} ${settings.cursorBlink ? styles.toggleOn : ''}`}
           onClick={() => updateSetting('cursorBlink', !settings.cursorBlink)}
         >
           <div className={styles.toggleKnob} />
-        </div>
+        </button>
       </div>
 
       <div className={styles.sectionTitle}>Display</div>
@@ -574,7 +724,7 @@ function ShortcutsSection({
             <span className={`${styles.shortcutKey} ${capturing === key ? styles.shortcutCapture : ''}`}>
               {capturing === key ? 'Press keys...' : shortcuts[key]}
             </span>
-            <button className={styles.shortcutBtn} onClick={() => onStartCapture(key)}>
+            <button type="button" className={styles.shortcutBtn} onClick={() => onStartCapture(key)}>
               {capturing === key ? 'Cancel' : 'Edit'}
             </button>
           </div>
@@ -598,12 +748,14 @@ function LayoutSection({
         <span className={styles.settingLabel}>Sidebar Position</span>
         <div className={styles.segmentGroup}>
           <button
+            type="button"
             className={`${styles.segmentBtn} ${settings.sidebarPosition === 'left' ? styles.segmentBtnActive : ''}`}
             onClick={() => updateSetting('sidebarPosition', 'left')}
           >
             Left
           </button>
           <button
+            type="button"
             className={`${styles.segmentBtn} ${settings.sidebarPosition === 'right' ? styles.segmentBtnActive : ''}`}
             onClick={() => updateSetting('sidebarPosition', 'right')}
           >
@@ -650,12 +802,15 @@ function NotificationsSection({
             Show indicators for permission requests, questions, and errors
           </div>
         </div>
-        <div
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.notifications.claudeCode}
           className={`${styles.toggle} ${settings.notifications.claudeCode ? styles.toggleOn : ''}`}
           onClick={toggleClaudeCode}
         >
           <div className={styles.toggleKnob} />
-        </div>
+        </button>
       </div>
 
       <div className={styles.settingRow}>
@@ -665,12 +820,15 @@ function NotificationsSection({
             Show indicators for permission requests, questions, and errors
           </div>
         </div>
-        <div
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.notifications.openCode}
           className={`${styles.toggle} ${settings.notifications.openCode ? styles.toggleOn : ''}`}
           onClick={toggleOpenCode}
         >
           <div className={styles.toggleKnob} />
-        </div>
+        </button>
       </div>
 
       <div className={styles.settingDesc} style={{ marginTop: '16px' }}>

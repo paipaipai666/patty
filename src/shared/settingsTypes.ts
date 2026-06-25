@@ -55,6 +55,64 @@ export interface UITheme {
   '--bg-dropdown-menu': string
   '--btn-close-hover': string
   '--btn-min-max-hover': string
+
+  '--ai-claude-color': string
+  '--ai-claude-bg': string
+  '--ai-claude-glow': string
+  '--ai-opencode-color': string
+  '--ai-opencode-bg': string
+  '--ai-opencode-glow': string
+
+  '--fire-claude': string
+  '--fire-opencode': string
+  '--fire-glow-claude-3': string
+  '--fire-glow-claude-4': string
+  '--fire-glow-opencode-3': string
+  '--fire-glow-opencode-4': string
+  '--fire-gradient-claude': string
+  '--fire-gradient-opencode': string
+
+  '--attention-complete-bg': string
+  '--attention-complete-bar': string
+  '--attention-complete-glow': string
+  '--attention-permission-bg': string
+  '--attention-permission-bar': string
+  '--attention-permission-glow': string
+  '--attention-error-bg': string
+  '--attention-error-bar': string
+  '--attention-error-glow': string
+
+  '--overlay-bg': string
+  '--scrollbar-thumb': string
+  '--neutral': string
+  '--neutral-4': string
+  '--neutral-5': string
+  '--neutral-6': string
+  '--neutral-8': string
+  '--neutral-10': string
+  '--neutral-20': string
+  '--accent-glow-subtle': string
+  '--accent-glow-soft': string
+  '--accent-glow-light': string
+  '--accent-border': string
+  '--accent-glow-strong': string
+  '--accent-hover': string
+  '--cyan-glow-soft': string
+  '--cyan-glow': string
+  '--cyan-glow-light': string
+  '--cyan-glow-medium': string
+  '--green-glow': string
+  '--red-glow': string
+  '--bg-error': string
+  '--btn-close-hover-alpha': string
+  '--text-separator': string
+  '--btn-close-text': string
+  '--btn-active-text': string
+  '--surface-highlight': string
+  '--green': string
+  '--red': string
+  '--cyan': string
+  '--amber': string
 }
 
 export interface CustomTheme {

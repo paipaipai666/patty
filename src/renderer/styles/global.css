@@ -30,8 +30,8 @@ body::before {
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 45% at 15% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 55% at 85% 80%, rgba(34, 211, 238, 0.03) 0%, transparent 50%);
+    radial-gradient(ellipse 60% 45% at 15% 20%, var(--accent-glow-light) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 55% at 85% 80%, var(--cyan-glow) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
 }
@@ -43,8 +43,8 @@ body::before {
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -52,13 +52,19 @@ body::before {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(128,128,128,0.1);
-  border-radius: 2px;
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
   transition: background 150ms var(--ease-out);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 /* Reset button styles */
@@ -89,7 +95,7 @@ input {
 }
 
 .xterm-viewport::-webkit-scrollbar-thumb {
-  background: rgba(128,128,128,0.1);
+  background: var(--scrollbar-thumb);
   border-radius: 2px;
 }
 

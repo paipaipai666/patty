@@ -1,4 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
 import { useSessionStore, type Collection, type TerminalSession } from '../../store/sessionStore'
 import { SessionItem } from './SessionItem'
 import { CollectionItem } from './CollectionItem'
@@ -27,7 +29,6 @@ function renderCollection(
       key={collection.id}
       collection={collection}
       depth={depth}
-      onCloseSession={onClose}
       onContextMenu={onCollectionContextMenu}
     >
       {childCollections.map((child) =>
@@ -50,6 +51,29 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
   const sessions = useSessionStore((s) => s.sessions)
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const loaded = useSessionStore((s) => s.loaded)
+  const listRef = useRef<HTMLDivElement>(null)
+  const prevCount = useRef(0)
+
+  // Stagger entrance animation for new items
+  useGSAP(() => {
+    if (!listRef.current) return
+    const items = listRef.current.children
+    if (items.length > prevCount.current && prevCount.current > 0) {
+      // New items added — animate only the new ones
+      const newItems = Array.from(items).slice(prevCount.current)
+      gsap.from(newItems, {
+        x: -40,
+        opacity: 0,
+        scale: 0.92,
+        duration: 0.4,
+        stagger: 0.06,
+        ease: 'back.out(1.3)',
+        clearProps: 'transform,opacity'
+      })
+    }
+    prevCount.current = items.length
+  }, { scope: listRef, dependencies: [sessions.map((s) => s.id).join(','), collections.map((c) => c.id).join(',')] })
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery?.trim()) return sessions
@@ -83,20 +107,29 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
   const topLevelCollections = filteredCollections.filter((c) => c.parentId === null)
   const topLevelSessions = filteredSessions.filter((s) => s.collectionId === null)
 
+  // While loading from disk, render nothing to avoid flashing the empty state
+  if (!loaded) return null
+
   if (filteredSessions.length === 0 && filteredCollections.length === 0) {
     return (
       <div className={styles.emptyState}>
-        <span className={styles.emptyIcon}>⌨</span>
+        <span className={styles.emptyIcon}>
+          <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" strokeWidth="2" opacity="0.4" />
+            <path d="M12 20L18 26L12 32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+            <path d="M24 32H34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
+          </svg>
+        </span>
         <span>{searchQuery?.trim() ? 'No matches' : 'No terminals'}</span>
         <span className={styles.emptyHint}>
-          {searchQuery?.trim() ? 'Try a different search' : 'Press Ctrl+T to create one'}
+          {searchQuery?.trim() ? 'Try a different search' : 'Press Ctrl+T or click + to create one'}
         </span>
       </div>
     )
   }
 
   return (
-    <div className={styles.list}>
+    <div className={styles.list} ref={listRef} role="tablist" aria-label="Terminal sessions">
       {topLevelCollections.map((collection) =>
         renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onCollectionContextMenu, 0)
       )}

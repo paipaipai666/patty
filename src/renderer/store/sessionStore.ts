@@ -26,10 +26,10 @@ export interface TerminalSession {
   aiType?: 'claude' | 'opencode' | null
 }
 
-const COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
+export const SESSION_COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
 
 function getNextColor(index: number): SessionColor {
-  return COLORS[index % COLORS.length]
+  return SESSION_COLORS[index % SESSION_COLORS.length]
 }
 
 interface SessionStore {
@@ -71,6 +71,7 @@ interface SessionStore {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 const attentionTimers: Record<string, ReturnType<typeof setTimeout>> = {}
+let ipcCleanup: (() => void) | null = null
 
 function debouncedSave(getState: () => SessionStore) {
   if (saveTimer) clearTimeout(saveTimer)
@@ -98,6 +99,10 @@ function debouncedSave(getState: () => SessionStore) {
   }, 500)
 }
 
+export function teardownSessionIPC() {
+  if (ipcCleanup) ipcCleanup()
+}
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   collections: [],
@@ -120,9 +125,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
 
       // Listen for attention changes from hook server
-      window.terminalAPI.onAttentionChange((paneId, eventType, aiType) => {
+      // Guard against duplicate registration (e.g. React StrictMode remount)
+      if (ipcCleanup) ipcCleanup()
+      const offAttention = window.terminalAPI.onAttentionChange((paneId, eventType, aiType) => {
         get().setAttention(paneId, eventType)
-        // aiType 参数非 undefined 时同步设置/清除
+        // Sync aiType when the parameter is not undefined
         if (aiType !== undefined) {
           get().setAiType(paneId, aiType ?? null)
         }
@@ -131,9 +138,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Listen for PTY exit to cleanup attention state
       // Don't remove the session — let the user close it manually.
       // TerminalPane's onExit handler writes "[Process exited]" to the terminal.
-      window.terminalAPI.onPtyExit((paneId) => {
+      const offPtyExit = window.terminalAPI.onPtyExit((paneId) => {
         get().setAttention(paneId, null)
       })
+
+      ipcCleanup = () => {
+        offAttention()
+        offPtyExit()
+        ipcCleanup = null
+      }
     } catch (err) {
       console.error('Failed to load state:', err)
       set({ loaded: true })
@@ -175,6 +188,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   removeSession: (id: string) => {
+    if (attentionTimers[id]) {
+      clearTimeout(attentionTimers[id])
+      delete attentionTimers[id]
+    }
     set((state) => {
       const filtered = state.sessions.filter((s) => s.id !== id)
       let newActiveId = state.activeSessionId
@@ -314,6 +331,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setSidebarWidth: (width: number) => {
+    // Keep in sync with --sidebar-min-width / --sidebar-max-width in variables.css
     const clamped = Math.min(320, Math.max(160, width))
     set({ sidebarWidth: clamped })
     debouncedSave(get)

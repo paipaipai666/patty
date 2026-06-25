@@ -42,6 +42,13 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     try {
       const settings = await window.terminalAPI.settingsGetAll()
       set({ settings, loaded: true })
+      // Cache theme for synchronous boot on next launch (prevents dark flash)
+      try {
+        sessionStorage.setItem('patty-theme', settings.theme)
+        document.documentElement.dataset.theme = settings.theme
+      } catch {
+        // ignore sessionStorage failures
+      }
       applyTheme(settings.theme, settings.customThemes)
       applyFontSettings(settings.fontFamily, settings.fontSize)
     } catch (err) {

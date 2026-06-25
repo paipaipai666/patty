@@ -9,21 +9,26 @@ const ROWS = 5
 const GAP = 3.5
 const PAD = 6
 
-const PALETTES: Record<string, string[]> = {
-  claude: [
+function parseRgb(color: string): [number, number, number] {
+  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+  if (m) return [+m[1], +m[2], +m[3]]
+  const hex = color.replace('#', '')
+  if (hex.length === 6) {
+    return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)]
+  }
+  return [200, 200, 200]
+}
+
+function buildPalette(varName: string): string[] {
+  const val = getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
+  const [r, g, b] = parseRgb(val || '#cccccc')
+  return [
     'transparent',
-    'rgba(204,120,92,0.08)',
-    'rgba(204,120,92,0.30)',
-    'rgba(204,120,92,0.65)',
-    'rgba(204,120,92,1.0)',
-  ],
-  opencode: [
-    'transparent',
-    'rgba(255,255,255,0.06)',
-    'rgba(255,255,255,0.25)',
-    'rgba(255,255,255,0.55)',
-    'rgba(255,255,255,0.95)',
-  ],
+    `rgba(${r},${g},${b},0.08)`,
+    `rgba(${r},${g},${b},0.30)`,
+    `rgba(${r},${g},${b},0.65)`,
+    `rgba(${r},${g},${b},1.0)`,
+  ]
 }
 
 export function ContributionGrid({ aiType }: Props) {
@@ -41,7 +46,7 @@ export function ContributionGrid({ aiType }: Props) {
     const cellSize = Math.floor((parentH - PAD * 2 - (ROWS - 1) * GAP) / ROWS)
     const usableW = parentW - PAD * 2 - 20
     const COLS = Math.max(16, Math.floor((usableW + GAP) / (cellSize + GAP)))
-    const palette = PALETTES[aiType] || PALETTES.opencode
+    const palette = buildPalette(aiType === 'claude' ? '--fire-claude' : '--fire-opencode')
 
     container.dataset.type = aiType
     container.style.gridTemplateColumns = `repeat(${COLS}, ${cellSize}px)`
@@ -117,8 +122,24 @@ export function ContributionGrid({ aiType }: Props) {
     render()
     intervalId = setInterval(() => { update(); render() }, 200)
 
+    // Pause animation when the window is hidden to save CPU/battery
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (intervalId) {
+          clearInterval(intervalId)
+          intervalId = null
+        }
+      } else if (!intervalId) {
+        update()
+        render()
+        intervalId = setInterval(() => { update(); render() }, 200)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
     return () => {
       if (intervalId) clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       container.innerHTML = ''
     }
   }, [aiType])

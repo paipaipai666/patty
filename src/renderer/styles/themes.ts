@@ -1,100 +1,30 @@
 import type { CustomTheme, UITheme, XtermTheme } from '../../shared/settingsTypes'
+import darkJson from '../themes/dark.json'
+import lightJson from '../themes/light.json'
+import draculaJson from '../themes/dracula.json'
+import nordJson from '../themes/nord.json'
+import tokyoNightJson from '../themes/tokyo-night.json'
+import solarizedLightJson from '../themes/solarized-light.json'
 
-export const DARK_UI: UITheme = {
-  '--bg-app': '#0a0a0c',
-  '--bg-titlebar': 'rgba(18,18,22,0.50)',
-  '--bg-sidebar': 'rgba(18,18,22,0.50)',
-  '--bg-main': 'rgba(10,10,12,0.40)',
-  '--bg-terminal': '#0a0a0c',
-  '--bg-item-hover': 'rgba(128,128,128,0.06)',
-  '--bg-item-active': 'rgba(99,102,241,0.08)',
-  '--bg-statusbar': 'rgba(18,18,22,0.50)',
-  '--bg-input': 'rgba(128,128,128,0.06)',
-  '--bg-context-menu': 'rgba(28,28,34,0.78)',
-  '--text-primary': '#e6e6ed',
-  '--text-secondary': '#90909e',
-  '--text-muted': '#5c5c6a',
-  '--border-subtle': 'rgba(255,255,255,0.05)',
-  '--border-medium': 'rgba(255,255,255,0.08)',
-  '--accent': '#6366f1',
-  '--accent-alpha': 'rgba(99,102,241,0.12)',
-  '--accent-glow': 'rgba(99,102,241,0.25)',
-  '--bg-dropdown-menu': 'rgba(28,28,34,0.85)',
-  '--btn-close-hover': '#e81123',
-  '--btn-min-max-hover': 'rgba(255,255,255,0.08)'
+// Primary: from JSON files
+export const DARK_UI: UITheme = darkJson.ui as UITheme
+export const LIGHT_UI: UITheme = lightJson.ui as UITheme
+export const DARK_XTERM: XtermTheme = darkJson.terminal as XtermTheme
+export const LIGHT_XTERM: XtermTheme = lightJson.terminal as XtermTheme
+
+// All built-in themes (key = theme id used in settings)
+export const BUILTIN_THEMES: Record<string, { name: string; ui: UITheme; terminal: XtermTheme }> = {
+  dark: { name: darkJson.name, ui: DARK_UI, terminal: DARK_XTERM },
+  light: { name: lightJson.name, ui: LIGHT_UI, terminal: LIGHT_XTERM },
+  dracula: { name: draculaJson.name, ui: draculaJson.ui as UITheme, terminal: draculaJson.terminal as XtermTheme },
+  nord: { name: nordJson.name, ui: nordJson.ui as UITheme, terminal: nordJson.terminal as XtermTheme },
+  'tokyo-night': { name: tokyoNightJson.name, ui: tokyoNightJson.ui as UITheme, terminal: tokyoNightJson.terminal as XtermTheme },
+  'solarized-light': { name: solarizedLightJson.name, ui: solarizedLightJson.ui as UITheme, terminal: solarizedLightJson.terminal as XtermTheme }
 }
 
-export const LIGHT_UI: UITheme = {
-  '--bg-app': '#f6f7f9',
-  '--bg-titlebar': 'rgba(248,249,252,0.70)',
-  '--bg-sidebar': 'rgba(248,249,252,0.70)',
-  '--bg-main': 'rgba(255,255,255,0.40)',
-  '--bg-terminal': '#ffffff',
-  '--bg-item-hover': 'rgba(128,128,128,0.05)',
-  '--bg-item-active': 'rgba(99,102,241,0.06)',
-  '--bg-statusbar': 'rgba(248,249,252,0.55)',
-  '--bg-input': 'rgba(0,0,0,0.04)',
-  '--bg-context-menu': 'rgba(238,239,244,0.78)',
-  '--text-primary': '#12121a',
-  '--text-secondary': '#5a5a6e',
-  '--text-muted': '#9292a8',
-  '--border-subtle': 'rgba(0,0,0,0.04)',
-  '--border-medium': 'rgba(0,0,0,0.07)',
-  '--accent': '#6366f1',
-  '--accent-alpha': 'rgba(99,102,241,0.08)',
-  '--accent-glow': 'rgba(99,102,241,0.15)',
-  '--bg-dropdown-menu': 'rgba(238,239,244,0.85)',
-  '--btn-close-hover': '#e81123',
-  '--btn-min-max-hover': 'rgba(0,0,0,0.05)'
-}
-
-export const DARK_XTERM: XtermTheme = {
-  background: '#0a0a0c',
-  foreground: '#e6e6ed',
-  cursor: '#e6e6ed',
-  cursorAccent: '#0a0a0c',
-  selectionBackground: 'rgba(99, 102, 241, 0.3)',
-  black: '#12121a',
-  red: '#f87171',
-  green: '#34d399',
-  yellow: '#fbbf24',
-  blue: '#818cf8',
-  magenta: '#a78bfa',
-  cyan: '#22d3ee',
-  white: '#c8c8d0',
-  brightBlack: '#5c5c6a',
-  brightRed: '#f87171',
-  brightGreen: '#34d399',
-  brightYellow: '#fbbf24',
-  brightBlue: '#818cf8',
-  brightMagenta: '#a78bfa',
-  brightCyan: '#22d3ee',
-  brightWhite: '#ffffff'
-}
-
-export const LIGHT_XTERM: XtermTheme = {
-  background: '#ffffff',
-  foreground: '#12121a',
-  cursor: '#12121a',
-  cursorAccent: '#ffffff',
-  selectionBackground: 'rgba(99, 102, 241, 0.15)',
-  black: '#12121a',
-  red: '#dc2626',
-  green: '#059669',
-  yellow: '#d97706',
-  blue: '#4f46e5',
-  magenta: '#7c3aed',
-  cyan: '#0d9488',
-  white: '#3d3d50',
-  brightBlack: '#9292a8',
-  brightRed: '#dc2626',
-  brightGreen: '#059669',
-  brightYellow: '#d97706',
-  brightBlue: '#4f46e5',
-  brightMagenta: '#7c3aed',
-  brightCyan: '#0d9488',
-  brightWhite: '#12121a'
-}
+// Fallback defaults (covers any field missing from imported JSON)
+const UI_DEFAULTS = { ...DARK_UI } as UITheme
+const XTERM_DEFAULTS = { ...DARK_XTERM } as XtermTheme
 
 export const UI_COLOR_LABELS: Record<keyof UITheme, string> = {
   '--bg-app': 'App Background',
@@ -117,7 +47,65 @@ export const UI_COLOR_LABELS: Record<keyof UITheme, string> = {
   '--accent-glow': 'Accent Glow',
   '--bg-dropdown-menu': 'Dropdown Menu',
   '--btn-close-hover': 'Close Button Hover',
-  '--btn-min-max-hover': 'Min/Max Button Hover'
+  '--btn-min-max-hover': 'Min/Max Button Hover',
+
+  '--ai-claude-color': 'AI Claude Icon',
+  '--ai-claude-bg': 'AI Claude Background',
+  '--ai-claude-glow': 'AI Claude Glow',
+  '--ai-opencode-color': 'AI OpenCode Icon',
+  '--ai-opencode-bg': 'AI OpenCode Background',
+  '--ai-opencode-glow': 'AI OpenCode Glow',
+
+  '--fire-claude': 'Fire Claude',
+  '--fire-opencode': 'Fire OpenCode',
+  '--fire-glow-claude-3': 'Fire Claude Glow (low)',
+  '--fire-glow-claude-4': 'Fire Claude Glow (high)',
+  '--fire-glow-opencode-3': 'Fire OpenCode Glow (low)',
+  '--fire-glow-opencode-4': 'Fire OpenCode Glow (high)',
+  '--fire-gradient-claude': 'Fire Claude Gradient',
+  '--fire-gradient-opencode': 'Fire OpenCode Gradient',
+
+  '--attention-complete-bg': 'Attention Complete BG',
+  '--attention-complete-bar': 'Attention Complete Bar',
+  '--attention-complete-glow': 'Attention Complete Glow',
+  '--attention-permission-bg': 'Attention Permission BG',
+  '--attention-permission-bar': 'Attention Permission Bar',
+  '--attention-permission-glow': 'Attention Permission Glow',
+  '--attention-error-bg': 'Attention Error BG',
+  '--attention-error-bar': 'Attention Error Bar',
+  '--attention-error-glow': 'Attention Error Glow',
+
+  '--overlay-bg': 'Overlay Background',
+  '--scrollbar-thumb': 'Scrollbar Thumb',
+  '--neutral': 'Neutral Gray',
+  '--neutral-4': 'Neutral 4%',
+  '--neutral-5': 'Neutral 5%',
+  '--neutral-6': 'Neutral 6%',
+  '--neutral-8': 'Neutral 8%',
+  '--neutral-10': 'Neutral 10%',
+  '--neutral-20': 'Neutral 20%',
+  '--accent-glow-subtle': 'Accent Glow Subtle',
+  '--accent-glow-soft': 'Accent Glow Soft',
+  '--accent-glow-light': 'Accent Glow Light',
+  '--accent-border': 'Accent Border',
+  '--accent-glow-strong': 'Accent Glow Strong',
+  '--accent-hover': 'Accent Hover',
+  '--cyan-glow-soft': 'Cyan Glow Soft',
+  '--cyan-glow': 'Cyan Glow',
+  '--cyan-glow-light': 'Cyan Glow Light',
+  '--cyan-glow-medium': 'Cyan Glow Medium',
+  '--green-glow': 'Green Glow',
+  '--red-glow': 'Red Glow',
+  '--bg-error': 'Error Background',
+  '--btn-close-hover-alpha': 'Close Button Hover Alpha',
+  '--text-separator': 'Text Separator',
+  '--btn-close-text': 'Close Button Text',
+  '--btn-active-text': 'Active Button Text',
+  '--surface-highlight': 'Surface Highlight',
+  '--green': 'Green',
+  '--red': 'Red',
+  '--cyan': 'Cyan',
+  '--amber': 'Amber'
 }
 
 export const XTERM_COLOR_LABELS: Record<keyof XtermTheme, string> = {
@@ -146,16 +134,42 @@ export const XTERM_COLOR_LABELS: Record<keyof XtermTheme, string> = {
 
 export function getThemeColors(theme: string, customThemes: CustomTheme[] = []): { ui: UITheme; terminal: XtermTheme } {
   const custom = customThemes.find((t) => t.id === theme)
-  if (custom) return { ui: custom.ui, terminal: custom.terminal }
-  if (theme === 'light') return { ui: LIGHT_UI, terminal: LIGHT_XTERM }
-  return { ui: DARK_UI, terminal: DARK_XTERM }
+  if (custom) return {
+    ui: { ...UI_DEFAULTS, ...custom.ui } as UITheme,
+    terminal: { ...XTERM_DEFAULTS, ...custom.terminal } as XtermTheme
+  }
+  const builtin = BUILTIN_THEMES[theme]
+  if (builtin) return {
+    ui: { ...UI_DEFAULTS, ...builtin.ui } as UITheme,
+    terminal: { ...XTERM_DEFAULTS, ...builtin.terminal } as XtermTheme
+  }
+  return {
+    ui: { ...UI_DEFAULTS, ...DARK_UI } as UITheme,
+    terminal: { ...XTERM_DEFAULTS, ...DARK_XTERM } as XtermTheme
+  }
 }
+
+// Module-level cache to diff against previous theme application
+const _appliedThemeCache = new Map<string, string>()
 
 export function applyTheme(theme: string, customThemes: CustomTheme[] = []): void {
   const { ui } = getThemeColors(theme, customThemes)
   const root = document.documentElement
+
+  // Apply only changed or new properties
   for (const [key, value] of Object.entries(ui)) {
-    root.style.setProperty(key, value)
+    if (_appliedThemeCache.get(key) !== value) {
+      root.style.setProperty(key, value)
+      _appliedThemeCache.set(key, value)
+    }
+  }
+
+  // Remove properties that existed in the old theme but not in the new one
+  for (const key of _appliedThemeCache.keys()) {
+    if (!(key in ui)) {
+      root.style.removeProperty(key)
+      _appliedThemeCache.delete(key)
+    }
   }
 }
 

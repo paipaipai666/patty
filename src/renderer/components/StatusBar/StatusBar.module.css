@@ -20,7 +20,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(128,128,128,0.04), transparent);
+  background: linear-gradient(90deg, transparent, var(--neutral-4), transparent);
   pointer-events: none;
 }
 
@@ -42,12 +42,11 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 5px rgba(52, 211, 153, 0.3);
+  background: var(--color-gray);
 }
 
 .separator {
-  color: rgba(128,128,128,0.2);
+  color: var(--text-separator);
   font-size: 10px;
   font-weight: 400;
 }

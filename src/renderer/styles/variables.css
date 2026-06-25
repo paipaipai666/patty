@@ -2,6 +2,73 @@
   --accent:            #6366f1;
   --accent-alpha:      rgba(99, 102, 241, 0.12);
   --accent-glow:       rgba(99, 102, 241, 0.25);
+
+  --bg-app:            #0a0a0c;
+
+  /* AI icon colors */
+  --ai-claude-color:       #d97757;
+  --ai-claude-bg:          rgba(217,119,87,0.12);
+  --ai-claude-glow:        rgba(217,119,87,0.25);
+  --ai-opencode-color:     rgba(255,255,255,0.8);
+  --ai-opencode-bg:        rgba(255,255,255,0.06);
+  --ai-opencode-glow:      rgba(255,255,255,0.12);
+
+  /* Fire effect - ContributionGrid */
+  --fire-claude:       #cc785c;
+  --fire-opencode:     #ffffff;
+  --fire-glow-claude-3:    rgba(204, 120, 92, 0.25);
+  --fire-glow-claude-4:    rgba(204, 120, 92, 0.5);
+  --fire-glow-opencode-3:  rgba(255, 255, 255, 0.25);
+  --fire-glow-opencode-4:  rgba(255, 255, 255, 0.5);
+  --fire-gradient-claude:    linear-gradient(90deg, transparent 0%, rgba(204, 120, 92, 0.10) 40%, rgba(204, 120, 92, 0.22) 100%);
+  --fire-gradient-opencode:  linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0.18) 100%);
+
+  /* Attention states (session list) */
+  --attention-complete-bg:     rgba(52, 211, 153, 0.12);
+  --attention-complete-bar:    #34d399;
+  --attention-complete-glow:   rgba(52, 211, 153, 0.3);
+  --attention-permission-bg:   rgba(99, 102, 241, 0.12);
+  --attention-permission-bar:  #818cf8;
+  --attention-permission-glow: rgba(99, 102, 241, 0.3);
+  --attention-error-bg:        rgba(248, 113, 113, 0.12);
+  --attention-error-bar:       #f87171;
+  --attention-error-glow:      rgba(248, 113, 113, 0.3);
+
+  /* Neutral gray scale */
+  --overlay-bg:          rgba(0, 0, 0, 0.4);
+  --scrollbar-thumb:     rgba(128,128,128,0.1);
+  --neutral:             #808080;
+  --neutral-4:           rgba(128,128,128,0.04);
+  --neutral-5:           rgba(128,128,128,0.05);
+  --neutral-6:           rgba(128,128,128,0.06);
+  --neutral-8:           rgba(128,128,128,0.08);
+  --neutral-10:          rgba(128,128,128,0.10);
+  --neutral-20:          rgba(128,128,128,0.20);
+
+  /* Accent derivatives */
+  --accent-glow-subtle:  rgba(99, 102, 241, 0.03);
+  --accent-glow-soft:    rgba(99, 102, 241, 0.04);
+  --accent-glow-light:   rgba(99, 102, 241, 0.06);
+  --accent-border:       rgba(99, 102, 241, 0.15);
+  --accent-glow-strong:  rgba(99, 102, 241, 0.30);
+  --accent-hover:        #5558e6;
+
+  /* Cyan decorative */
+  --cyan-glow-soft:      rgba(34, 211, 238, 0.02);
+  --cyan-glow:           rgba(34, 211, 238, 0.03);
+  --cyan-glow-light:     rgba(34, 211, 238, 0.06);
+  --cyan-glow-medium:    rgba(34, 211, 238, 0.08);
+
+  /* Semantic */
+  --green-glow:          rgba(52, 211, 153, 0.3);
+  --red-glow:            rgba(248, 113, 113, 0.3);
+  --bg-error:            rgba(248, 113, 113, 0.1);
+  --btn-close-hover-alpha: rgba(232, 17, 35, 0.15);
+  --text-separator:      rgba(128,128,128,0.2);
+  --btn-close-text:      #ffffff;
+  --btn-active-text:     #ffffff;
+  --surface-highlight:   rgba(255,255,255,0.02);
+
   --cyan:              #22d3ee;
   --green:             #34d399;
   --red:               #f87171;
@@ -36,6 +103,7 @@
   --btn-close-hover:   #e81123;
 
   --sidebar-width:     220px;
+  /* Keep in sync with setSidebarWidth clamp in sessionStore.ts */
   --sidebar-min-width: 160px;
   --sidebar-max-width: 320px;
   --titlebar-height:   32px;
@@ -62,4 +130,69 @@
   --transition-fast:   150ms var(--ease-out);
   --transition-normal: 200ms var(--ease-out);
   --transition-slow:   300ms var(--ease-out);
+}
+
+/* Light theme CSS fallback — applied synchronously via data-theme attribute
+   before React/JS loads, preventing dark flash for light-theme users.
+   sessionStorage('patty-theme') is set after first successful settings load. */
+:root[data-theme="light"] {
+  --bg-app:            #f6f7f9;
+  --bg-titlebar:       rgba(248,249,252,0.70);
+  --bg-sidebar:        rgba(248,249,252,0.70);
+  --bg-main:           rgba(255,255,255,0.40);
+  --bg-terminal:       #ffffff;
+  --bg-item-hover:     rgba(128,128,128,0.05);
+  --bg-item-active:    rgba(99,102,241,0.06);
+  --bg-statusbar:      rgba(248,249,252,0.55);
+  --bg-input:          rgba(0,0,0,0.04);
+  --bg-context-menu:   rgba(238,239,244,0.78);
+  --bg-dropdown-menu:  rgba(238,239,244,0.85);
+  --text-primary:      #12121a;
+  --text-secondary:    #5a5a6e;
+  --text-muted:        #9292a8;
+  --border-subtle:     rgba(0,0,0,0.04);
+  --border-medium:     rgba(0,0,0,0.07);
+  --accent:            #6366f1;
+  --accent-hover:      #4f46e5;
+  --ai-claude-color:   #b85a3a;
+  --ai-claude-bg:      rgba(184,90,58,0.10);
+  --ai-opencode-color: #3d4f6e;
+  --ai-opencode-bg:    rgba(61,79,110,0.08);
+  --fire-claude:       #b0553a;
+  --fire-opencode:     #3d4f6e;
+  --overlay-bg:        rgba(0, 0, 0, 0.25);
+  --scrollbar-thumb:   rgba(0,0,0,0.12);
+  --neutral:           #6b7280;
+  --neutral-4:         rgba(0,0,0,0.04);
+  --neutral-5:         rgba(0,0,0,0.05);
+  --neutral-6:         rgba(0,0,0,0.06);
+  --neutral-8:         rgba(0,0,0,0.08);
+  --neutral-10:        rgba(0,0,0,0.10);
+  --neutral-20:        rgba(0,0,0,0.20);
+  --green-glow:        rgba(5, 150, 105, 0.25);
+  --red-glow:          rgba(220, 38, 38, 0.25);
+  --text-separator:    rgba(0,0,0,0.15);
+  --surface-highlight: rgba(0,0,0,0.02);
+  --green:             #059669;
+  --red:               #dc2626;
+  --cyan:              #0d9488;
+  --amber:             #d97706;
+}
+
+:root[data-theme="solarized-light"] {
+  --bg-app:            #fdf6e3;
+  --bg-titlebar:       rgba(253,246,227,0.70);
+  --bg-sidebar:        rgba(253,246,227,0.70);
+  --bg-main:           rgba(255,255,255,0.40);
+  --bg-terminal:       #fdf6e3;
+  --bg-input:          rgba(0,0,0,0.04);
+  --bg-context-menu:   rgba(253,246,227,0.85);
+  --bg-dropdown-menu:  rgba(253,246,227,0.90);
+  --text-primary:      #586e75;
+  --text-secondary:    #839496;
+  --text-muted:        #93a1a1;
+  --border-subtle:     rgba(0,0,0,0.06);
+  --border-medium:     rgba(0,0,0,0.10);
+  --overlay-bg:        rgba(0, 0, 0, 0.20);
+  --scrollbar-thumb:   rgba(0,0,0,0.12);
 }

@@ -58,7 +58,7 @@ export function Sidebar({ onNewTerminal, onCloseSession, onCollectionContextMenu
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [setSidebarWidth])
+  }, [setSidebarWidth, sidebarPosition])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -109,11 +109,13 @@ export function Sidebar({ onNewTerminal, onCloseSession, onCollectionContextMenu
           type="text"
           className={styles.searchInput}
           placeholder="Search sessions..."
+          aria-label="Search sessions"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         <div className={styles.menuContainer} ref={menuRef}>
           <button
+            type="button"
             className={styles.newBtn}
             onClick={() => setShowMenu(!showMenu)}
             aria-label="New terminal or collection"
@@ -130,14 +132,14 @@ export function Sidebar({ onNewTerminal, onCloseSession, onCollectionContextMenu
           </button>
           {showMenu && (
             <div className={styles.dropdownMenu}>
-              <button className={styles.menuItem} onClick={handleNewTerminalClick}>
+              <button type="button" className={styles.menuItem} onClick={handleNewTerminalClick}>
                 <svg width="12" height="12" viewBox="0 0 12 12">
                   <rect x="1" y="2" width="10" height="8" rx="1" stroke="currentColor" fill="none" strokeWidth="1" />
                   <path d="M4 6L5.5 7.5L8 5" stroke="currentColor" strokeWidth="1" fill="none" />
                 </svg>
                 New Terminal
               </button>
-              <button className={styles.menuItem} onClick={handleNewCollection}>
+              <button type="button" className={styles.menuItem} onClick={handleNewCollection}>
                 <svg width="12" height="12" viewBox="0 0 12 12">
                   <path
                     d="M1 3C1 2.45 1.45 2 2 2H4.5L5.5 3H10C10.55 3 11 3.45 11 4V9C11 9.55 10.55 10 10 10H2C1.45 10 1 9.55 1 9V3Z"

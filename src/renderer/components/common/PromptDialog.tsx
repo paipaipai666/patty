@@ -20,9 +20,11 @@ export function PromptDialog({ show, options }: PromptDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setValue(options.defaultValue || '')
-    inputRef.current?.select()
-  }, [options.defaultValue])
+    if (show) {
+      setValue(options.defaultValue || '')
+      inputRef.current?.select()
+    }
+  }, [show, options.defaultValue])
 
   const handleSubmit = () => {
     options.onSubmit(value)
@@ -40,8 +42,11 @@ export function PromptDialog({ show, options }: PromptDialogProps) {
   if (!mounted) return null
 
   return (
-    <div className={`${styles.overlay} ${exiting ? styles.overlayExit : ''}`}>
-      <div className={`${styles.dialog} ${exiting ? styles.dialogExit : ''}`}>
+    <div
+      className={`${styles.overlay} ${exiting ? styles.overlayExit : ''}`}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) handleCancel() }}
+    >
+      <div className={`${styles.dialog} ${exiting ? styles.dialogExit : ''}`} role="dialog" aria-modal="true" aria-label={options.title}>
         <div className={styles.title}>{options.title}</div>
         <input
           ref={inputRef}
@@ -52,8 +57,8 @@ export function PromptDialog({ show, options }: PromptDialogProps) {
           autoFocus
         />
         <div className={styles.buttons}>
-          <button className={styles.cancelBtn} onClick={handleCancel}>Cancel</button>
-          <button className={styles.okBtn} onClick={handleSubmit}>OK</button>
+          <button type="button" className={styles.cancelBtn} onClick={handleCancel}>Cancel</button>
+          <button type="button" className={styles.okBtn} onClick={handleSubmit}>OK</button>
         </div>
       </div>
     </div>
