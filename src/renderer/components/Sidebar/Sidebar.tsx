@@ -58,7 +58,7 @@ export function Sidebar({ onNewTerminal, onCloseSession, onCollectionContextMenu
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [setSidebarWidth])
+  }, [setSidebarWidth, sidebarPosition])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -109,6 +109,7 @@ export function Sidebar({ onNewTerminal, onCloseSession, onCollectionContextMenu
           type="text"
           className={styles.searchInput}
           placeholder="Search sessions..."
+          aria-label="Search sessions"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />

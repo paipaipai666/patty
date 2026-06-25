@@ -52,16 +52,47 @@ export function ContextMenu({ show, x, y, items, onClose }: ContextMenuProps) {
     }
   }, [x, y])
 
+  // Focus first item + arrow-key navigation
+  useEffect(() => {
+    if (!mounted || !menuRef.current) return
+    const buttons = Array.from(menuRef.current.querySelectorAll<HTMLButtonElement>('button:not([disabled])'))
+    buttons[0]?.focus()
+
+    const handleArrow = (e: KeyboardEvent) => {
+      if (!menuRef.current) return
+      const btns = Array.from(menuRef.current.querySelectorAll<HTMLButtonElement>('button:not([disabled])'))
+      if (btns.length === 0) return
+      const idx = btns.findIndex((b) => b === document.activeElement)
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        btns[(idx + 1) % btns.length].focus()
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        btns[(idx - 1 + btns.length) % btns.length].focus()
+      } else if (e.key === 'Home') {
+        e.preventDefault()
+        btns[0].focus()
+      } else if (e.key === 'End') {
+        e.preventDefault()
+        btns[btns.length - 1].focus()
+      }
+    }
+    menuRef.current.addEventListener('keydown', handleArrow)
+    return () => menuRef.current?.removeEventListener('keydown', handleArrow)
+  }, [mounted])
+
   if (!mounted) return null
 
   return (
-    <div ref={menuRef} className={`${styles.menu} ${exiting ? styles.menuExit : ''}`} style={{ left: x, top: y }}>
+    <div ref={menuRef} className={`${styles.menu} ${exiting ? styles.menuExit : ''}`} style={{ left: x, top: y }} role="menu">
       {items.map((item, i) =>
         item.separator ? (
-          <div key={i} className={styles.separator} />
+          <div key={i} className={styles.separator} role="separator" />
         ) : (
           <button
             key={i}
+            type="button"
+            role="menuitem"
             className={styles.item}
             disabled={item.disabled}
             onClick={() => {

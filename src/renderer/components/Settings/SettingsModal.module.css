@@ -259,6 +259,7 @@
   position: relative;
   width: 36px;
   height: 20px;
+  padding: 0;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: 10px;

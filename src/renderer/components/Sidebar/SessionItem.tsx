@@ -86,11 +86,21 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleRename()
-    } else if (e.key === 'Escape') {
-      setIsEditing(false)
-      setEditValue(session.title)
+    if (isEditing) {
+      if (e.key === 'Enter') {
+        handleRename()
+      } else if (e.key === 'Escape') {
+        setIsEditing(false)
+        setEditValue(session.title)
+      }
+      return
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      setActive(session.id)
+    } else if (e.key === 'F2') {
+      e.preventDefault()
+      handleDoubleClick()
     }
   }
 
@@ -123,9 +133,14 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
       ref={itemRef}
       className={`${styles.item} ${isActive ? styles.itemActive : ''} ${getAttentionClass()}`}
       style={{ paddingLeft: `${depth * 16 + 8}px`, position: 'relative', overflow: 'hidden' }}
+      role="tab"
+      tabIndex={isEditing ? -1 : 0}
+      aria-selected={isActive}
+      aria-label={session.title}
       onClick={() => setActive(session.id)}
       onDoubleClick={handleDoubleClick}
-      draggable
+      onKeyDown={handleKeyDown}
+      draggable={!isEditing}
       onDragStart={handleDragStart}
     >
       {isAi && <ContributionGrid aiType={session.aiType!} />}

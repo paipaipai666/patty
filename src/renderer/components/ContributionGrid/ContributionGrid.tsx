@@ -122,8 +122,24 @@ export function ContributionGrid({ aiType }: Props) {
     render()
     intervalId = setInterval(() => { update(); render() }, 200)
 
+    // Pause animation when the window is hidden to save CPU/battery
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        if (intervalId) {
+          clearInterval(intervalId)
+          intervalId = null
+        }
+      } else if (!intervalId) {
+        update()
+        render()
+        intervalId = setInterval(() => { update(); render() }, 200)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
     return () => {
       if (intervalId) clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       container.innerHTML = ''
     }
   }, [aiType])

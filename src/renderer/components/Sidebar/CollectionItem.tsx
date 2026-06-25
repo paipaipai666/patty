@@ -37,11 +37,23 @@ export function CollectionItem({ collection, depth, children, onCloseSession, on
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleRename()
-    } else if (e.key === 'Escape') {
-      setIsEditing(false)
+    if (isEditing) {
+      if (e.key === 'Enter') {
+        handleRename()
+      } else if (e.key === 'Escape') {
+        setIsEditing(false)
+        setEditValue(collection.name)
+      }
+      return
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      toggleCollectionCollapse(collection.id)
+    } else if (e.key === 'F2') {
+      e.preventDefault()
+      setIsEditing(true)
       setEditValue(collection.name)
+      setTimeout(() => inputRef.current?.select(), 0)
     }
   }
 
@@ -106,7 +118,12 @@ export function CollectionItem({ collection, depth, children, onCloseSession, on
       <div
         className={`${styles.collectionItem} ${isDragOver ? styles.dragOver : ''}`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        draggable
+        role="treeitem"
+        aria-expanded={!collection.collapsed}
+        aria-label={collection.name}
+        tabIndex={isEditing ? -1 : 0}
+        onKeyDown={handleKeyDown}
+        draggable={!isEditing}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -120,6 +137,7 @@ export function CollectionItem({ collection, depth, children, onCloseSession, on
             e.stopPropagation()
             toggleCollectionCollapse(collection.id)
           }}
+          aria-label={collection.collapsed ? `Expand ${collection.name}` : `Collapse ${collection.name}`}
         >
           <svg
             className={styles.chevronIcon}

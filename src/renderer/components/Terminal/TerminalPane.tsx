@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, memo } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -15,7 +15,7 @@ interface TerminalPaneProps {
   isActive: boolean
 }
 
-export function TerminalPane({ session, isActive }: TerminalPaneProps) {
+export const TerminalPane = memo(function TerminalPane({ session, isActive }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -25,10 +25,17 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ptyReadyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
   const updatePid = useSessionStore((s) => s.updatePid)
-  const settings = useSettingsStore((s) => s.settings)
+  const fontFamily = useSettingsStore((s) => s.settings.fontFamily)
+  const fontSize = useSettingsStore((s) => s.settings.fontSize)
+  const cursorBlink = useSettingsStore((s) => s.settings.cursorBlink)
+  const cursorStyle = useSettingsStore((s) => s.settings.cursorStyle)
+  const theme = useSettingsStore((s) => s.settings.theme)
+  const customThemes = useSettingsStore((s) => s.settings.customThemes)
+  const opacity = useSettingsStore((s) => s.settings.opacity)
 
   const fitTerminal = useCallback(
     (skipResize = false) => {
@@ -53,16 +60,16 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     initializedRef.current = true
 
     const term = new Terminal({
-      fontFamily: `'${settings.fontFamily}', Consolas, 'Courier New', monospace`,
-      fontSize: settings.fontSize,
+      fontFamily: `'${fontFamily}', Consolas, 'Courier New', monospace`,
+      fontSize: fontSize,
       lineHeight: 1.2,
       letterSpacing: 0,
       fontLigatures: true,
-      cursorBlink: settings.cursorBlink,
-      cursorStyle: settings.cursorStyle,
-      allowTransparency: settings.opacity < 1,
+      cursorBlink: cursorBlink,
+      cursorStyle: cursorStyle,
+      allowTransparency: opacity < 1,
       allowProposedApi: true,
-      theme: getThemeColors(settings.theme, settings.customThemes).terminal,
+      theme: getThemeColors(theme, customThemes).terminal,
       scrollback: 10000,
       convertEol: false,
       rescaleOverlappingGlyphs: true
@@ -214,7 +221,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
             cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
               ptyCreatedRef.current = false
               term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
-              setTimeout(() => startPty(), 500)
+              restartTimerRef.current = setTimeout(() => startPty(), 500)
             })
           }
         })
@@ -228,6 +235,7 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     return () => {
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
       if (ptyReadyTimerRef.current) clearTimeout(ptyReadyTimerRef.current)
+      if (restartTimerRef.current) clearTimeout(restartTimerRef.current)
       if (isComposing) unblockTextareaStyles()
       textarea?.removeEventListener('compositionstart', onCompositionStart)
       textarea?.removeEventListener('compositionend', onCompositionEnd)
@@ -272,21 +280,21 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     const term = termRef.current
     if (!term) return
 
-    term.options.fontFamily = `'${settings.fontFamily}', Consolas, 'Courier New', monospace`
-    term.options.fontSize = settings.fontSize
-    term.options.cursorBlink = settings.cursorBlink
-    term.options.cursorStyle = settings.cursorStyle
-    term.options.theme = getThemeColors(settings.theme, settings.customThemes).terminal
+    term.options.fontFamily = `'${fontFamily}', Consolas, 'Courier New', monospace`
+    term.options.fontSize = fontSize
+    term.options.cursorBlink = cursorBlink
+    term.options.cursorStyle = cursorStyle
+    term.options.theme = getThemeColors(theme, customThemes).terminal
 
     // Re-fit after font size change
     setTimeout(() => fitTerminal(), 20)
-  }, [settings.fontFamily, settings.fontSize, settings.cursorBlink, settings.cursorStyle, settings.theme, fitTerminal])
+  }, [fontFamily, fontSize, cursorBlink, cursorStyle, theme, customThemes, fitTerminal])
 
   return (
     <div
       ref={containerRef}
       className={styles.pane}
-      style={{ display: isActive ? 'block' : 'none', opacity: settings.opacity < 1 ? settings.opacity : undefined }}
+      style={{ display: isActive ? 'block' : 'none', opacity: opacity < 1 ? opacity : undefined }}
     />
   )
-}
+})

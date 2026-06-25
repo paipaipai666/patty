@@ -2,12 +2,15 @@ import { useRef } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { useSessionStore } from '../../store/sessionStore'
+import { useSettingsStore } from '../../store/settingsStore'
+import { ErrorBoundary } from '../common/ErrorBoundary'
 import { TerminalPane } from './TerminalPane'
 import styles from './Terminal.module.css'
 
 export function TerminalArea() {
   const sessions = useSessionStore((s) => s.sessions)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const settingsLoaded = useSettingsStore((s) => s.loaded)
   const emptyRef = useRef<HTMLDivElement>(null)
 
   // Empty state entrance animation
@@ -45,13 +48,15 @@ export function TerminalArea() {
 
   return (
     <div className={styles.area}>
-      {sessions.map((session) => (
-        <TerminalPane
-          key={session.id}
-          session={session}
-          isActive={session.id === activeSessionId}
-        />
-      ))}
+      {settingsLoaded &&
+        sessions.map((session) => (
+          <ErrorBoundary key={session.id}>
+            <TerminalPane
+              session={session}
+              isActive={session.id === activeSessionId}
+            />
+          </ErrorBoundary>
+        ))}
     </div>
   )
 }

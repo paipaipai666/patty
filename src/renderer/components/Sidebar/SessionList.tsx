@@ -120,7 +120,7 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
   }
 
   return (
-    <div className={styles.list} ref={listRef}>
+    <div className={styles.list} ref={listRef} role="tablist" aria-label="Terminal sessions">
       {topLevelCollections.map((collection) =>
         renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onCollectionContextMenu, 0)
       )}

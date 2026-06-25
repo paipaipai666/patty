@@ -69,6 +69,7 @@ export function SettingsModal() {
   const navRef = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const prevCategory = useRef<Category>('appearance')
+  const previouslyFocused = useRef<HTMLElement | null>(null)
 
   // Modal entrance animation (after mount, not useLayoutEffect)
   useEffect(() => {
@@ -157,6 +158,41 @@ export function SettingsModal() {
     }
   }, [settingsOpen, handleKeyDown])
 
+  // Focus trap: save/restore focus, keep Tab inside the modal
+  useEffect(() => {
+    if (!settingsOpen) return
+    previouslyFocused.current = document.activeElement as HTMLElement | null
+    const modal = modalRef.current
+    if (modal) {
+      const focusable = modal.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      focusable?.focus()
+    }
+
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !modalRef.current) return
+      const focusables = modalRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', trap)
+    return () => {
+      window.removeEventListener('keydown', trap)
+      previouslyFocused.current?.focus?.()
+    }
+  }, [settingsOpen])
+
   const startCapture = (key: keyof ShortcutMap) => {
     setCapturingShortcut(key)
     captureRef.current = key
@@ -168,9 +204,9 @@ export function SettingsModal() {
     <div className={`${styles.overlay} ${exiting ? styles.overlayExit : ''}`} onMouseDown={(e) => {
       if (e.target === e.currentTarget) closeSettings()
     }}>
-      <div ref={modalRef} className={`${styles.modal} ${exiting ? styles.modalExit : ''}`}>
+      <div ref={modalRef} className={`${styles.modal} ${exiting ? styles.modalExit : ''}`} role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div className={styles.header}>
-          <span className={styles.title}>Settings</span>
+          <span id="settings-title" className={styles.title}>Settings</span>
           <button className={styles.closeBtn} onClick={closeSettings}>
             <svg width="10" height="10" viewBox="0 0 10 10">
               <path d="M0.5 0.5L9.5 9.5M9.5 0.5L0.5 9.5" stroke="currentColor" strokeWidth="1" />
@@ -425,10 +461,10 @@ function ThemeEditor({
           >
             <span className={styles.themeItemName}>{theme.name}</span>
             <div className={styles.themeItemActions}>
-              <button className={styles.themeActionBtn} title="Apply" onClick={() => onSelectTheme(theme.id)}>✓</button>
-              <button className={styles.themeActionBtn} title="Duplicate" onClick={(e) => { e.stopPropagation(); handleDuplicate(theme) }}>⧉</button>
-              <button className={styles.themeActionBtn} title="Export" onClick={(e) => { e.stopPropagation(); handleExport(theme) }}>↓</button>
-              <button className={styles.themeActionBtn} title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(theme.id) }}>✕</button>
+              <button type="button" className={styles.themeActionBtn} title="Apply" aria-label="Apply theme" onClick={() => onSelectTheme(theme.id)}>✓</button>
+              <button type="button" className={styles.themeActionBtn} title="Duplicate" aria-label="Duplicate theme" onClick={(e) => { e.stopPropagation(); handleDuplicate(theme) }}>⧉</button>
+              <button type="button" className={styles.themeActionBtn} title="Export" aria-label="Export theme" onClick={(e) => { e.stopPropagation(); handleExport(theme) }}>↓</button>
+              <button type="button" className={styles.themeActionBtn} title="Delete" aria-label="Delete theme" onClick={(e) => { e.stopPropagation(); handleDelete(theme.id) }}>✕</button>
             </div>
           </div>
         ))}
@@ -616,12 +652,15 @@ function TerminalSection({
           <span className={styles.settingLabel}>Cursor Blink</span>
           <div className={styles.settingDesc}>Animate cursor blinking</div>
         </div>
-        <div
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.cursorBlink}
           className={`${styles.toggle} ${settings.cursorBlink ? styles.toggleOn : ''}`}
           onClick={() => updateSetting('cursorBlink', !settings.cursorBlink)}
         >
           <div className={styles.toggleKnob} />
-        </div>
+        </button>
       </div>
 
       <div className={styles.sectionTitle}>Display</div>
@@ -754,12 +793,15 @@ function NotificationsSection({
             Show indicators for permission requests, questions, and errors
           </div>
         </div>
-        <div
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.notifications.claudeCode}
           className={`${styles.toggle} ${settings.notifications.claudeCode ? styles.toggleOn : ''}`}
           onClick={toggleClaudeCode}
         >
           <div className={styles.toggleKnob} />
-        </div>
+        </button>
       </div>
 
       <div className={styles.settingRow}>
@@ -769,12 +811,15 @@ function NotificationsSection({
             Show indicators for permission requests, questions, and errors
           </div>
         </div>
-        <div
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.notifications.openCode}
           className={`${styles.toggle} ${settings.notifications.openCode ? styles.toggleOn : ''}`}
           onClick={toggleOpenCode}
         >
           <div className={styles.toggleKnob} />
-        </div>
+        </button>
       </div>
 
       <div className={styles.settingDesc} style={{ marginTop: '16px' }}>

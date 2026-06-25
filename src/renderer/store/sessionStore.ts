@@ -69,6 +69,7 @@ interface SessionStore {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 const attentionTimers: Record<string, ReturnType<typeof setTimeout>> = {}
+let ipcCleanup: (() => void) | null = null
 
 function debouncedSave(getState: () => SessionStore) {
   if (saveTimer) clearTimeout(saveTimer)
@@ -84,6 +85,10 @@ function debouncedSave(getState: () => SessionStore) {
     }
     window.terminalAPI.stateSave(persistedState).catch(console.error)
   }, 500)
+}
+
+export function teardownSessionIPC() {
+  if (ipcCleanup) ipcCleanup()
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -108,7 +113,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       })
 
       // Listen for attention changes from hook server
-      window.terminalAPI.onAttentionChange((paneId, eventType, aiType) => {
+      // Guard against duplicate registration (e.g. React StrictMode remount)
+      if (ipcCleanup) ipcCleanup()
+      const offAttention = window.terminalAPI.onAttentionChange((paneId, eventType, aiType) => {
         get().setAttention(paneId, eventType)
         // aiType 参数非 undefined 时同步设置/清除
         if (aiType !== undefined) {
@@ -119,9 +126,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Listen for PTY exit to cleanup attention state
       // Don't remove the session — let the user close it manually.
       // TerminalPane's onExit handler writes "[Process exited]" to the terminal.
-      window.terminalAPI.onPtyExit((paneId) => {
+      const offPtyExit = window.terminalAPI.onPtyExit((paneId) => {
         get().setAttention(paneId, null)
       })
+
+      ipcCleanup = () => {
+        offAttention()
+        offPtyExit()
+        ipcCleanup = null
+      }
     } catch (err) {
       console.error('Failed to load state:', err)
       set({ loaded: true })

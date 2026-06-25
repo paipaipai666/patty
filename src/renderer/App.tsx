@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState, useRef } from 'react'
-import { useSessionStore, type SessionColor } from './store/sessionStore'
+import { useSessionStore, teardownSessionIPC, type SessionColor } from './store/sessionStore'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
@@ -77,6 +77,7 @@ export default function App() {
   // Load session state on mount
   useEffect(() => {
     loadState()
+    return () => teardownSessionIPC()
   }, [loadState])
 
   const handleNewTerminal = useCallback(async () => {
