@@ -1,12 +1,26 @@
 import type { CustomTheme, UITheme, XtermTheme } from '../../shared/settingsTypes'
 import darkJson from '../themes/dark.json'
 import lightJson from '../themes/light.json'
+import draculaJson from '../themes/dracula.json'
+import nordJson from '../themes/nord.json'
+import tokyoNightJson from '../themes/tokyo-night.json'
+import solarizedLightJson from '../themes/solarized-light.json'
 
 // Primary: from JSON files
 export const DARK_UI: UITheme = darkJson.ui as UITheme
 export const LIGHT_UI: UITheme = lightJson.ui as UITheme
 export const DARK_XTERM: XtermTheme = darkJson.terminal as XtermTheme
 export const LIGHT_XTERM: XtermTheme = lightJson.terminal as XtermTheme
+
+// All built-in themes (key = theme id used in settings)
+export const BUILTIN_THEMES: Record<string, { name: string; ui: UITheme; terminal: XtermTheme }> = {
+  dark: { name: darkJson.name, ui: DARK_UI, terminal: DARK_XTERM },
+  light: { name: lightJson.name, ui: LIGHT_UI, terminal: LIGHT_XTERM },
+  dracula: { name: draculaJson.name, ui: draculaJson.ui as UITheme, terminal: draculaJson.terminal as XtermTheme },
+  nord: { name: nordJson.name, ui: nordJson.ui as UITheme, terminal: nordJson.terminal as XtermTheme },
+  'tokyo-night': { name: tokyoNightJson.name, ui: tokyoNightJson.ui as UITheme, terminal: tokyoNightJson.terminal as XtermTheme },
+  'solarized-light': { name: solarizedLightJson.name, ui: solarizedLightJson.ui as UITheme, terminal: solarizedLightJson.terminal as XtermTheme }
+}
 
 // Fallback defaults (covers any field missing from imported JSON)
 const UI_DEFAULTS = { ...DARK_UI } as UITheme
@@ -120,9 +134,10 @@ export function getThemeColors(theme: string, customThemes: CustomTheme[] = []):
     ui: { ...UI_DEFAULTS, ...custom.ui } as UITheme,
     terminal: { ...XTERM_DEFAULTS, ...custom.terminal } as XtermTheme
   }
-  if (theme === 'light') return {
-    ui: { ...UI_DEFAULTS, ...LIGHT_UI } as UITheme,
-    terminal: { ...XTERM_DEFAULTS, ...LIGHT_XTERM } as XtermTheme
+  const builtin = BUILTIN_THEMES[theme]
+  if (builtin) return {
+    ui: { ...UI_DEFAULTS, ...builtin.ui } as UITheme,
+    terminal: { ...XTERM_DEFAULTS, ...builtin.terminal } as XtermTheme
   }
   return {
     ui: { ...UI_DEFAULTS, ...DARK_UI } as UITheme,

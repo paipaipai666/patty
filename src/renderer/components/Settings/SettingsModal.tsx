@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import type { AppSettings, CustomTheme, ShortcutMap } from '../../../shared/settingsTypes'
-import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS } from '../../styles/themes'
+import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS, BUILTIN_THEMES } from '../../styles/themes'
 import styles from './SettingsModal.module.css'
 
 const FALLBACK_FONTS = [
@@ -413,7 +413,8 @@ function AppearanceSection({
   settings: AppSettings
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
 }) {
-  const isCustom = settings.theme !== 'dark' && settings.theme !== 'light'
+  const isBuiltin = settings.theme in BUILTIN_THEMES
+  const isCustom = !isBuiltin
 
   return (
     <div className={styles.section}>
@@ -421,18 +422,15 @@ function AppearanceSection({
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Color Theme</span>
         <div className={styles.segmentGroup}>
-          <button
-            className={`${styles.segmentBtn} ${settings.theme === 'dark' ? styles.segmentBtnActive : ''}`}
-            onClick={() => updateSetting('theme', 'dark')}
-          >
-            Dark
-          </button>
-          <button
-            className={`${styles.segmentBtn} ${settings.theme === 'light' ? styles.segmentBtnActive : ''}`}
-            onClick={() => updateSetting('theme', 'light')}
-          >
-            Light
-          </button>
+          {Object.entries(BUILTIN_THEMES).map(([id, theme]) => (
+            <button
+              key={id}
+              className={`${styles.segmentBtn} ${settings.theme === id ? styles.segmentBtnActive : ''}`}
+              onClick={() => updateSetting('theme', id)}
+            >
+              {theme.name}
+            </button>
+          ))}
           <button
             className={`${styles.segmentBtn} ${isCustom ? styles.segmentBtnActive : ''}`}
             onClick={() => {
