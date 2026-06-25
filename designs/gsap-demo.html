@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GSAP 动画示例</title>
+<script src="https://unpkg.com/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #0f0f0f; color: #e0e0e0; padding: 40px; }
+h1 { font-size: 28px; margin-bottom: 8px; }
+h2 { font-size: 18px; margin-bottom: 16px; color: #aaa; font-weight: 400; }
+section { margin-bottom: 60px; }
+h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 16px; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.box { width: 80px; height: 80px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #fff; }
+.btn { padding: 8px 20px; border: 1px solid #444; border-radius: 8px; background: #1a1a1a; color: #e0e0e0; cursor: pointer; font-size: 13px; }
+.btn:hover { background: #2a2a2a; }
+.btn-group { display: flex; gap: 8px; margin-top: 12px; }
+.panel { background: #1a1a1a; border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1px solid #2a2a2a; }
+code { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #7ec8e3; display: block; margin-bottom: 12px; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #2a2a2a; color: #999; display: inline-block; margin-bottom: 8px; }
+.c-1 { background: #6366f1; }
+.c-2 { background: #ec4899; }
+.c-3 { background: #14b8a6; }
+.c-4 { background: #f59e0b; }
+.c-5 { background: #8b5cf6; }
+.c-6 { background: #ef4444; }
+.c-7 { background: #3b82f6; }
+.c-8 { background: #10b981; }
+</style>
+</head>
+<body>
+
+<h1>GSAP 核心动画示例</h1>
+<h2>gsap.to / gsap.from / gsap.fromTo / stagger / ease / 控制</h2>
+
+<section>
+  <h3>1. gsap.to() — 从当前位置动画到目标值</h3>
+  <div class="panel">
+    <code>gsap.to(".box-1", { x: 200, rotation: 360, duration: 1, ease: "power2.out" })</code>
+    <div class="row">
+      <div class="box c-1 box-1">to</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="gsap.to('.box-1', { x: 200, rotation: 360, duration: 1, ease: 'power2.out' })">播放</button>
+      <button class="btn" onclick="gsap.to('.box-1', { x: 0, rotation: 0, duration: 0.6 })">重置</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3>2. gsap.from() — 从指定值动画到当前位置（入场）</h3>
+  <div class="panel">
+    <code>gsap.from(".box-2", { y: -40, opacity: 0, scale: 0.5, duration: 0.8, ease: "back.out(1.7)" })</code>
+    <div class="row">
+      <div class="box c-2 box-2">from</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="gsap.from('.box-2', { y: -40, opacity: 0, scale: 0.5, duration: 0.8, ease: 'back.out(1.7)' })">播放</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3>3. gsap.fromTo() — 显式指定起止值</h3>
+  <div class="panel">
+    <code>gsap.fromTo(".box-3", { x: -100, opacity: 0 }, { x: 100, opacity: 1, duration: 1, ease: "power3.inOut" })</code>
+    <div class="row">
+      <div class="box c-3 box-3">fromTo</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="gsap.fromTo('.box-3', { x: -100, opacity: 0 }, { x: 100, opacity: 1, duration: 1, ease: 'power3.inOut' })">播放</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3>4. Stagger — 依次错开动画</h3>
+  <div class="panel">
+    <code>gsap.to(".box-4", { y: -60, scale: 1.2, duration: 0.5, stagger: 0.08, ease: "back.out(1.7)", yoyo: true, repeat: 1 })</code>
+    <div class="row">
+      <div class="box c-4 box-4">1</div>
+      <div class="box c-4 box-4">2</div>
+      <div class="box c-4 box-4">3</div>
+      <div class="box c-4 box-4">4</div>
+      <div class="box c-4 box-4">5</div>
+      <div class="box c-4 box-4">6</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="gsap.to('.box-4', { y: -60, scale: 1.2, duration: 0.5, stagger: 0.08, ease: 'back.out(1.7)', yoyo: true, repeat: 1 })">播放</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3>5. 不同 Easing 对比</h3>
+  <div class="panel">
+    <code>gsap.to(".box-5", { x: 250, duration: 1, ease: "..." })</code>
+    <div class="row" style="flex-direction: column; align-items: stretch; gap: 16px;">
+      <div><span class="tag">power1.out</span><div class="box c-5 box-5" style="width:60px;height:60px;font-size:10px;">p1</div></div>
+      <div><span class="tag">back.out(1.7)</span><div class="box c-5 box-5b" style="width:60px;height:60px;font-size:10px;">back</div></div>
+      <div><span class="tag">elastic.out(1,0.3)</span><div class="box c-5 box-5c" style="width:60px;height:60px;font-size:10px;">elas</div></div>
+      <div><span class="tag">bounce.out</span><div class="box c-5 box-5d" style="width:60px;height:60px;font-size:10px;">bnce</div></div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="
+        gsap.to('.box-5', { x: 250, duration: 1, ease: 'power1.out' });
+        gsap.to('.box-5b', { x: 250, duration: 1, ease: 'back.out(1.7)' });
+        gsap.to('.box-5c', { x: 250, duration: 1, ease: 'elastic.out(1,0.3)' });
+        gsap.to('.box-5d', { x: 250, duration: 1, ease: 'bounce.out' });
+      ">播放</button>
+      <button class="btn" onclick="
+        gsap.to('.box-5', { x: 0, duration: 0.3 });
+        gsap.to('.box-5b', { x: 0, duration: 0.3 });
+        gsap.to('.box-5c', { x: 0, duration: 0.3 });
+        gsap.to('.box-5d', { x: 0, duration: 0.3 });
+      ">重置</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3>6. 播放控制 — pause / play / reverse / progress</h3>
+  <div class="panel">
+    <code>const t = gsap.to(".box-6", { x: 300, rotation: 360, duration: 2, ease: "none" });</code>
+    <div class="row">
+      <div class="box c-6 box-6">ctrl</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="if(!window.t6) { window.t6 = gsap.to('.box-6', { x: 300, rotation: 360, duration: 2, ease: 'none' }); } t6.play()">播放</button>
+      <button class="btn" onclick="if(window.t6) t6.pause()">暂停</button>
+      <button class="btn" onclick="if(window.t6) t6.reverse()">反向</button>
+      <button class="btn" onclick="if(window.t6) t6.progress(0.5)">跳转到50%</button>
+      <button class="btn" onclick="if(window.t6) { t6.kill(); window.t6 = null; gsap.set('.box-6', { x: 0, rotation: 0 }); }">重置</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3>7. autoAlpha — 淡入/淡出并自动管理 visibility</h3>
+  <div class="panel">
+    <code>gsap.to(".box-7", { autoAlpha: 0, duration: 0.5 })</code>
+    <div class="row">
+      <div class="box c-7 box-7">alpha</div>
+      <span style="font-size:13px;color:#888;">autoAlpha=0 时 visibility:hidden</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="gsap.to('.box-7', { autoAlpha: 0, duration: 0.5 })">隐藏</button>
+      <button class="btn" onclick="gsap.to('.box-7', { autoAlpha: 1, duration: 0.5 })">显示</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3>8. 函数值和相对值 — 每个元素不同位移</h3>
+  <div class="panel">
+    <code>gsap.to(".box-8", { x: (i) => (i + 1) * 50, rotation: "+=360", duration: 0.8, stagger: 0.1 })</code>
+    <div class="row">
+      <div class="box c-8 box-8">0</div>
+      <div class="box c-8 box-8">1</div>
+      <div class="box c-8 box-8">2</div>
+      <div class="box c-8 box-8">3</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" onclick="gsap.to('.box-8', { x: (i) => (i + 1) * 50, rotation: '+=360', duration: 0.8, stagger: 0.1 })">播放</button>
+      <button class="btn" onclick="gsap.to('.box-8', { x: 0, rotation: 0, duration: 0.3 })">重置</button>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

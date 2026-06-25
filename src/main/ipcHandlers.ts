@@ -81,16 +81,20 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
   ipcMain.handle('pty:create', (event, id: string, cwd?: string, shell?: string, cols?: number, rows?: number) => {
     try {
       const term = createPty(id, cwd, shell, cols, rows)
-      const win = getWindow()
-
-      // Forward PTY data to renderer
+      // Forward PTY data to renderer (use dynamic getWindow to avoid EPIPE on close)
       term.onData((data) => {
-        win?.webContents.send(`pty:data:${id}`, data)
+        const win = getWindow()
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(`pty:data:${id}`, data)
+        }
       })
 
       // Forward PTY exit to renderer
       term.onExit(({ exitCode }) => {
-        win?.webContents.send(`pty:exit:${id}`, exitCode)
+        const win = getWindow()
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(`pty:exit:${id}`, exitCode)
+        }
       })
 
       return { pid: term.pid, success: true }
