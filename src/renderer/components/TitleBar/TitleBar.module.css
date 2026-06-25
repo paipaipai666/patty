@@ -20,7 +20,7 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent 5%, var(--accent-alpha) 30%, rgba(34, 211, 238, 0.08) 60%, transparent 95%);
+  background: linear-gradient(90deg, transparent 5%, var(--accent-alpha) 30%, var(--cyan-glow-medium) 60%, transparent 95%);
   pointer-events: none;
 }
 
@@ -60,11 +60,11 @@
 }
 
 .btnControl:hover {
-  background: rgba(128,128,128,0.08);
+  background: var(--neutral-8);
   color: var(--text-primary);
 }
 
 .btnClose:hover {
   background: var(--btn-close-hover);
-  color: #ffffff;
+  color: var(--btn-close-text);
 }

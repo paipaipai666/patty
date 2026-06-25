@@ -20,6 +20,53 @@
   --fire-glow-opencode-4:  rgba(255, 255, 255, 0.5);
   --fire-gradient-claude:    linear-gradient(90deg, transparent 0%, rgba(204, 120, 92, 0.10) 40%, rgba(204, 120, 92, 0.22) 100%);
   --fire-gradient-opencode:  linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0.18) 100%);
+
+  /* Attention states (session list) */
+  --attention-complete-bg:     rgba(52, 211, 153, 0.12);
+  --attention-complete-bar:    #34d399;
+  --attention-complete-glow:   rgba(52, 211, 153, 0.3);
+  --attention-permission-bg:   rgba(99, 102, 241, 0.12);
+  --attention-permission-bar:  #818cf8;
+  --attention-permission-glow: rgba(99, 102, 241, 0.3);
+  --attention-error-bg:        rgba(248, 113, 113, 0.12);
+  --attention-error-bar:       #f87171;
+  --attention-error-glow:      rgba(248, 113, 113, 0.3);
+
+  /* Neutral gray scale */
+  --overlay-bg:          rgba(0, 0, 0, 0.4);
+  --scrollbar-thumb:     rgba(128,128,128,0.1);
+  --neutral:             #808080;
+  --neutral-4:           rgba(128,128,128,0.04);
+  --neutral-5:           rgba(128,128,128,0.05);
+  --neutral-6:           rgba(128,128,128,0.06);
+  --neutral-8:           rgba(128,128,128,0.08);
+  --neutral-10:          rgba(128,128,128,0.10);
+  --neutral-20:          rgba(128,128,128,0.20);
+
+  /* Accent derivatives */
+  --accent-glow-subtle:  rgba(99, 102, 241, 0.03);
+  --accent-glow-soft:    rgba(99, 102, 241, 0.04);
+  --accent-glow-light:   rgba(99, 102, 241, 0.06);
+  --accent-border:       rgba(99, 102, 241, 0.15);
+  --accent-glow-strong:  rgba(99, 102, 241, 0.30);
+  --accent-hover:        #5558e6;
+
+  /* Cyan decorative */
+  --cyan-glow-soft:      rgba(34, 211, 238, 0.02);
+  --cyan-glow:           rgba(34, 211, 238, 0.03);
+  --cyan-glow-light:     rgba(34, 211, 238, 0.06);
+  --cyan-glow-medium:    rgba(34, 211, 238, 0.08);
+
+  /* Semantic */
+  --green-glow:          rgba(52, 211, 153, 0.3);
+  --red-glow:            rgba(248, 113, 113, 0.3);
+  --bg-error:            rgba(248, 113, 113, 0.1);
+  --btn-close-hover-alpha: rgba(232, 17, 35, 0.15);
+  --text-separator:      rgba(128,128,128,0.2);
+  --btn-close-text:      #ffffff;
+  --btn-active-text:     #ffffff;
+  --surface-highlight:   rgba(255,255,255,0.02);
+
   --cyan:              #22d3ee;
   --green:             #34d399;
   --red:               #f87171;

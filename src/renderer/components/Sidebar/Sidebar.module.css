@@ -40,7 +40,7 @@
   background: var(--accent-alpha);
   box-shadow:
     inset 0 0 0 1px var(--accent),
-    0 0 12px rgba(99, 102, 241, 0.06);
+    0 0 12px var(--accent-glow-light);
 }
 
 .newBtn {
@@ -51,7 +51,7 @@
   height: 28px;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  background: rgba(128,128,128,0.05);
+  background: var(--neutral-5);
   border: 1px solid transparent;
   font-family: var(--font-ui);
   font-size: 15px;
@@ -62,9 +62,9 @@
 .newBtn:hover {
   color: var(--accent);
   background: var(--accent-alpha);
-  border-color: rgba(99, 102, 241, 0.15);
+  border-color: var(--accent-border);
   transform: scale(1.04);
-  box-shadow: 0 0 16px rgba(99, 102, 241, 0.08);
+  box-shadow: 0 0 16px var(--accent-glow-light);
 }
 
 .newBtn:active {
@@ -82,7 +82,7 @@
 }
 
 .list::-webkit-scrollbar-thumb {
-  background: rgba(128,128,128,0.1);
+  background: var(--scrollbar-thumb);
   border-radius: 2px;
   transition: background var(--transition-fast);
 }
@@ -206,12 +206,12 @@
 
 /* 整行高亮样式 - 回答完毕 (绿色) */
 .itemAttention-complete {
-  background: rgba(52, 211, 153, 0.12) !important;
+  background: var(--attention-complete-bg) !important;
 }
 
 /* 整行高亮样式 - 执行出错 (红色) */
 .itemAttention-error {
-  background: rgba(248, 113, 113, 0.12) !important;
+  background: var(--attention-error-bg) !important;
 }
 
 .itemAttention-permission::before,
@@ -227,18 +227,18 @@
 }
 
 .itemAttention-permission::before {
-  background: var(--color-blue);
-  box-shadow: 0 0 6px rgba(99, 102, 241, 0.3);
+  background: var(--attention-permission-bar);
+  box-shadow: 0 0 6px var(--attention-permission-glow);
 }
 
 .itemAttention-complete::before {
-  background: var(--green);
-  box-shadow: 0 0 6px rgba(52, 211, 153, 0.3);
+  background: var(--attention-complete-bar);
+  box-shadow: 0 0 6px var(--attention-complete-glow);
 }
 
 .itemAttention-error::before {
-  background: var(--red);
-  box-shadow: 0 0 6px rgba(248, 113, 113, 0.3);
+  background: var(--attention-error-bar);
+  box-shadow: 0 0 6px var(--attention-error-glow);
 }
 
 /* 呼吸灯动画 */
@@ -309,7 +309,7 @@
 }
 
 .closeBtn:hover {
-  background: rgba(232, 17, 35, 0.15);
+  background: var(--btn-close-hover-alpha);
   color: var(--red) !important;
 }
 
@@ -355,7 +355,7 @@
   width: 2px;
   height: 24px;
   border-radius: 2px;
-  background: rgba(128,128,128,0.06);
+  background: var(--neutral-6);
   transition: all var(--transition-fast);
 }
 
