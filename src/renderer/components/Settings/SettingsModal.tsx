@@ -235,13 +235,6 @@ function ThemeEditor({
 
   const editingTheme = customThemes.find((t) => t.id === editingId)
 
-  const handleNew = () => {
-    const theme = createDefaultCustomTheme(`Theme ${customThemes.length + 1}`)
-    onUpdateThemes([...customThemes, theme])
-    setEditingId(theme.id)
-    onSelectTheme(theme.id)
-  }
-
   const handleDelete = (id: string) => {
     onUpdateThemes(customThemes.filter((t) => t.id !== id))
     if (editingId === id) setEditingId(null)
@@ -259,15 +252,6 @@ function ThemeEditor({
     onUpdateThemes([...customThemes, copy])
     setEditingId(copy.id)
     onSelectTheme(copy.id)
-  }
-
-  const handleImport = async () => {
-    const result = await window.terminalAPI.themeImport()
-    if (result.success && result.theme) {
-      onUpdateThemes([...customThemes, result.theme])
-      setEditingId(result.theme.id)
-      onSelectTheme(result.theme.id)
-    }
   }
 
   const handleExport = (theme: CustomTheme) => {
@@ -320,10 +304,6 @@ function ThemeEditor({
             </div>
           </div>
         ))}
-        <div className={styles.themeListActions}>
-          <button className={styles.themeBtn} onClick={handleNew}>+ New Theme</button>
-          <button className={styles.themeBtn} onClick={handleImport}>Import</button>
-        </div>
       </div>
 
       {editingTheme && (
@@ -416,36 +396,47 @@ function AppearanceSection({
   const isBuiltin = settings.theme in BUILTIN_THEMES
   const isCustom = !isBuiltin
 
+  const handleImport = async () => {
+    const result = await window.terminalAPI.themeImport()
+    if (result.success && result.theme) {
+      updateSetting('customThemes', [...settings.customThemes, result.theme])
+      updateSetting('theme', result.theme.id)
+    }
+  }
+
+  const handleNew = () => {
+    const theme = createDefaultCustomTheme(`Theme ${settings.customThemes.length + 1}`)
+    updateSetting('customThemes', [...settings.customThemes, theme])
+    updateSetting('theme', theme.id)
+  }
+
   return (
     <div className={styles.section}>
       <div className={styles.sectionTitle}>Theme</div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Color Theme</span>
-        <div className={styles.segmentGroup}>
-          {Object.entries(BUILTIN_THEMES).map(([id, theme]) => (
-            <button
-              key={id}
-              className={`${styles.segmentBtn} ${settings.theme === id ? styles.segmentBtnActive : ''}`}
-              onClick={() => updateSetting('theme', id)}
-            >
-              {theme.name}
-            </button>
-          ))}
-          <button
-            className={`${styles.segmentBtn} ${isCustom ? styles.segmentBtnActive : ''}`}
-            onClick={() => {
-              if (settings.customThemes.length > 0) {
-                updateSetting('theme', settings.customThemes[0].id)
-              } else {
-                const theme = createDefaultCustomTheme('My Theme')
-                updateSetting('customThemes', [theme])
-                updateSetting('theme', theme.id)
-              }
-            }}
-          >
-            Custom
-          </button>
-        </div>
+        <select
+          className={styles.select}
+          value={settings.theme}
+          onChange={(e) => updateSetting('theme', e.target.value)}
+        >
+          <optgroup label="Built-in">
+            {Object.entries(BUILTIN_THEMES).map(([id, theme]) => (
+              <option key={id} value={id}>{theme.name}</option>
+            ))}
+          </optgroup>
+          {settings.customThemes.length > 0 && (
+            <optgroup label="Custom">
+              {settings.customThemes.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </div>
+      <div className={styles.themeActions}>
+        <button className={styles.themeBtn} onClick={handleImport}>Import</button>
+        <button className={styles.themeBtn} onClick={handleNew}>New</button>
       </div>
 
       {isCustom && (
