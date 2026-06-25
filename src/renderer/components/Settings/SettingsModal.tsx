@@ -164,6 +164,70 @@ export function SettingsModal() {
   )
 }
 
+function ThemePicker({
+  value,
+  customThemes,
+  onChange
+}: {
+  value: string
+  customThemes: CustomTheme[]
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  const builtinEntries = Object.entries(BUILTIN_THEMES)
+  const currentName = BUILTIN_THEMES[value]?.name ?? customThemes.find((t) => t.id === value)?.name ?? value
+
+  return (
+    <div className={styles.fontPicker} ref={containerRef}>
+      <input
+        className={styles.fontPickerInput}
+        value={currentName}
+        readOnly
+        onClick={() => setOpen(!open)}
+      />
+      {open && (
+        <div className={styles.fontPickerList}>
+          <div className={styles.themeGroupLabel}>Built-in</div>
+          {builtinEntries.map(([id, theme]) => (
+            <div
+              key={id}
+              className={`${styles.fontPickerItem} ${id === value ? styles.fontPickerItemActive : ''}`}
+              onClick={() => { onChange(id); setOpen(false) }}
+            >
+              {theme.name}
+            </div>
+          ))}
+          {customThemes.length > 0 && (
+            <>
+              <div className={styles.themeGroupLabel}>Custom</div>
+              {customThemes.map((t) => (
+                <div
+                  key={t.id}
+                  className={`${styles.fontPickerItem} ${t.id === value ? styles.fontPickerItemActive : ''}`}
+                  onClick={() => { onChange(t.id); setOpen(false) }}
+                >
+                  {t.name}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function FontPicker({ value, onChange }: { value: string; onChange: (font: string) => void }) {
   const [fonts, setFonts] = useState<string[]>([])
   const [search, setSearch] = useState('')
@@ -415,24 +479,11 @@ function AppearanceSection({
       <div className={styles.sectionTitle}>Theme</div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Color Theme</span>
-        <select
-          className={styles.select}
+        <ThemePicker
           value={settings.theme}
-          onChange={(e) => updateSetting('theme', e.target.value)}
-        >
-          <optgroup label="Built-in">
-            {Object.entries(BUILTIN_THEMES).map(([id, theme]) => (
-              <option key={id} value={id}>{theme.name}</option>
-            ))}
-          </optgroup>
-          {settings.customThemes.length > 0 && (
-            <optgroup label="Custom">
-              {settings.customThemes.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </optgroup>
-          )}
-        </select>
+          customThemes={settings.customThemes}
+          onChange={(id) => updateSetting('theme', id)}
+        />
       </div>
       <div className={styles.themeActions}>
         <button className={styles.themeBtn} onClick={handleImport}>Import</button>
