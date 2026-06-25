@@ -20,9 +20,11 @@ export function PromptDialog({ show, options }: PromptDialogProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setValue(options.defaultValue || '')
-    inputRef.current?.select()
-  }, [options.defaultValue])
+    if (show) {
+      setValue(options.defaultValue || '')
+      inputRef.current?.select()
+    }
+  }, [show, options.defaultValue])
 
   const handleSubmit = () => {
     options.onSubmit(value)

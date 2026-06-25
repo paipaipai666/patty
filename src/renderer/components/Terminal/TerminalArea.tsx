@@ -52,7 +52,7 @@ export function TerminalArea() {
             </svg>
           </div>
           <h2 className={styles.emptyTitle}>Patty</h2>
-          <p className={styles.emptyDesc}>Press Ctrl+T or click + to create a new terminal</p>
+          <p className={styles.emptyDesc}>Press Ctrl+T or click + to create one</p>
         </div>
       </div>
     )

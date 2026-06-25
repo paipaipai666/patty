@@ -131,6 +131,7 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
         onContextMenu={handleContextMenu}
       >
         <button
+          type="button"
           className={styles.collapseBtn}
           onClick={(e) => {
             e.stopPropagation()
@@ -173,6 +174,7 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
         )}
 
         <button
+          type="button"
           className={styles.closeBtn}
           onClick={handleDelete}
           aria-label={`Delete ${collection.name}`}

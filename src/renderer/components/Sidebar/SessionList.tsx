@@ -73,7 +73,7 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
       })
     }
     prevCount.current = items.length
-  }, { scope: listRef, dependencies: [sessions.length, collections.length] })
+  }, { scope: listRef, dependencies: [sessions.map((s) => s.id).join(','), collections.map((c) => c.id).join(',')] })
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery?.trim()) return sessions
@@ -122,7 +122,7 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
         </span>
         <span>{searchQuery?.trim() ? 'No matches' : 'No terminals'}</span>
         <span className={styles.emptyHint}>
-          {searchQuery?.trim() ? 'Try a different search' : 'Press Ctrl+T to create one'}
+          {searchQuery?.trim() ? 'Try a different search' : 'Press Ctrl+T or click + to create one'}
         </span>
       </div>
     )

@@ -210,7 +210,7 @@ export function SettingsModal() {
       <div ref={modalRef} className={`${styles.modal} ${exiting ? styles.modalExit : ''}`} role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div className={styles.header}>
           <span id="settings-title" className={styles.title}>Settings</span>
-          <button className={styles.closeBtn} onClick={closeSettings}>
+          <button type="button" className={styles.closeBtn} onClick={closeSettings}>
             <svg width="10" height="10" viewBox="0 0 10 10">
               <path d="M0.5 0.5L9.5 9.5M9.5 0.5L0.5 9.5" stroke="currentColor" strokeWidth="1" />
             </svg>
@@ -221,6 +221,7 @@ export function SettingsModal() {
           <nav className={styles.nav} ref={navRef}>
             {CATEGORIES.map((cat) => (
               <button
+                type="button"
                 key={cat.key}
                 className={`${styles.navItem} ${activeCategory === cat.key ? styles.navItemActive : ''}`}
                 onClick={() => setActiveCategory(cat.key)}
@@ -483,12 +484,14 @@ function ThemeEditor({
             />
             <div className={styles.segmentGroup}>
               <button
+                type="button"
                 className={`${styles.segmentBtn} ${editorMode === 'visual' ? styles.segmentBtnActive : ''}`}
                 onClick={() => setEditorMode('visual')}
               >
                 Visual
               </button>
               <button
+                type="button"
                 className={`${styles.segmentBtn} ${editorMode === 'json' ? styles.segmentBtnActive : ''}`}
                 onClick={startJsonEdit}
               >
@@ -542,8 +545,8 @@ function ThemeEditor({
               />
               {jsonError && <div className={styles.jsonError}>{jsonError}</div>}
               <div className={styles.jsonActions}>
-                <button className={styles.themeBtn} onClick={applyJsonEdit}>Apply</button>
-                <button className={styles.themeBtn} onClick={() => setEditorMode('visual')}>Cancel</button>
+                <button type="button" className={styles.themeBtn} onClick={applyJsonEdit}>Apply</button>
+                <button type="button" className={styles.themeBtn} onClick={() => setEditorMode('visual')}>Cancel</button>
               </div>
             </div>
           )}
@@ -589,8 +592,8 @@ function AppearanceSection({
         />
       </div>
       <div className={styles.themeActions}>
-        <button className={styles.themeBtn} onClick={handleImport}>Import</button>
-        <button className={styles.themeBtn} onClick={handleNew}>New</button>
+        <button type="button" className={styles.themeBtn} onClick={handleImport}>Import</button>
+        <button type="button" className={styles.themeBtn} onClick={handleNew}>New</button>
       </div>
 
       {isCustom && (
@@ -610,7 +613,7 @@ function AppearanceSection({
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Font Size</span>
         <div className={styles.stepper}>
-          <button className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.max(8, settings.fontSize - 1))}>-</button>
+          <button type="button" className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.max(8, settings.fontSize - 1))}>-</button>
           <input
             type="number"
             className={styles.numberInput}
@@ -619,7 +622,7 @@ function AppearanceSection({
             max={32}
             onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 8 && v <= 32) updateSetting('fontSize', v) }}
           />
-          <button className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.min(32, settings.fontSize + 1))}>+</button>
+          <button type="button" className={styles.stepBtn} onClick={() => updateSetting('fontSize', Math.min(32, settings.fontSize + 1))}>+</button>
         </div>
       </div>
     </div>
@@ -641,6 +644,7 @@ function TerminalSection({
         <div className={styles.segmentGroup}>
           {(['block', 'underline', 'bar'] as const).map((style) => (
             <button
+              type="button"
               key={style}
               className={`${styles.segmentBtn} ${settings.cursorStyle === style ? styles.segmentBtnActive : ''}`}
               onClick={() => updateSetting('cursorStyle', style)}
@@ -720,7 +724,7 @@ function ShortcutsSection({
             <span className={`${styles.shortcutKey} ${capturing === key ? styles.shortcutCapture : ''}`}>
               {capturing === key ? 'Press keys...' : shortcuts[key]}
             </span>
-            <button className={styles.shortcutBtn} onClick={() => onStartCapture(key)}>
+            <button type="button" className={styles.shortcutBtn} onClick={() => onStartCapture(key)}>
               {capturing === key ? 'Cancel' : 'Edit'}
             </button>
           </div>
@@ -744,12 +748,14 @@ function LayoutSection({
         <span className={styles.settingLabel}>Sidebar Position</span>
         <div className={styles.segmentGroup}>
           <button
+            type="button"
             className={`${styles.segmentBtn} ${settings.sidebarPosition === 'left' ? styles.segmentBtnActive : ''}`}
             onClick={() => updateSetting('sidebarPosition', 'left')}
           >
             Left
           </button>
           <button
+            type="button"
             className={`${styles.segmentBtn} ${settings.sidebarPosition === 'right' ? styles.segmentBtnActive : ''}`}
             onClick={() => updateSetting('sidebarPosition', 'right')}
           >

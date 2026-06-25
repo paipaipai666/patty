@@ -32,13 +32,14 @@ export function StatusBar() {
   }
 
   return (
-    <div className={styles.statusbar}>
+    <div className={styles.statusbar} role="status" aria-live="polite">
       <span className={styles.item}>
         <span
           className={styles.dot}
           style={{
             backgroundColor: `var(--color-${activeSession.color})`
           }}
+          aria-label={activeSession.color}
         />
         {activeSession.title}
       </span>

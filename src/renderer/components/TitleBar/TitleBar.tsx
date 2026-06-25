@@ -68,6 +68,7 @@ export function TitleBar({ onOpenSettings }: TitleBarProps) {
       <div className={styles.controls}>
         {onOpenSettings && (
           <button
+            type="button"
             onClick={onOpenSettings}
             className={styles.btnControl}
             aria-label="Settings"
@@ -77,6 +78,7 @@ export function TitleBar({ onOpenSettings }: TitleBarProps) {
           </button>
         )}
         <button
+          type="button"
           onClick={() => window.terminalAPI.windowMinimize()}
           className={styles.btnControl}
           aria-label="Minimize"
@@ -84,6 +86,7 @@ export function TitleBar({ onOpenSettings }: TitleBarProps) {
           <MinimizeIcon />
         </button>
         <button
+          type="button"
           onClick={() => window.terminalAPI.windowMaximize()}
           className={styles.btnControl}
           aria-label={maximized ? 'Restore' : 'Maximize'}
@@ -91,6 +94,7 @@ export function TitleBar({ onOpenSettings }: TitleBarProps) {
           {maximized ? <RestoreIcon /> : <MaximizeIcon />}
         </button>
         <button
+          type="button"
           onClick={() => window.terminalAPI.windowClose()}
           className={`${styles.btnControl} ${styles.btnClose}`}
           aria-label="Close"

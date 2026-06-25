@@ -319,6 +319,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setSidebarWidth: (width: number) => {
+    // Keep in sync with --sidebar-min-width / --sidebar-max-width in variables.css
     const clamped = Math.min(320, Math.max(160, width))
     set({ sidebarWidth: clamped })
     debouncedSave(get)

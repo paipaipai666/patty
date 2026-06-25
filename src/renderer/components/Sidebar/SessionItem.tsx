@@ -35,10 +35,11 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
   useEffect(() => {
     if (attentionType && attentionType !== prevAttention.current && itemRef.current) {
       attentionTimelineRef.current?.kill()
+      const style = getComputedStyle(document.documentElement)
       const colorMap: Record<string, string> = {
-        permission: 'rgba(99,102,241,0.4)',
-        complete: 'rgba(52,211,153,0.4)',
-        error: 'rgba(248,113,113,0.4)'
+        permission: style.getPropertyValue('--attention-permission-glow').trim() || 'rgba(99,102,241,0.4)',
+        complete: style.getPropertyValue('--attention-complete-glow').trim() || 'rgba(52,211,153,0.4)',
+        error: style.getPropertyValue('--attention-error-glow').trim() || 'rgba(248,113,113,0.4)'
       }
       const glow = document.createElement('div')
       glow.style.cssText = `
@@ -180,6 +181,7 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
           <span className={styles.itemTitle}>{session.title}</span>
         )}
         <button
+          type="button"
           className={styles.closeBtn}
           onClick={(e) => {
             e.stopPropagation()

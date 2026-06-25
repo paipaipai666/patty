@@ -103,6 +103,7 @@
   --btn-close-hover:   #e81123;
 
   --sidebar-width:     220px;
+  /* Keep in sync with setSidebarWidth clamp in sessionStore.ts */
   --sidebar-min-width: 160px;
   --sidebar-max-width: 320px;
   --titlebar-height:   32px;

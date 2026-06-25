@@ -149,11 +149,27 @@ export function getThemeColors(theme: string, customThemes: CustomTheme[] = []):
   }
 }
 
+// Module-level cache to diff against previous theme application
+const _appliedThemeCache = new Map<string, string>()
+
 export function applyTheme(theme: string, customThemes: CustomTheme[] = []): void {
   const { ui } = getThemeColors(theme, customThemes)
   const root = document.documentElement
+
+  // Apply only changed or new properties
   for (const [key, value] of Object.entries(ui)) {
-    root.style.setProperty(key, value)
+    if (_appliedThemeCache.get(key) !== value) {
+      root.style.setProperty(key, value)
+      _appliedThemeCache.set(key, value)
+    }
+  }
+
+  // Remove properties that existed in the old theme but not in the new one
+  for (const key of _appliedThemeCache.keys()) {
+    if (!(key in ui)) {
+      root.style.removeProperty(key)
+      _appliedThemeCache.delete(key)
+    }
   }
 }
 

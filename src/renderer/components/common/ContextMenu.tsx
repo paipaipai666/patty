@@ -50,13 +50,19 @@ export function ContextMenu({ show, x, y, items, onClose }: ContextMenuProps) {
   // Adjust position if menu would overflow
   useEffect(() => {
     if (!menuRef.current) return
-    const rect = menuRef.current.getBoundingClientRect()
-    if (rect.right > window.innerWidth) {
-      menuRef.current.style.left = `${x - rect.width}px`
+    const adjust = () => {
+      if (!menuRef.current) return
+      const rect = menuRef.current.getBoundingClientRect()
+      if (rect.right > window.innerWidth) {
+        menuRef.current.style.left = `${x - rect.width}px`
+      }
+      if (rect.bottom > window.innerHeight) {
+        menuRef.current.style.top = `${y - rect.height}px`
+      }
     }
-    if (rect.bottom > window.innerHeight) {
-      menuRef.current.style.top = `${y - rect.height}px`
-    }
+    adjust()
+    window.addEventListener('resize', adjust)
+    return () => window.removeEventListener('resize', adjust)
   }, [x, y])
 
   // Focus first item + arrow-key navigation
