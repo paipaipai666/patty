@@ -463,15 +463,20 @@
 .collectionChildren {
   display: flex;
   flex-direction: column;
-  max-height: 500px;
   overflow: hidden;
   opacity: 1;
-  transition: max-height var(--transition-normal), opacity var(--transition-fast);
+  max-height: 2000px;
+  transition: max-height 300ms var(--ease-out), opacity 200ms var(--ease-out);
 }
 
 .collectionCollapsed {
   max-height: 0;
   opacity: 0;
+  transition: max-height 250ms var(--ease-out), opacity 150ms var(--ease-out);
+}
+
+.chevronIcon {
+  transition: transform 200ms var(--ease-out);
 }
 
 @media (prefers-reduced-motion: reduce) {

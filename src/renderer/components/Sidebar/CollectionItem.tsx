@@ -122,6 +122,7 @@ export function CollectionItem({ collection, depth, children, onCloseSession, on
           }}
         >
           <svg
+            className={styles.chevronIcon}
             width="10"
             height="10"
             viewBox="0 0 10 10"

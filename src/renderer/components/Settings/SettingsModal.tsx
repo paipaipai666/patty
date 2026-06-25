@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import gsap from 'gsap'
 import { themeRipple } from '../../utils/themeRipple'
 import { getThemeColors } from '../../styles/themes'
@@ -66,39 +66,52 @@ export function SettingsModal() {
   const [capturingShortcut, setCapturingShortcut] = useState<keyof ShortcutMap | null>(null)
   const captureRef = useRef<keyof ShortcutMap | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
+  const navRef = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const prevCategory = useRef<Category>('appearance')
 
-  // Modal entrance animation
-  useLayoutEffect(() => {
+  // Modal entrance animation (after mount, not useLayoutEffect)
+  useEffect(() => {
     if (!mounted || !modalRef.current) return
     const panel = modalRef.current
+    const navItems = navRef.current?.children
     const fields = contentRef.current?.children
 
     const tl = gsap.timeline()
     tl.from(panel, {
-      y: 20, scale: 0.95, opacity: 0,
-      duration: 0.4, ease: 'back.out(1.2)'
+      y: 24, scale: 0.96, opacity: 0,
+      duration: 0.45, ease: 'back.out(1.2)',
+      clearProps: 'transform,opacity'
     })
+    if (navItems && navItems.length > 0) {
+      tl.from(Array.from(navItems), {
+        x: -12, opacity: 0,
+        duration: 0.3, stagger: 0.04,
+        ease: 'power2.out',
+        clearProps: 'transform,opacity'
+      }, '-=0.2')
+    }
     if (fields && fields.length > 0) {
       tl.from(Array.from(fields), {
         y: 12, opacity: 0,
         duration: 0.3, stagger: 0.04,
-        ease: 'power2.out'
-      }, '-=0.15')
+        ease: 'power2.out',
+        clearProps: 'transform,opacity'
+      }, '-=0.2')
     }
 
     return () => { tl.kill() }
   }, [mounted])
 
   // Tab content crossfade animation
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!contentRef.current || prevCategory.current === activeCategory) return
     const children = contentRef.current.children
     if (children.length > 0) {
-      gsap.from(children, {
+      gsap.from(Array.from(children), {
         y: 8, opacity: 0,
-        duration: 0.3, ease: 'power2.out'
+        duration: 0.3, ease: 'power2.out',
+        clearProps: 'transform,opacity'
       })
     }
     prevCategory.current = activeCategory
@@ -166,7 +179,7 @@ export function SettingsModal() {
         </div>
 
         <div className={styles.body}>
-          <nav className={styles.nav}>
+          <nav className={styles.nav} ref={navRef}>
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.key}
