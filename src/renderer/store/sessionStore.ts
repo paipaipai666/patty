@@ -24,10 +24,10 @@ export interface TerminalSession {
   aiType?: 'claude' | 'opencode' | null
 }
 
-const COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
+export const SESSION_COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
 
 function getNextColor(index: number): SessionColor {
-  return COLORS[index % COLORS.length]
+  return SESSION_COLORS[index % SESSION_COLORS.length]
 }
 
 interface SessionStore {

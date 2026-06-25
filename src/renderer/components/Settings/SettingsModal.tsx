@@ -60,7 +60,10 @@ function formatShortcut(e: KeyboardEvent): string {
 }
 
 export function SettingsModal() {
-  const { settings, settingsOpen, closeSettings, updateSetting } = useSettingsStore()
+  const settings = useSettingsStore((s) => s.settings)
+  const settingsOpen = useSettingsStore((s) => s.settingsOpen)
+  const closeSettings = useSettingsStore((s) => s.closeSettings)
+  const updateSetting = useSettingsStore((s) => s.updateSetting)
   const { mounted, exiting } = useAnimatedMount(settingsOpen, 200)
   const [activeCategory, setActiveCategory] = useState<Category>('appearance')
   const [capturingShortcut, setCapturingShortcut] = useState<keyof ShortcutMap | null>(null)

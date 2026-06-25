@@ -75,7 +75,11 @@
     "--text-separator": "rgba(128,128,128,0.2)",
     "--btn-close-text": "#ffffff",
     "--btn-active-text": "#ffffff",
-    "--surface-highlight": "rgba(255,255,255,0.02)"
+    "--surface-highlight": "rgba(255,255,255,0.02)",
+    "--green": "#34d399",
+    "--red": "#f87171",
+    "--cyan": "#22d3ee",
+    "--amber": "#fbbf24"
   },
   "terminal": {
     "background": "#0a0a0c",

@@ -10,6 +10,7 @@ import styles from './Terminal.module.css'
 export function TerminalArea() {
   const sessions = useSessionStore((s) => s.sessions)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const sessionsLoaded = useSessionStore((s) => s.loaded)
   const settingsLoaded = useSettingsStore((s) => s.loaded)
   const emptyRef = useRef<HTMLDivElement>(null)
 
@@ -33,6 +34,11 @@ export function TerminalArea() {
       ease: 'sine.inOut'
     })
   }, { scope: emptyRef })
+
+  // While sessions are still loading from disk, show nothing (avoid empty-state flash)
+  if (!sessionsLoaded) {
+    return <div className={styles.area} />
+  }
 
   if (sessions.length === 0) {
     return (

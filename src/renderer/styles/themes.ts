@@ -101,7 +101,11 @@ export const UI_COLOR_LABELS: Record<keyof UITheme, string> = {
   '--text-separator': 'Text Separator',
   '--btn-close-text': 'Close Button Text',
   '--btn-active-text': 'Active Button Text',
-  '--surface-highlight': 'Surface Highlight'
+  '--surface-highlight': 'Surface Highlight',
+  '--green': 'Green',
+  '--red': 'Red',
+  '--cyan': 'Cyan',
+  '--amber': 'Amber'
 }
 
 export const XTERM_COLOR_LABELS: Record<keyof XtermTheme, string> = {

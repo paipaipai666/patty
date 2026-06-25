@@ -52,6 +52,7 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
   const sessions = useSessionStore((s) => s.sessions)
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const loaded = useSessionStore((s) => s.loaded)
   const listRef = useRef<HTMLDivElement>(null)
   const prevCount = useRef(0)
 
@@ -106,6 +107,9 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
 
   const topLevelCollections = filteredCollections.filter((c) => c.parentId === null)
   const topLevelSessions = filteredSessions.filter((s) => s.collectionId === null)
+
+  // While loading from disk, render nothing to avoid flashing the empty state
+  if (!loaded) return null
 
   if (filteredSessions.length === 0 && filteredCollections.length === 0) {
     return (

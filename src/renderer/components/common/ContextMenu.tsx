@@ -20,6 +20,13 @@ interface ContextMenuProps {
 export function ContextMenu({ show, x, y, items, onClose }: ContextMenuProps) {
   const { mounted, exiting } = useAnimatedMount(show, 120)
   const menuRef = useRef<HTMLDivElement>(null)
+  const cachedItemsRef = useRef<MenuItem[]>([])
+
+  // Keep the last non-empty items so the menu still shows content during its exit animation
+  if (items.length > 0) {
+    cachedItemsRef.current = items
+  }
+  const renderItems = items.length > 0 ? items : cachedItemsRef.current
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -85,7 +92,7 @@ export function ContextMenu({ show, x, y, items, onClose }: ContextMenuProps) {
 
   return (
     <div ref={menuRef} className={`${styles.menu} ${exiting ? styles.menuExit : ''}`} style={{ left: x, top: y }} role="menu">
-      {items.map((item, i) =>
+      {renderItems.map((item, i) =>
         item.separator ? (
           <div key={i} className={styles.separator} role="separator" />
         ) : (

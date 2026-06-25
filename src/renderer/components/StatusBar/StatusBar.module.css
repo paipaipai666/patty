@@ -42,8 +42,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 5px var(--green-glow);
+  background: var(--color-gray);
 }
 
 .separator {

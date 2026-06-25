@@ -3,6 +3,8 @@
   --accent-alpha:      rgba(99, 102, 241, 0.12);
   --accent-glow:       rgba(99, 102, 241, 0.25);
 
+  --bg-app:            #0a0a0c;
+
   /* AI icon colors */
   --ai-claude-color:       #d97757;
   --ai-claude-bg:          rgba(217,119,87,0.12);
@@ -127,4 +129,69 @@
   --transition-fast:   150ms var(--ease-out);
   --transition-normal: 200ms var(--ease-out);
   --transition-slow:   300ms var(--ease-out);
+}
+
+/* Light theme CSS fallback — applied synchronously via data-theme attribute
+   before React/JS loads, preventing dark flash for light-theme users.
+   sessionStorage('patty-theme') is set after first successful settings load. */
+:root[data-theme="light"] {
+  --bg-app:            #f6f7f9;
+  --bg-titlebar:       rgba(248,249,252,0.70);
+  --bg-sidebar:        rgba(248,249,252,0.70);
+  --bg-main:           rgba(255,255,255,0.40);
+  --bg-terminal:       #ffffff;
+  --bg-item-hover:     rgba(128,128,128,0.05);
+  --bg-item-active:    rgba(99,102,241,0.06);
+  --bg-statusbar:      rgba(248,249,252,0.55);
+  --bg-input:          rgba(0,0,0,0.04);
+  --bg-context-menu:   rgba(238,239,244,0.78);
+  --bg-dropdown-menu:  rgba(238,239,244,0.85);
+  --text-primary:      #12121a;
+  --text-secondary:    #5a5a6e;
+  --text-muted:        #9292a8;
+  --border-subtle:     rgba(0,0,0,0.04);
+  --border-medium:     rgba(0,0,0,0.07);
+  --accent:            #6366f1;
+  --accent-hover:      #4f46e5;
+  --ai-claude-color:   #b85a3a;
+  --ai-claude-bg:      rgba(184,90,58,0.10);
+  --ai-opencode-color: #3d4f6e;
+  --ai-opencode-bg:    rgba(61,79,110,0.08);
+  --fire-claude:       #b0553a;
+  --fire-opencode:     #3d4f6e;
+  --overlay-bg:        rgba(0, 0, 0, 0.25);
+  --scrollbar-thumb:   rgba(0,0,0,0.12);
+  --neutral:           #6b7280;
+  --neutral-4:         rgba(0,0,0,0.04);
+  --neutral-5:         rgba(0,0,0,0.05);
+  --neutral-6:         rgba(0,0,0,0.06);
+  --neutral-8:         rgba(0,0,0,0.08);
+  --neutral-10:        rgba(0,0,0,0.10);
+  --neutral-20:        rgba(0,0,0,0.20);
+  --green-glow:        rgba(5, 150, 105, 0.25);
+  --red-glow:          rgba(220, 38, 38, 0.25);
+  --text-separator:    rgba(0,0,0,0.15);
+  --surface-highlight: rgba(0,0,0,0.02);
+  --green:             #059669;
+  --red:               #dc2626;
+  --cyan:              #0d9488;
+  --amber:             #d97706;
+}
+
+:root[data-theme="solarized-light"] {
+  --bg-app:            #fdf6e3;
+  --bg-titlebar:       rgba(253,246,227,0.70);
+  --bg-sidebar:        rgba(253,246,227,0.70);
+  --bg-main:           rgba(255,255,255,0.40);
+  --bg-terminal:       #fdf6e3;
+  --bg-input:          rgba(0,0,0,0.04);
+  --bg-context-menu:   rgba(253,246,227,0.85);
+  --bg-dropdown-menu:  rgba(253,246,227,0.90);
+  --text-primary:      #586e75;
+  --text-secondary:    #839496;
+  --text-muted:        #93a1a1;
+  --border-subtle:     rgba(0,0,0,0.06);
+  --border-medium:     rgba(0,0,0,0.10);
+  --overlay-bg:        rgba(0, 0, 0, 0.20);
+  --scrollbar-thumb:   rgba(0,0,0,0.12);
 }

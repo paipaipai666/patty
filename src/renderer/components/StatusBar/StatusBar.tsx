@@ -19,9 +19,9 @@ function formatCwd(cwd: string): string {
 }
 
 export function StatusBar() {
-  const sessions = useSessionStore((s) => s.sessions)
-  const activeSessionId = useSessionStore((s) => s.activeSessionId)
-  const activeSession = sessions.find((s) => s.id === activeSessionId)
+  const activeSession = useSessionStore((s) =>
+    s.sessions.find((x) => x.id === s.activeSessionId) ?? null
+  )
 
   if (!activeSession) {
     return (

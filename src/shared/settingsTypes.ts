@@ -109,6 +109,10 @@ export interface UITheme {
   '--btn-close-text': string
   '--btn-active-text': string
   '--surface-highlight': string
+  '--green': string
+  '--red': string
+  '--cyan': string
+  '--amber': string
 }
 
 export interface CustomTheme {
