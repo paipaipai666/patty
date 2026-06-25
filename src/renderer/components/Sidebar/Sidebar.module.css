@@ -199,17 +199,17 @@
   50% { opacity: 0; transform: scale(1.5); }
 }
 
-/* 整行高亮样式 - 权限请求/询问问题 (accent) */
+/* Full-row highlight - permission request/question (accent) */
 .itemAttention-permission {
   background: var(--accent-alpha) !important;
 }
 
-/* 整行高亮样式 - 回答完毕 (绿色) */
+/* Full-row highlight - answer complete (green) */
 .itemAttention-complete {
   background: var(--attention-complete-bg) !important;
 }
 
-/* 整行高亮样式 - 执行出错 (红色) */
+/* Full-row highlight - error (red) */
 .itemAttention-error {
   background: var(--attention-error-bg) !important;
 }
@@ -241,7 +241,7 @@
   box-shadow: 0 0 6px var(--attention-error-glow);
 }
 
-/* 呼吸灯动画 */
+/* Breathing pulse animation */
 .itemAttention-permission,
 .itemAttention-complete,
 .itemAttention-error {
@@ -284,7 +284,7 @@
   padding: 0 4px;
   background: var(--bg-input);
   border: 1px solid var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-family: var(--font-ui);
   font-size: 12px;

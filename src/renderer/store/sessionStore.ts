@@ -117,7 +117,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (ipcCleanup) ipcCleanup()
       const offAttention = window.terminalAPI.onAttentionChange((paneId, eventType, aiType) => {
         get().setAttention(paneId, eventType)
-        // aiType 参数非 undefined 时同步设置/清除
+        // Sync aiType when the parameter is not undefined
         if (aiType !== undefined) {
           get().setAiType(paneId, aiType ?? null)
         }
@@ -176,6 +176,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   removeSession: (id: string) => {
+    if (attentionTimers[id]) {
+      clearTimeout(attentionTimers[id])
+      delete attentionTimers[id]
+    }
     set((state) => {
       const filtered = state.sessions.filter((s) => s.id !== id)
       let newActiveId = state.activeSessionId

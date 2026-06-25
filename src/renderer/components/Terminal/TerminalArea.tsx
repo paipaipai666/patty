@@ -44,7 +44,13 @@ export function TerminalArea() {
     return (
       <div className={styles.emptyArea}>
         <div className={styles.emptyContent} ref={emptyRef}>
-          <div className={styles.emptyLogo}>⌨</div>
+          <div className={styles.emptyLogo}>
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+              <rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" strokeWidth="2" opacity="0.4" />
+              <path d="M12 20L18 26L12 32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+              <path d="M24 32H34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
+            </svg>
+          </div>
           <h2 className={styles.emptyTitle}>Patty</h2>
           <p className={styles.emptyDesc}>Press Ctrl+T or click + to create a new terminal</p>
         </div>

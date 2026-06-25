@@ -6,11 +6,10 @@ interface CollectionItemProps {
   collection: Collection
   depth: number
   children: React.ReactNode
-  onCloseSession: (id: string) => void
   onContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
 
-export function CollectionItem({ collection, depth, children, onCloseSession, onContextMenu }: CollectionItemProps) {
+export function CollectionItem({ collection, depth, children, onContextMenu }: CollectionItemProps) {
   const toggleCollectionCollapse = useSessionStore((s) => s.toggleCollectionCollapse)
   const renameCollection = useSessionStore((s) => s.renameCollection)
   const removeCollection = useSessionStore((s) => s.removeCollection)

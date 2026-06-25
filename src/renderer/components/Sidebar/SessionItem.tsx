@@ -29,10 +29,12 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
   const inputRef = useRef<HTMLInputElement>(null)
   const itemRef = useRef<HTMLDivElement>(null)
   const prevAttention = useRef<string | null>(null)
+  const attentionTimelineRef = useRef<gsap.core.Timeline | null>(null)
 
   // Attention state entrance animation
   useEffect(() => {
     if (attentionType && attentionType !== prevAttention.current && itemRef.current) {
+      attentionTimelineRef.current?.kill()
       const colorMap: Record<string, string> = {
         permission: 'rgba(99,102,241,0.4)',
         complete: 'rgba(52,211,153,0.4)',
@@ -48,15 +50,23 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
       itemRef.current.appendChild(glow)
 
       const tl = gsap.timeline({
-        onComplete: () => { if (glow.parentNode) glow.parentNode.removeChild(glow) }
+        onComplete: () => {
+          if (glow.parentNode) glow.parentNode.removeChild(glow)
+          attentionTimelineRef.current = null
+        }
       })
+      attentionTimelineRef.current = tl
       tl.to(glow, { scale: 1.5, opacity: 0.6, duration: 0.35, ease: 'power2.out' })
         .to(glow, { scale: 2.5, opacity: 0, duration: 0.7, ease: 'power2.out' })
     }
     prevAttention.current = attentionType
+    return () => {
+      attentionTimelineRef.current?.kill()
+      attentionTimelineRef.current = null
+    }
   }, [attentionType])
 
-  // 根据注意力类型获取 CSS 类名
+  // Map attention type to CSS class name
   const getAttentionClass = () => {
     if (!attentionType) return ''
     switch (attentionType) {

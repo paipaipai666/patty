@@ -29,7 +29,6 @@ function renderCollection(
       key={collection.id}
       collection={collection}
       depth={depth}
-      onCloseSession={onClose}
       onContextMenu={onCollectionContextMenu}
     >
       {childCollections.map((child) =>
@@ -114,7 +113,13 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
   if (filteredSessions.length === 0 && filteredCollections.length === 0) {
     return (
       <div className={styles.emptyState}>
-        <span className={styles.emptyIcon}>⌨</span>
+        <span className={styles.emptyIcon}>
+          <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" strokeWidth="2" opacity="0.4" />
+            <path d="M12 20L18 26L12 32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+            <path d="M24 32H34" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.4" />
+          </svg>
+        </span>
         <span>{searchQuery?.trim() ? 'No matches' : 'No terminals'}</span>
         <span className={styles.emptyHint}>
           {searchQuery?.trim() ? 'Try a different search' : 'Press Ctrl+T to create one'}
