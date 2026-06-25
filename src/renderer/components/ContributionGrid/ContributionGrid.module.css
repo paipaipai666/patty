@@ -23,19 +23,19 @@
 }
 
 .grid[data-type="claude"] .glow-3 {
-  box-shadow: 0 0 4px rgba(204, 120, 92, 0.25);
+  box-shadow: 0 0 4px var(--fire-glow-claude-3);
 }
 
 .grid[data-type="claude"] .glow-4 {
-  box-shadow: 0 0 8px rgba(204, 120, 92, 0.5);
+  box-shadow: 0 0 8px var(--fire-glow-claude-4);
 }
 
 .grid[data-type="opencode"] .glow-3 {
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 4px var(--fire-glow-opencode-3);
 }
 
 .grid[data-type="opencode"] .glow-4 {
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 8px var(--fire-glow-opencode-4);
 }
 
 .grid::after {
@@ -55,9 +55,9 @@
 }
 
 .grid[data-type="claude"]::after {
-  background: linear-gradient(90deg, transparent 0%, rgba(204, 120, 92, 0.10) 40%, rgba(204, 120, 92, 0.22) 100%);
+  background: var(--fire-gradient-claude);
 }
 
 .grid[data-type="opencode"]::after {
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0.18) 100%);
+  background: var(--fire-gradient-opencode);
 }

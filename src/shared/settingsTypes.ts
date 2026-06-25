@@ -55,6 +55,22 @@ export interface UITheme {
   '--bg-dropdown-menu': string
   '--btn-close-hover': string
   '--btn-min-max-hover': string
+
+  '--ai-claude-color': string
+  '--ai-claude-bg': string
+  '--ai-claude-glow': string
+  '--ai-opencode-color': string
+  '--ai-opencode-bg': string
+  '--ai-opencode-glow': string
+
+  '--fire-claude': string
+  '--fire-opencode': string
+  '--fire-glow-claude-3': string
+  '--fire-glow-claude-4': string
+  '--fire-glow-opencode-3': string
+  '--fire-glow-opencode-4': string
+  '--fire-gradient-claude': string
+  '--fire-gradient-opencode': string
 }
 
 export interface CustomTheme {

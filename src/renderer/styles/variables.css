@@ -2,6 +2,24 @@
   --accent:            #6366f1;
   --accent-alpha:      rgba(99, 102, 241, 0.12);
   --accent-glow:       rgba(99, 102, 241, 0.25);
+
+  /* AI icon colors */
+  --ai-claude-color:       #d97757;
+  --ai-claude-bg:          rgba(217,119,87,0.12);
+  --ai-claude-glow:        rgba(217,119,87,0.25);
+  --ai-opencode-color:     rgba(255,255,255,0.8);
+  --ai-opencode-bg:        rgba(255,255,255,0.06);
+  --ai-opencode-glow:      rgba(255,255,255,0.12);
+
+  /* Fire effect - ContributionGrid */
+  --fire-claude:       #cc785c;
+  --fire-opencode:     #ffffff;
+  --fire-glow-claude-3:    rgba(204, 120, 92, 0.25);
+  --fire-glow-claude-4:    rgba(204, 120, 92, 0.5);
+  --fire-glow-opencode-3:  rgba(255, 255, 255, 0.25);
+  --fire-glow-opencode-4:  rgba(255, 255, 255, 0.5);
+  --fire-gradient-claude:    linear-gradient(90deg, transparent 0%, rgba(204, 120, 92, 0.10) 40%, rgba(204, 120, 92, 0.22) 100%);
+  --fire-gradient-opencode:  linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0.18) 100%);
   --cyan:              #22d3ee;
   --green:             #34d399;
   --red:               #f87171;
