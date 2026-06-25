@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import gsap from 'gsap'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
@@ -26,6 +27,34 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(session.title)
   const inputRef = useRef<HTMLInputElement>(null)
+  const itemRef = useRef<HTMLDivElement>(null)
+  const prevAttention = useRef<string | null>(null)
+
+  // Attention state entrance animation
+  useEffect(() => {
+    if (attentionType && attentionType !== prevAttention.current && itemRef.current) {
+      const colorMap: Record<string, string> = {
+        permission: 'rgba(99,102,241,0.4)',
+        complete: 'rgba(52,211,153,0.4)',
+        error: 'rgba(248,113,113,0.4)'
+      }
+      const glow = document.createElement('div')
+      glow.style.cssText = `
+        position:absolute; left:-20px; top:50%; width:40px; height:40px;
+        border-radius:50%; pointer-events:none;
+        background:radial-gradient(circle, ${colorMap[attentionType] || colorMap.complete}, transparent);
+        transform:translateY(-50%) scale(0); opacity:0;
+      `
+      itemRef.current.appendChild(glow)
+
+      const tl = gsap.timeline({
+        onComplete: () => { if (glow.parentNode) glow.parentNode.removeChild(glow) }
+      })
+      tl.to(glow, { scale: 1.5, opacity: 0.6, duration: 0.35, ease: 'power2.out' })
+        .to(glow, { scale: 2.5, opacity: 0, duration: 0.7, ease: 'power2.out' })
+    }
+    prevAttention.current = attentionType
+  }, [attentionType])
 
   // 根据注意力类型获取 CSS 类名
   const getAttentionClass = () => {
@@ -91,8 +120,9 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
 
   return (
     <div
+      ref={itemRef}
       className={`${styles.item} ${isActive ? styles.itemActive : ''} ${getAttentionClass()}`}
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      style={{ paddingLeft: `${depth * 16 + 8}px`, position: 'relative', overflow: 'hidden' }}
       onClick={() => setActive(session.id)}
       onDoubleClick={handleDoubleClick}
       draggable

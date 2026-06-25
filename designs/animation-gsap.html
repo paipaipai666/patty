@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Patty - GSAP Animation Concepts</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<style>
+  :root {
+    --bg-app: #0a0a0c;
+    --bg-sidebar: rgba(18,18,22,0.50);
+    --bg-item-hover: rgba(128,128,128,0.06);
+    --bg-item-active: rgba(99,102,241,0.08);
+    --bg-input: rgba(128,128,128,0.06);
+    --bg-context-menu: rgba(28,28,34,0.78);
+    --text-primary: #e6e6ed;
+    --text-secondary: #90909e;
+    --text-muted: #5c5c6a;
+    --border-subtle: rgba(255,255,255,0.05);
+    --border-medium: rgba(255,255,255,0.08);
+    --accent: #6366f1;
+    --accent-alpha: rgba(99,102,241,0.12);
+    --accent-glow: rgba(99,102,241,0.25);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg-app);
+    color: var(--text-primary);
+    padding: 40px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 32px; }
+
+  .section {
+    margin-bottom: 48px;
+    padding: 24px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+  .section h2 { font-size: 14px; color: var(--text-secondary); font-weight: 500; margin-bottom: 4px; }
+  .section .desc { font-size: 11px; color: var(--text-muted); margin-bottom: 20px; }
+
+  .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .demo { display: flex; flex-direction: column; gap: 8px; min-width: 220px; flex: 1; }
+  .demo-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .demo-box {
+    padding: 16px;
+    background: rgba(0,0,0,0.3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn {
+    padding: 6px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-secondary);
+    background: rgba(128,128,128,0.08);
+    transition: background 150ms, color 150ms;
+  }
+  .btn:hover { background: rgba(128,128,128,0.14); color: var(--text-primary); }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { box-shadow: 0 0 8px var(--accent-glow); }
+  .btn-sm { padding: 4px 10px; font-size: 10px; }
+  .mt-8 { margin-top: 8px; }
+
+  /* ===== Session List ===== */
+  .session-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 200px;
+  }
+  .session-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    position: relative;
+    background: transparent;
+    will-change: transform, opacity;
+  }
+  .session-item:hover { background: var(--bg-item-hover); }
+  .session-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .session-title { flex: 1; font-size: 12px; color: var(--text-secondary); }
+  .session-pid { font-size: 11px; color: var(--text-muted); }
+
+  /* ===== Tab System ===== */
+  .tabs-nav {
+    display: inline-flex;
+    gap: 0;
+    background: rgba(0,0,0,0.3);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    position: relative;
+    margin-bottom: 16px;
+  }
+  .tab-btn {
+    padding: 6px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    position: relative;
+    z-index: 1;
+    transition: color 150ms;
+  }
+  .tab-btn:hover { color: var(--text-secondary); }
+  .tab-btn.active { color: var(--text-primary); }
+
+  .tab-indicator {
+    position: absolute;
+    height: calc(100% - 6px);
+    top: 3px;
+    background: var(--accent-alpha);
+    border-radius: 4px;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .tab-content { position: relative; min-height: 100px; }
+  .tab-panel {
+    position: absolute;
+    inset: 0;
+    padding: 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    opacity: 0;
+    visibility: hidden;
+  }
+  .tab-panel.visible { opacity: 1; visibility: visible; }
+
+  /* ===== Terminal Open ===== */
+  .terminal-frame {
+    width: 100%;
+    height: 140px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    background: #0a0a0c;
+    position: relative;
+    overflow: hidden;
+  }
+  .terminal-titlebar {
+    height: 28px;
+    background: rgba(18,18,22,0.6);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 6px;
+  }
+  .terminal-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .terminal-body {
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .terminal-line { opacity: 0; }
+  .terminal-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 14px;
+    background: var(--text-primary);
+    vertical-align: text-bottom;
+    opacity: 0;
+  }
+
+  /* ===== Attention ===== */
+  .attention-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .attention-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    transform-origin: center top;
+    transform: scaleY(0);
+  }
+  .attention-item .glow-ring {
+    position: absolute;
+    left: -20px;
+    top: 50%;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    transform: translateY(-50%) scale(0);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ===== Modal ===== */
+  .modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .modal-overlay.open { pointer-events: auto; }
+  .modal-panel {
+    width: 280px;
+    background: var(--bg-context-menu);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    backdrop-filter: blur(12px);
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+  }
+  .modal-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .modal-field { margin-bottom: 10px; }
+  .modal-field label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .modal-field input {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    outline: none;
+  }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+
+  /* ===== Empty State ===== */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 50px 20px;
+    text-align: center;
+  }
+  .empty-icon { font-size: 40px; }
+  .empty-title { font-size: 18px; font-weight: 600; color: var(--text-secondary); }
+  .empty-desc { font-size: 12px; color: var(--text-muted); }
+  .empty-keys {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 22px;
+    padding: 0 6px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-medium);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* ===== Drag ===== */
+  .drag-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    cursor: grab;
+    position: relative;
+    background: transparent;
+    border: 1px solid transparent;
+    will-change: transform;
+  }
+  .drag-item:active { cursor: grabbing; }
+  .drag-item .drag-handle {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    opacity: 0.3;
+  }
+  .drag-item .drag-handle span {
+    display: block;
+    width: 10px;
+    height: 2px;
+    background: var(--text-muted);
+    border-radius: 1px;
+  }
+  .drag-placeholder {
+    height: 42px;
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--accent-alpha);
+    opacity: 0;
+    transition: opacity 150ms;
+  }
+
+  /* ===== Theme Ripple ===== */
+  .theme-demo-area {
+    width: 100%;
+    height: 120px;
+    border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: background 600ms;
+  }
+  .theme-ripple {
+    position: absolute;
+    border-radius: 50%;
+    transform: scale(0);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>Patty UI - GSAP Animation Concepts</h1>
+<p class="subtitle">比纯 CSS 更有层次感的动画方案。每个都可以交互。</p>
+
+<!-- ========== 1. SESSION LIST STAGGER ========== -->
+<div class="section">
+  <h2>1. Session List — Staggered Cascade Entrance</h2>
+  <p class="desc">终端列表加载时，每个 item 从左侧滑入 + 弹性缓动，营造"终端逐个启动"的感觉</p>
+  <div class="row">
+    <div class="demo">
+      <span class="demo-label">Click "Replay" to animate</span>
+      <div class="demo-box" style="padding:8px">
+        <div class="session-list" id="session-list">
+          <div class="session-item"><span class="session-dot" style="background:var(--accent)"></span><span class="session-title">PowerShell</span><span class="session-pid">PID 1204</span></div>
+          <div class="session-item"><span class="session-dot" style="background:#34d399"></span><span class="session-title">claude-code</span><span class="session-pid">PID 3190</span></div>
+          <div class="session-item"><span class="session-dot" style="background:#fbbf24"></span><span class="session-title">dev-server</span><span class="session-pid">PID 5521</span></div>
+          <div class="session-item"><span class="session-dot" style="background:#f87171"></span><span class="session-title">build-watch</span><span class="session-pid">PID 7723</span></div>
+          <div class="session-item"><span class="session-dot" style="background:#a78bfa"></span><span class="session-title">git-status</span><span class="session-pid">PID 8844</span></div>
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="replayStagger()">Replay</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 2. TAB SWITCH WITH FLIP ========== -->
+<div class="section">
+  <h2>2. Settings Tabs — Morphing Indicator + Content Crossfade</h2>
+  <p class="desc">Tab 指示条用 GSAP 精确插值移动（非 CSS transition），内容面板带方向感知的滑入</p>
+  <div class="row">
+    <div class="demo" style="min-width:360px">
+      <div class="demo-box">
+        <div class="tabs-nav" id="gsap-tabs-nav">
+          <div class="tab-indicator" id="gsap-indicator"></div>
+          <button class="tab-btn active" data-tab="0">Appearance</button>
+          <button class="tab-btn" data-tab="1">Terminal</button>
+          <button class="tab-btn" data-tab="2">Shortcuts</button>
+        </div>
+        <div class="tab-content" id="gsap-tabs-content">
+          <div class="tab-panel visible">
+            <strong>Font Family</strong><br>Cascadia Code, 14px<br><br>
+            <strong>Color Theme</strong><br>Dark / Light / Dracula / Nord<br><br>
+            <strong>Cursor Style</strong><br>Block — Blinking
+          </div>
+          <div class="tab-panel">
+            <strong>Default Shell</strong><br>PowerShell 7 (pwsh)<br><br>
+            <strong>Font Size</strong><br>14px<br><br>
+            <strong>Opacity</strong><br>100%
+          </div>
+          <div class="tab-panel">
+            <strong>New Terminal</strong><br>Ctrl+T<br><br>
+            <strong>Close Terminal</strong><br>Ctrl+W<br><br>
+            <strong>Next Tab</strong><br>Ctrl+]
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 3. TERMINAL OPEN ========== -->
+<div class="section">
+  <h2>3. Terminal Open — Typewriter Cascade</h2>
+  <p class="desc">新建终端时，窗口框架先展开，然后标题栏渐入，最后内容逐行"打字"出现</p>
+  <div class="row">
+    <div class="demo">
+      <div class="demo-box" style="padding:8px">
+        <div class="terminal-frame" id="terminal-frame">
+          <div class="terminal-titlebar" id="terminal-titlebar">
+            <div class="terminal-dot" style="background:#f87171"></div>
+            <div class="terminal-dot" style="background:#fbbf24"></div>
+            <div class="terminal-dot" style="background:#34d399"></div>
+            <span style="margin-left:8px;font-size:11px;color:var(--text-muted)">PowerShell</span>
+          </div>
+          <div class="terminal-body" id="terminal-body">
+            <div class="terminal-line">Windows PowerShell</div>
+            <div class="terminal-line">Copyright (C) Microsoft Corporation.</div>
+            <div class="terminal-line">&nbsp;</div>
+            <div class="terminal-line">PS C:\Users\pai&gt; <span class="terminal-cursor" id="term-cursor"></span></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="replayTerminalOpen()">Replay</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 4. ATTENTION STATE ========== -->
+<div class="section">
+  <h2>4. Attention State — Elastic Bar + Radial Glow</h2>
+  <p class="desc">注意力状态激活时，左侧指示条从中心弹性展开，同时发出径向光晕脉冲</p>
+  <div class="row">
+    <div class="demo">
+      <span class="demo-label">Complete</span>
+      <div class="demo-box" style="padding:4px">
+        <div class="attention-item" id="att-complete" data-color="#34d399" data-bg="rgba(52,211,153,0.12)">
+          <span class="session-dot" style="background:#34d399"></span>
+          <span class="session-title">task-runner.sh</span>
+          <span class="session-pid">Done</span>
+          <div class="glow-ring" style="background:radial-gradient(circle,rgba(52,211,153,0.4),transparent)"></div>
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="replayAttention('att-complete')">Replay</button>
+    </div>
+    <div class="demo">
+      <span class="demo-label">Permission</span>
+      <div class="demo-box" style="padding:4px">
+        <div class="attention-item" id="att-perm" data-color="#818cf8" data-bg="rgba(99,102,241,0.12)">
+          <span class="session-dot" style="background:#818cf8"></span>
+          <span class="session-title">claude-code</span>
+          <span class="session-pid">Waiting</span>
+          <div class="glow-ring" style="background:radial-gradient(circle,rgba(99,102,241,0.4),transparent)"></div>
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="replayAttention('att-perm')">Replay</button>
+    </div>
+    <div class="demo">
+      <span class="demo-label">Error</span>
+      <div class="demo-box" style="padding:4px">
+        <div class="attention-item" id="att-err" data-color="#f87171" data-bg="rgba(248,113,113,0.12)">
+          <span class="session-dot" style="background:#f87171"></span>
+          <span class="session-title">build.sh</span>
+          <span class="session-pid">Failed</span>
+          <div class="glow-ring" style="background:radial-gradient(circle,rgba(248,113,113,0.4),transparent)"></div>
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="replayAttention('att-err')">Replay</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 5. SETTINGS MODAL ========== -->
+<div class="section">
+  <h2>5. Settings Modal — Staggered Form Fields</h2>
+  <p class="desc">弹窗入场时，面板先弹入，然后表单字段逐个交错渐入，营造"逐层展开"的层次感</p>
+  <div class="row">
+    <div class="demo" style="min-width:340px">
+      <div class="demo-box" style="padding:0;height:280px;position:relative">
+        <div class="modal-overlay" id="modal-overlay">
+          <div class="modal-panel" id="modal-panel">
+            <div class="modal-title" id="modal-title">Settings</div>
+            <div class="modal-field" id="modal-f1">
+              <label>Font Family</label>
+              <input value="Cascadia Code" readonly>
+            </div>
+            <div class="modal-field" id="modal-f2">
+              <label>Font Size</label>
+              <input value="14" readonly>
+            </div>
+            <div class="modal-field" id="modal-f3">
+              <label>Color Theme</label>
+              <input value="Dark" readonly>
+            </div>
+            <div class="modal-actions" id="modal-actions">
+              <button class="btn btn-sm">Cancel</button>
+              <button class="btn btn-sm btn-accent">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="openModal()">Open Modal</button>
+        <button class="btn btn-sm" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 6. EMPTY STATE ========== -->
+<div class="section">
+  <h2>6. Empty State — Floating Icon + Key Cascade</h2>
+  <p class="desc">空状态时，键盘图标悬浮呼吸，快捷键提示逐个弹入，引导用户操作</p>
+  <div class="row">
+    <div class="demo" style="min-width:280px">
+      <div class="demo-box">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon" id="empty-icon">⌨</div>
+          <div class="empty-title" id="empty-title">Patty</div>
+          <div class="empty-desc" id="empty-desc">Create a new terminal to get started</div>
+          <div class="empty-keys" id="empty-keys">
+            <span class="key">Ctrl</span><span class="key">T</span>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-sm" onclick="replayEmpty()">Replay</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 7. DRAG & DROP ========== -->
+<div class="section">
+  <h2>7. Drag & Drop — Lift + Reflow Physics</h2>
+  <p class="desc">拖拽时 item 浮起 + 投射阴影，其他 item 物理弹性让位，放置时平滑归位</p>
+  <div class="row">
+    <div class="demo" style="min-width:260px">
+      <div class="demo-box" style="padding:8px">
+        <div id="drag-list">
+          <div class="drag-item" draggable="true" data-idx="0">
+            <div class="drag-handle"><span></span><span></span><span></span></div>
+            <span class="session-dot" style="background:var(--accent)"></span>
+            <span class="session-title">PowerShell</span>
+          </div>
+          <div class="drag-item" draggable="true" data-idx="1">
+            <div class="drag-handle"><span></span><span></span><span></span></div>
+            <span class="session-dot" style="background:#34d399"></span>
+            <span class="session-title">claude-code</span>
+          </div>
+          <div class="drag-item" draggable="true" data-idx="2">
+            <div class="drag-handle"><span></span><span></span><span></span></div>
+            <span class="session-dot" style="background:#fbbf24"></span>
+            <span class="session-title">dev-server</span>
+          </div>
+          <div class="drag-item" draggable="true" data-idx="3">
+            <div class="drag-handle"><span></span><span></span><span></span></div>
+            <span class="session-dot" style="background:#f87171"></span>
+            <span class="session-title">build-watch</span>
+          </div>
+        </div>
+      </div>
+      <span class="demo-label">Drag items to reorder</span>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 8. THEME SWITCH ========== -->
+<div class="section">
+  <h2>8. Theme Switch — Radial Ripple</h2>
+  <p class="desc">切换主题时，从点击位置发出一个颜色波纹，覆盖整个区域，模拟"换肤"的视觉冲击</p>
+  <div class="row">
+    <div class="demo" style="min-width:300px">
+      <div class="demo-box" style="padding:0">
+        <div class="theme-demo-area" id="theme-area" style="background:#0a0a0c">
+          <span id="theme-label">Dark Theme</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-sm" onclick="switchTheme('#0a0a0c','#e6e6ed','Dark')">Dark</button>
+        <button class="btn btn-sm" onclick="switchTheme('#f6f7f9','#12121a','Light')">Light</button>
+        <button class="btn btn-sm" onclick="switchTheme('#282a36','#f8f8f2','Dracula')">Dracula</button>
+        <button class="btn btn-sm" onclick="switchTheme('#2e3440','#eceff4','Nord')">Nord</button>
+        <button class="btn btn-sm" onclick="switchTheme('#1a1b26','#c0caf5','Tokyo Night')">Tokyo Night</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== 1. SESSION LIST STAGGER =====
+  function replayStagger() {
+    const items = document.querySelectorAll('#session-list .session-item');
+    gsap.fromTo(items,
+      { x: -60, opacity: 0, scale: 0.92 },
+      {
+        x: 0, opacity: 1, scale: 1,
+        duration: 0.5,
+        stagger: 0.08,
+        ease: 'back.out(1.4)',
+        clearProps: 'transform'
+      }
+    );
+  }
+  replayStagger();
+
+  // ===== 2. TAB SWITCH =====
+  const tabBtns = document.querySelectorAll('#gsap-tabs-nav .tab-btn');
+  const indicator = document.getElementById('gsap-indicator');
+  const panels = document.querySelectorAll('#gsap-tabs-content .tab-panel');
+  let currentTab = 0;
+
+  function moveIndicator(btn) {
+    gsap.to(indicator, {
+      left: btn.offsetLeft,
+      width: btn.offsetWidth,
+      duration: 0.35,
+      ease: 'power3.out'
+    });
+  }
+
+  // Init indicator
+  moveIndicator(tabBtns[0]);
+
+  tabBtns.forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      if (i === currentTab) return;
+      const direction = i > currentTab ? 1 : -1;
+
+      tabBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      moveIndicator(btn);
+
+      // Outgoing panel
+      gsap.to(panels[currentTab], {
+        opacity: 0, x: -20 * direction,
+        duration: 0.2, ease: 'power2.in',
+        onComplete: () => {
+          panels[currentTab].classList.remove('visible');
+          gsap.set(panels[currentTab], { x: 0 });
+        }
+      });
+
+      // Incoming panel
+      panels[i].classList.add('visible');
+      gsap.fromTo(panels[i],
+        { opacity: 0, x: 20 * direction },
+        { opacity: 1, x: 0, duration: 0.3, ease: 'power2.out', delay: 0.15 }
+      );
+
+      currentTab = i;
+    });
+  });
+
+  // ===== 3. TERMINAL OPEN =====
+  function replayTerminalOpen() {
+    const frame = document.getElementById('terminal-frame');
+    const titlebar = document.getElementById('terminal-titlebar');
+    const body = document.getElementById('terminal-body');
+    const lines = document.querySelectorAll('.terminal-line');
+    const cursor = document.getElementById('term-cursor');
+
+    const tl = gsap.timeline();
+
+    // Reset
+    gsap.set(frame, { scaleY: 0, transformOrigin: 'top center', opacity: 0 });
+    gsap.set(titlebar, { opacity: 0 });
+    gsap.set(lines, { opacity: 0, y: 8 });
+    gsap.set(cursor, { opacity: 0 });
+
+    // Frame expands
+    tl.to(frame, { scaleY: 1, opacity: 1, duration: 0.4, ease: 'power3.out' })
+      // Titlebar fades in
+      .to(titlebar, { opacity: 1, duration: 0.25, ease: 'power2.out' }, '-=0.1')
+      // Lines type in one by one
+      .to(lines[0], { opacity: 1, y: 0, duration: 0.2, ease: 'power2.out' })
+      .to(lines[1], { opacity: 1, y: 0, duration: 0.2, ease: 'power2.out' }, '-=0.05')
+      .to(lines[2], { opacity: 1, y: 0, duration: 0.15, ease: 'power2.out' }, '-=0.05')
+      .to(lines[3], { opacity: 1, y: 0, duration: 0.2, ease: 'power2.out' }, '-=0.05')
+      // Cursor blinks in
+      .to(cursor, { opacity: 1, duration: 0.1 })
+      .to(cursor, { opacity: 0, duration: 0.4, repeat: 3, yoyo: true, ease: 'power1.inOut' });
+  }
+  replayTerminalOpen();
+
+  // ===== 4. ATTENTION STATE =====
+  function replayAttention(id) {
+    const el = document.getElementById(id);
+    const bar = el.querySelector('::before') || el; // pseudo-element can't be targeted, use CSS
+    const glow = el.querySelector('.glow-ring');
+    const color = el.dataset.color;
+    const bg = el.dataset.bg;
+
+    const tl = gsap.timeline();
+
+    // Reset
+    gsap.set(el, { background: 'transparent' });
+    gsap.set(glow, { scale: 0, opacity: 0 });
+    el.style.setProperty('--att-bar-opacity', '0');
+    el.style.setProperty('--att-bar-scale', '0');
+
+    // Background fade
+    tl.to(el, {
+      background: bg,
+      duration: 0.5,
+      ease: 'power2.out'
+    })
+    // Glow pulse
+    .to(glow, {
+      scale: 1.5, opacity: 0.6,
+      duration: 0.4, ease: 'power2.out'
+    }, 0)
+    .to(glow, {
+      scale: 2.5, opacity: 0,
+      duration: 0.8, ease: 'power2.out'
+    })
+    // CSS bar animation via custom property trick - use box-shadow instead
+    .fromTo(el, {
+      boxShadow: `inset 3px 0 0 0 ${color}, 0 0 0px transparent`
+    }, {
+      boxShadow: `inset 3px 0 0 0 ${color}, 0 0 8px ${color}40`,
+      duration: 0.4,
+      ease: 'elastic.out(1, 0.5)'
+    }, 0);
+  }
+  // Auto-play on load
+  setTimeout(() => {
+    replayAttention('att-complete');
+    setTimeout(() => replayAttention('att-perm'), 200);
+    setTimeout(() => replayAttention('att-err'), 400);
+  }, 800);
+
+  // ===== 5. SETTINGS MODAL =====
+  function openModal() {
+    const overlay = document.getElementById('modal-overlay');
+    const panel = document.getElementById('modal-panel');
+    const title = document.getElementById('modal-title');
+    const fields = [document.getElementById('modal-f1'), document.getElementById('modal-f2'), document.getElementById('modal-f3')];
+    const actions = document.getElementById('modal-actions');
+
+    overlay.classList.add('open');
+
+    const tl = gsap.timeline();
+    tl.to(overlay, { opacity: 1, duration: 0.25, ease: 'power2.out' })
+      .to(panel, { y: 0, opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.2)' }, '-=0.1')
+      .from(title, { y: -10, opacity: 0, duration: 0.25, ease: 'power2.out' }, '-=0.15')
+      .from(fields, { y: 12, opacity: 0, duration: 0.3, stagger: 0.06, ease: 'power2.out' }, '-=0.1')
+      .from(actions, { y: 8, opacity: 0, duration: 0.25, ease: 'power2.out' }, '-=0.1');
+  }
+
+  function closeModal() {
+    const overlay = document.getElementById('modal-overlay');
+    const panel = document.getElementById('modal-panel');
+
+    gsap.to(panel, { y: 20, opacity: 0, scale: 0.95, duration: 0.25, ease: 'power2.in' });
+    gsap.to(overlay, {
+      opacity: 0, duration: 0.25, ease: 'power2.in',
+      onComplete: () => overlay.classList.remove('open')
+    });
+  }
+
+  // ===== 6. EMPTY STATE =====
+  function replayEmpty() {
+    const icon = document.getElementById('empty-icon');
+    const title = document.getElementById('empty-title');
+    const desc = document.getElementById('empty-desc');
+    const keys = document.getElementById('empty-keys');
+
+    const tl = gsap.timeline();
+
+    gsap.set([icon, title, desc, keys], { opacity: 0, y: 16 });
+
+    tl.to(icon, { opacity: 0.35, y: 0, duration: 0.5, ease: 'back.out(1.5)' })
+      // Floating effect
+      .to(icon, { y: -6, duration: 1.5, repeat: -1, yoyo: true, ease: 'sine.inOut' }, '+=0')
+      // Others stagger in
+      .to(title, { opacity: 0.35, y: 0, duration: 0.4, ease: 'power2.out' }, 0.15)
+      .to(desc, { opacity: 0.35, y: 0, duration: 0.4, ease: 'power2.out' }, 0.3)
+      // Keys pop in one by one
+      .from(keys.children, {
+        opacity: 0, scale: 0.5, y: 8,
+        duration: 0.3, stagger: 0.08,
+        ease: 'back.out(2)'
+      }, 0.45);
+  }
+  replayEmpty();
+
+  // ===== 7. DRAG & DROP =====
+  (function() {
+    const list = document.getElementById('drag-list');
+    let dragItem = null;
+    let dragClone = null;
+
+    list.querySelectorAll('.drag-item').forEach(item => {
+      item.addEventListener('dragstart', (e) => {
+        dragItem = item;
+        gsap.to(item, { opacity: 0.3, scale: 0.96, duration: 0.15 });
+
+        // Create floating clone
+        dragClone = item.cloneNode(true);
+        dragClone.style.position = 'fixed';
+        dragClone.style.pointerEvents = 'none';
+        dragClone.style.zIndex = '9999';
+        dragClone.style.width = item.offsetWidth + 'px';
+        dragClone.style.background = 'rgba(99,102,241,0.08)';
+        dragClone.style.border = '1px solid rgba(99,102,241,0.2)';
+        dragClone.style.borderRadius = '6px';
+        dragClone.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)';
+        document.body.appendChild(dragClone);
+
+        // Hide default ghost
+        const empty = document.createElement('div');
+        e.dataTransfer.setDragImage(empty, 0, 0);
+      });
+
+      item.addEventListener('drag', (e) => {
+        if (dragClone && e.clientX && e.clientY) {
+          gsap.set(dragClone, { left: e.clientX - 20, top: e.clientY - 20 });
+        }
+      });
+
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (item === dragItem) return;
+
+        const rect = item.getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        const after = e.clientY > mid;
+
+        // Animate other items to make room
+        gsap.to(item, {
+          y: after ? -44 : 44,
+          duration: 0.25,
+          ease: 'power2.out'
+        });
+      });
+
+      item.addEventListener('dragleave', () => {
+        gsap.to(item, { y: 0, duration: 0.25, ease: 'power2.out' });
+      });
+
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (!dragItem || item === dragItem) return;
+
+        const rect = item.getBoundingClientRect();
+        const after = e.clientY > rect.top + rect.height / 2;
+
+        if (after) {
+          list.insertBefore(dragItem, item.nextSibling);
+        } else {
+          list.insertBefore(dragItem, item);
+        }
+
+        // Reset all positions
+        gsap.to(item, { y: 0, duration: 0.25, ease: 'power2.out' });
+      });
+
+      item.addEventListener('dragend', () => {
+        if (dragClone) {
+          document.body.removeChild(dragClone);
+          dragClone = null;
+        }
+        if (dragItem) {
+          gsap.to(dragItem, { opacity: 1, scale: 1, duration: 0.25, ease: 'power2.out', clearProps: 'all' });
+          dragItem = null;
+        }
+        // Reset all items
+        list.querySelectorAll('.drag-item').forEach(i => {
+          gsap.to(i, { y: 0, duration: 0.2, ease: 'power2.out' });
+        });
+      });
+    });
+  })();
+
+  // ===== 8. THEME SWITCH =====
+  function switchTheme(bg, fg, name) {
+    const area = document.getElementById('theme-area');
+    const label = document.getElementById('theme-label');
+    const rect = area.getBoundingClientRect();
+
+    // Create ripple from center
+    const ripple = document.createElement('div');
+    ripple.className = 'theme-ripple';
+    ripple.style.left = (rect.width / 2 - 10) + 'px';
+    ripple.style.top = (rect.height / 2 - 10) + 'px';
+    ripple.style.width = '20px';
+    ripple.style.height = '20px';
+    ripple.style.background = bg;
+    area.appendChild(ripple);
+
+    const maxDim = Math.max(rect.width, rect.height) * 2.5;
+
+    gsap.to(ripple, {
+      scale: maxDim / 20,
+      duration: 0.7,
+      ease: 'power2.out',
+      onComplete: () => {
+        area.style.background = bg;
+        label.style.color = fg;
+        label.textContent = name + ' Theme';
+        if (ripple.parentNode) ripple.parentNode.removeChild(ripple);
+      }
+    });
+
+    // Fade label
+    gsap.to(label, {
+      opacity: 0, duration: 0.2,
+      onComplete: () => {
+        gsap.to(label, { opacity: 1, duration: 0.3, delay: 0.3 });
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

@@ -1,4 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import gsap from 'gsap'
+import { themeRipple } from '../../utils/themeRipple'
+import { getThemeColors } from '../../styles/themes'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import type { AppSettings, CustomTheme, ShortcutMap } from '../../../shared/settingsTypes'
@@ -62,6 +65,44 @@ export function SettingsModal() {
   const [activeCategory, setActiveCategory] = useState<Category>('appearance')
   const [capturingShortcut, setCapturingShortcut] = useState<keyof ShortcutMap | null>(null)
   const captureRef = useRef<keyof ShortcutMap | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const prevCategory = useRef<Category>('appearance')
+
+  // Modal entrance animation
+  useLayoutEffect(() => {
+    if (!mounted || !modalRef.current) return
+    const panel = modalRef.current
+    const fields = contentRef.current?.children
+
+    const tl = gsap.timeline()
+    tl.from(panel, {
+      y: 20, scale: 0.95, opacity: 0,
+      duration: 0.4, ease: 'back.out(1.2)'
+    })
+    if (fields && fields.length > 0) {
+      tl.from(Array.from(fields), {
+        y: 12, opacity: 0,
+        duration: 0.3, stagger: 0.04,
+        ease: 'power2.out'
+      }, '-=0.15')
+    }
+
+    return () => { tl.kill() }
+  }, [mounted])
+
+  // Tab content crossfade animation
+  useLayoutEffect(() => {
+    if (!contentRef.current || prevCategory.current === activeCategory) return
+    const children = contentRef.current.children
+    if (children.length > 0) {
+      gsap.from(children, {
+        y: 8, opacity: 0,
+        duration: 0.3, ease: 'power2.out'
+      })
+    }
+    prevCategory.current = activeCategory
+  }, [activeCategory])
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -114,7 +155,7 @@ export function SettingsModal() {
     <div className={`${styles.overlay} ${exiting ? styles.overlayExit : ''}`} onMouseDown={(e) => {
       if (e.target === e.currentTarget) closeSettings()
     }}>
-      <div className={`${styles.modal} ${exiting ? styles.modalExit : ''}`}>
+      <div ref={modalRef} className={`${styles.modal} ${exiting ? styles.modalExit : ''}`}>
         <div className={styles.header}>
           <span className={styles.title}>Settings</span>
           <button className={styles.closeBtn} onClick={closeSettings}>
@@ -137,7 +178,7 @@ export function SettingsModal() {
             ))}
           </nav>
 
-          <div className={styles.content}>
+          <div className={styles.content} ref={contentRef}>
             {activeCategory === 'appearance' && (
               <AppearanceSection settings={settings} updateSetting={updateSetting} />
             )}
@@ -188,6 +229,16 @@ function ThemePicker({
   const builtinEntries = Object.entries(BUILTIN_THEMES)
   const currentName = BUILTIN_THEMES[value]?.name ?? customThemes.find((t) => t.id === value)?.name ?? value
 
+  const handleSelect = (id: string, e: React.MouseEvent) => {
+    if (id !== value) {
+      // Trigger ripple from click position
+      const theme = getThemeColors(id, customThemes)
+      themeRipple(e.clientX, e.clientY, theme.ui['--bg-app'])
+    }
+    onChange(id)
+    setOpen(false)
+  }
+
   return (
     <div className={styles.fontPicker} ref={containerRef}>
       <input
@@ -203,7 +254,7 @@ function ThemePicker({
             <div
               key={id}
               className={`${styles.fontPickerItem} ${id === value ? styles.fontPickerItemActive : ''}`}
-              onClick={() => { onChange(id); setOpen(false) }}
+              onClick={(e) => handleSelect(id, e)}
             >
               {theme.name}
             </div>
@@ -215,7 +266,7 @@ function ThemePicker({
                 <div
                   key={t.id}
                   className={`${styles.fontPickerItem} ${t.id === value ? styles.fontPickerItemActive : ''}`}
-                  onClick={() => { onChange(t.id); setOpen(false) }}
+                  onClick={(e) => handleSelect(t.id, e)}
                 >
                   {t.name}
                 </div>

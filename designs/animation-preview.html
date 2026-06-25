@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Patty - Animation Preview</title>
+<style>
+  :root {
+    --bg-app: #0a0a0c;
+    --bg-sidebar: rgba(18,18,22,0.50);
+    --bg-item-hover: rgba(128,128,128,0.06);
+    --bg-item-active: rgba(99,102,241,0.08);
+    --bg-input: rgba(128,128,128,0.06);
+    --bg-context-menu: rgba(28,28,34,0.78);
+    --text-primary: #e6e6ed;
+    --text-secondary: #90909e;
+    --text-muted: #5c5c6a;
+    --border-subtle: rgba(255,255,255,0.05);
+    --border-medium: rgba(255,255,255,0.08);
+    --accent: #6366f1;
+    --accent-alpha: rgba(99,102,241,0.12);
+    --accent-glow: rgba(99,102,241,0.25);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --font-ui: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-fast: 150ms var(--ease-out);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg-app);
+    color: var(--text-primary);
+    padding: 40px;
+    min-height: 100vh;
+  }
+
+  h1 { font-size: 20px; margin-bottom: 8px; color: var(--text-primary); }
+  h2 { font-size: 14px; margin-bottom: 16px; color: var(--text-secondary); font-weight: 500; }
+  .subtitle { font-size: 12px; color: var(--text-muted); margin-bottom: 32px; }
+
+  .section {
+    margin-bottom: 48px;
+    padding: 24px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .row {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .demo {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 200px;
+  }
+
+  .demo-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .demo-box {
+    padding: 16px;
+    background: rgba(0,0,0,0.3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .tag-before { background: rgba(248,113,113,0.15); color: #f87171; }
+  .tag-after { background: rgba(52,211,153,0.15); color: #34d399; }
+
+  /* ========== 1. BUTTON PRESS FEEDBACK ========== */
+  .btn {
+    padding: 6px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast),
+                border-color var(--transition-fast), box-shadow var(--transition-fast);
+    user-select: none;
+  }
+
+  .btn-accent {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-accent:hover {
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+
+  /* BEFORE: no press feedback */
+  .btn-no-press:active {
+    /* nothing */
+  }
+
+  /* AFTER: press feedback */
+  .btn-press {
+    transition: background var(--transition-fast), color var(--transition-fast),
+                transform 80ms var(--ease-out), box-shadow var(--transition-fast);
+  }
+  .btn-press:active {
+    transform: scale(0.95);
+  }
+
+  .btn-cancel {
+    background: rgba(128,128,128,0.06);
+    color: var(--text-secondary);
+  }
+  .btn-cancel:hover {
+    background: rgba(128,128,128,0.10);
+    color: var(--text-primary);
+  }
+
+  /* TitleBar button */
+  .titlebar-btn {
+    width: 46px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+    font-size: 14px;
+  }
+  .titlebar-btn:hover {
+    background: rgba(128,128,128,0.08);
+    color: var(--text-primary);
+  }
+  .titlebar-btn-press:active {
+    background: rgba(128,128,128,0.12);
+    transform: scale(0.92);
+    transition: background 80ms, transform 80ms var(--ease-out);
+  }
+
+  /* ========== 2. ATTENTION STATE ENTRANCE ========== */
+  .session-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 42px;
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+  }
+  .session-item:hover { background: var(--bg-item-hover); }
+
+  .session-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #818cf8;
+    flex-shrink: 0;
+  }
+  .session-title {
+    flex: 1;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .session-pid {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* Attention bar */
+  .session-item::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 4px;
+    bottom: 4px;
+    width: 2.5px;
+    border-radius: 0 3px 3px 0;
+    opacity: 0;
+    transform: scaleY(0);
+  }
+
+  /* BEFORE: instant appear */
+  .attention-instant::before {
+    background: #34d399;
+    opacity: 1;
+    transform: scaleY(1);
+    box-shadow: 0 0 6px rgba(52,211,153,0.3);
+  }
+  .attention-instant {
+    background: rgba(52,211,153,0.12) !important;
+  }
+
+  /* AFTER: animated entrance */
+  .attention-animated {
+    transition: background 400ms var(--ease-out);
+  }
+  .attention-animated::before {
+    background: #34d399;
+    box-shadow: 0 0 6px rgba(52,211,153,0.3);
+    transition: opacity 400ms var(--ease-out), transform 400ms var(--ease-out);
+  }
+  .attention-animated.active::before {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  .attention-animated.active {
+    background: rgba(52,211,153,0.12) !important;
+  }
+
+  /* Permission variant */
+  .attention-perm::before {
+    background: #818cf8;
+    box-shadow: 0 0 6px rgba(99,102,241,0.3);
+  }
+  .attention-perm.active {
+    background: rgba(99,102,241,0.12) !important;
+  }
+
+  /* Error variant */
+  .attention-err::before {
+    background: #f87171;
+    box-shadow: 0 0 6px rgba(248,113,113,0.3);
+  }
+  .attention-err.active {
+    background: rgba(248,113,113,0.12) !important;
+  }
+
+  /* ========== 3. SETTINGS TAB SWITCHING ========== */
+  .tabs-container {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .tabs-nav {
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    background: rgba(0,0,0,0.2);
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .tab-btn {
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    position: relative;
+    z-index: 1;
+    transition: color var(--transition-fast);
+  }
+  .tab-btn:hover { color: var(--text-secondary); }
+  .tab-btn.active { color: var(--text-primary); }
+
+  /* Sliding indicator */
+  .tab-indicator {
+    position: absolute;
+    height: calc(100% - 8px);
+    top: 4px;
+    background: var(--accent-alpha);
+    border-radius: 4px;
+    transition: left 300ms var(--ease-out), width 300ms var(--ease-out);
+    z-index: 0;
+  }
+
+  .tabs-content {
+    position: relative;
+    min-height: 80px;
+  }
+
+  /* BEFORE: instant switch */
+  .tab-panel-instant {
+    display: none;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    padding: 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: var(--radius-sm);
+  }
+  .tab-panel-instant.visible { display: block; }
+
+  /* AFTER: crossfade */
+  .tab-panel-fade {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    padding: 12px;
+    background: rgba(0,0,0,0.2);
+    border-radius: var(--radius-sm);
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 250ms var(--ease-out), transform 250ms var(--ease-out);
+    pointer-events: none;
+  }
+  .tab-panel-fade.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  /* ========== 4. EMPTY STATE ENTRANCE ========== */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 60px 20px;
+    text-align: center;
+  }
+
+  .empty-logo { font-size: 36px; margin-bottom: 2px; }
+  .empty-title { font-size: 18px; font-weight: 600; color: var(--text-secondary); }
+  .empty-desc { font-size: 12.5px; color: var(--text-muted); }
+
+  /* BEFORE: static */
+  .empty-static { opacity: 0.35; }
+
+  /* AFTER: staggered entrance */
+  .empty-animated > * {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: emptyFadeIn 500ms var(--ease-out) forwards;
+  }
+  .empty-animated > *:nth-child(1) { animation-delay: 0ms; }
+  .empty-animated > *:nth-child(2) { animation-delay: 80ms; }
+  .empty-animated > *:nth-child(3) { animation-delay: 160ms; }
+
+  @keyframes emptyFadeIn {
+    to { opacity: 0.35; transform: translateY(0); }
+  }
+
+  /* ========== 5. CONTEXT MENU ITEM FEEDBACK ========== */
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    transition: background var(--transition-fast);
+  }
+  .menu-item:hover { background: var(--bg-item-hover); }
+
+  /* AFTER: press feedback */
+  .menu-item-press:active {
+    background: var(--accent-alpha);
+    transform: scale(0.98);
+    transition: background 60ms, transform 60ms var(--ease-out);
+  }
+
+  .menu-separator {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 4px 0;
+  }
+
+  .context-menu {
+    min-width: 160px;
+    background: var(--bg-context-menu);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    padding: 4px;
+    backdrop-filter: blur(12px);
+  }
+
+  /* ========== 6. RESIZE HANDLE ========== */
+  .resize-demo {
+    width: 200px;
+    height: 120px;
+    background: rgba(0,0,0,0.3);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+    position: relative;
+  }
+
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    right: -2px;
+    width: 4px;
+    height: 100%;
+    cursor: col-resize;
+  }
+
+  .resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 24px;
+    border-radius: 2px;
+    background: rgba(128,128,128,0.06);
+    transition: all var(--transition-fast);
+  }
+
+  /* BEFORE: basic hover */
+  .resize-basic:hover::after,
+  .resize-basic:active::after {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent-glow);
+    height: 40px;
+  }
+
+  /* AFTER: enhanced hover with width expand */
+  .resize-enhanced::after {
+    transition: all 200ms var(--ease-out);
+  }
+  .resize-enhanced:hover::after {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    height: 40px;
+    width: 3px;
+  }
+  .resize-enhanced:active::after {
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+    height: 60px;
+    width: 4px;
+  }
+
+  .resize-label {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* Utility */
+  .mt-8 { margin-top: 8px; }
+  .gap-12 { gap: 12px; }
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .w-full { width: 100%; }
+</style>
+</head>
+<body>
+
+<h1>Patty UI - Animation Preview</h1>
+<p class="subtitle">对比 BEFORE（无动画）和 AFTER（添加动画）的效果。点击/交互查看变化。</p>
+
+<!-- ==================== SECTION 1: BUTTON PRESS ==================== -->
+<div class="section">
+  <h2>1. Button Press Feedback</h2>
+  <div class="row">
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-before">BEFORE</span> No press effect</span>
+      <div class="demo-box flex gap-12">
+        <button class="btn btn-accent btn-no-press">Confirm</button>
+        <button class="btn btn-cancel btn-no-press">Cancel</button>
+      </div>
+    </div>
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> Scale on press</span>
+      <div class="demo-box flex gap-12">
+        <button class="btn btn-accent btn-press">Confirm</button>
+        <button class="btn btn-cancel btn-press">Cancel</button>
+      </div>
+    </div>
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-before">BEFORE</span> TitleBar buttons</span>
+      <div class="demo-box flex">
+        <button class="titlebar-btn">—</button>
+        <button class="titlebar-btn">□</button>
+        <button class="titlebar-btn" style="color:#f87171">✕</button>
+      </div>
+    </div>
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> With press scale</span>
+      <div class="demo-box flex">
+        <button class="titlebar-btn titlebar-btn-press">—</button>
+        <button class="titlebar-btn titlebar-btn-press">□</button>
+        <button class="titlebar-btn titlebar-btn-press" style="color:#f87171">✕</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 2: ATTENTION STATE ==================== -->
+<div class="section">
+  <h2>2. Attention State Entrance Animation</h2>
+  <div class="row">
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-before">BEFORE</span> Instant appear</span>
+      <div class="demo-box" style="padding:4px">
+        <div class="session-item attention-instant">
+          <span class="session-dot"></span>
+          <span class="session-title">task-runner.sh</span>
+          <span class="session-pid">PID 4821</span>
+        </div>
+      </div>
+    </div>
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> Animated entrance</span>
+      <div class="demo-box" style="padding:4px">
+        <div class="session-item attention-animated" id="anim-complete">
+          <span class="session-dot"></span>
+          <span class="session-title">task-runner.sh</span>
+          <span class="session-pid">PID 4821</span>
+        </div>
+      </div>
+    </div>
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> Permission request</span>
+      <div class="demo-box" style="padding:4px">
+        <div class="session-item attention-animated attention-perm" id="anim-perm">
+          <span class="session-dot"></span>
+          <span class="session-title">claude-code</span>
+          <span class="session-pid">PID 3190</span>
+        </div>
+      </div>
+    </div>
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> Error state</span>
+      <div class="demo-box" style="padding:4px">
+        <div class="session-item attention-animated attention-err" id="anim-err">
+          <span class="session-dot"></span>
+          <span class="session-title">build.sh</span>
+          <span class="session-pid">PID 7723</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="subtitle mt-8">点击任意 animated 项可重播入场动画</p>
+</div>
+
+<!-- ==================== SECTION 3: TAB SWITCHING ==================== -->
+<div class="section">
+  <h2>3. Settings Tab Switching</h2>
+  <div class="row">
+    <div class="demo" style="min-width:300px">
+      <span class="demo-label"><span class="tag tag-before">BEFORE</span> Instant switch</span>
+      <div class="demo-box">
+        <div class="tabs-container">
+          <div class="tabs-nav" id="instant-tabs-nav">
+            <button class="tab-btn active" data-tab="0">Appearance</button>
+            <button class="tab-btn" data-tab="1">Terminal</button>
+            <button class="tab-btn" data-tab="2">Shortcuts</button>
+          </div>
+          <div class="tabs-content" id="instant-tabs-content">
+            <div class="tab-panel-instant visible">
+              <strong>Font Family</strong><br>Cascadia Code, 14px<br><br>
+              <strong>Color Theme</strong><br>Dark / Light / Custom
+            </div>
+            <div class="tab-panel-instant">
+              <strong>Default Shell</strong><br>PowerShell 7<br><br>
+              <strong>Cursor Style</strong><br>Block / Underline / Bar
+            </div>
+            <div class="tab-panel-instant">
+              <strong>New Terminal</strong><br>Ctrl+T<br><br>
+              <strong>Close Terminal</strong><br>Ctrl+W
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="demo" style="min-width:300px">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> Crossfade + sliding indicator</span>
+      <div class="demo-box">
+        <div class="tabs-container">
+          <div class="tabs-nav" id="fade-tabs-nav">
+            <div class="tab-indicator" id="tab-indicator"></div>
+            <button class="tab-btn active" data-tab="0">Appearance</button>
+            <button class="tab-btn" data-tab="1">Terminal</button>
+            <button class="tab-btn" data-tab="2">Shortcuts</button>
+          </div>
+          <div class="tabs-content" id="fade-tabs-content">
+            <div class="tab-panel-fade visible">
+              <strong>Font Family</strong><br>Cascadia Code, 14px<br><br>
+              <strong>Color Theme</strong><br>Dark / Light / Custom
+            </div>
+            <div class="tab-panel-fade">
+              <strong>Default Shell</strong><br>PowerShell 7<br><br>
+              <strong>Cursor Style</strong><br>Block / Underline / Bar
+            </div>
+            <div class="tab-panel-fade">
+              <strong>New Terminal</strong><br>Ctrl+T<br><br>
+              <strong>Close Terminal</strong><br>Ctrl+W
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 4: EMPTY STATE ==================== -->
+<div class="section">
+  <h2>4. Empty State Entrance</h2>
+  <div class="row">
+    <div class="demo" style="min-width:240px">
+      <span class="demo-label"><span class="tag tag-before">BEFORE</span> Static</span>
+      <div class="demo-box">
+        <div class="empty-state empty-static">
+          <div class="empty-logo">⌨</div>
+          <div class="empty-title">Patty</div>
+          <div class="empty-desc">Press Ctrl+T to create a new terminal</div>
+        </div>
+      </div>
+    </div>
+    <div class="demo" style="min-width:240px">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> Staggered fade-in</span>
+      <div class="demo-box">
+        <div class="empty-state empty-animated" id="empty-animated">
+          <div class="empty-logo">⌨</div>
+          <div class="empty-title">Patty</div>
+          <div class="empty-desc">Press Ctrl+T to create a new terminal</div>
+        </div>
+      </div>
+      <button class="btn btn-cancel mt-8" onclick="replayEmpty()" style="font-size:11px;padding:4px 10px">Replay</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 5: CONTEXT MENU ==================== -->
+<div class="section">
+  <h2>5. Context Menu Item Feedback</h2>
+  <div class="row">
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-before">BEFORE</span> No press feedback</span>
+      <div class="context-menu">
+        <button class="menu-item">Rename</button>
+        <div class="menu-separator"></div>
+        <button class="menu-item">Color: blue</button>
+        <button class="menu-item">Color: green</button>
+        <div class="menu-separator"></div>
+        <button class="menu-item" style="color:#f87171">Close</button>
+      </div>
+    </div>
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> Press feedback</span>
+      <div class="context-menu">
+        <button class="menu-item menu-item-press">Rename</button>
+        <div class="menu-separator"></div>
+        <button class="menu-item menu-item-press">Color: blue</button>
+        <button class="menu-item menu-item-press">Color: green</button>
+        <div class="menu-separator"></div>
+        <button class="menu-item menu-item-press" style="color:#f87171">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 6: RESIZE HANDLE ==================== -->
+<div class="section">
+  <h2>6. Sidebar Resize Handle</h2>
+  <div class="row">
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-before">BEFORE</span> Basic hover</span>
+      <div class="demo-box">
+        <div class="resize-demo">
+          <div class="resize-handle resize-basic"></div>
+          <span class="resize-label">Hover me</span>
+        </div>
+      </div>
+    </div>
+    <div class="demo">
+      <span class="demo-label"><span class="tag tag-after">AFTER</span> Enhanced hover</span>
+      <div class="demo-box">
+        <div class="resize-demo">
+          <div class="resize-handle resize-enhanced"></div>
+          <span class="resize-label">Hover me</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Attention state animation - replay on click
+  document.querySelectorAll('.attention-animated').forEach(el => {
+    el.addEventListener('click', () => {
+      el.classList.remove('active');
+      void el.offsetWidth; // force reflow
+      el.classList.add('active');
+    });
+    // Trigger initial animation
+    setTimeout(() => el.classList.add('active'), 200);
+  });
+
+  // Instant tab switching
+  document.querySelectorAll('#instant-tabs-nav .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.dataset.tab;
+      document.querySelectorAll('#instant-tabs-nav .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('#instant-tabs-content .tab-panel-instant').forEach(p => p.classList.remove('visible'));
+      document.querySelectorAll('#instant-tabs-content .tab-panel-instant')[idx].classList.add('visible');
+    });
+  });
+
+  // Fade tab switching with sliding indicator
+  const fadeNav = document.getElementById('fade-tabs-nav');
+  const indicator = document.getElementById('tab-indicator');
+
+  function updateIndicator(btn) {
+    indicator.style.left = btn.offsetLeft + 'px';
+    indicator.style.width = btn.offsetWidth + 'px';
+  }
+
+  // Init indicator position
+  const initBtn = fadeNav.querySelector('.tab-btn.active');
+  if (initBtn) updateIndicator(initBtn);
+
+  document.querySelectorAll('#fade-tabs-nav .tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.dataset.tab;
+      document.querySelectorAll('#fade-tabs-nav .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateIndicator(btn);
+      document.querySelectorAll('#fade-tabs-content .tab-panel-fade').forEach(p => p.classList.remove('visible'));
+      document.querySelectorAll('#fade-tabs-content .tab-panel-fade')[idx].classList.add('visible');
+    });
+  });
+
+  // Empty state replay
+  function replayEmpty() {
+    const el = document.getElementById('empty-animated');
+    el.style.animation = 'none';
+    el.innerHTML = el.innerHTML;
+  }
+</script>
+
+</body>
+</html>

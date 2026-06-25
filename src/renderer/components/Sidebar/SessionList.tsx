@@ -1,4 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
 import { useSessionStore, type Collection, type TerminalSession } from '../../store/sessionStore'
 import { SessionItem } from './SessionItem'
 import { CollectionItem } from './CollectionItem'
@@ -50,6 +52,28 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
   const sessions = useSessionStore((s) => s.sessions)
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
+  const listRef = useRef<HTMLDivElement>(null)
+  const prevCount = useRef(0)
+
+  // Stagger entrance animation for new items
+  useGSAP(() => {
+    if (!listRef.current) return
+    const items = listRef.current.children
+    if (items.length > prevCount.current && prevCount.current > 0) {
+      // New items added — animate only the new ones
+      const newItems = Array.from(items).slice(prevCount.current)
+      gsap.from(newItems, {
+        x: -40,
+        opacity: 0,
+        scale: 0.92,
+        duration: 0.4,
+        stagger: 0.06,
+        ease: 'back.out(1.3)',
+        clearProps: 'transform,opacity'
+      })
+    }
+    prevCount.current = items.length
+  }, { scope: listRef, dependencies: [sessions.length, collections.length] })
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery?.trim()) return sessions
@@ -96,7 +120,7 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
   }
 
   return (
-    <div className={styles.list}>
+    <div className={styles.list} ref={listRef}>
       {topLevelCollections.map((collection) =>
         renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onCollectionContextMenu, 0)
       )}

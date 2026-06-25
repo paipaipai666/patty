@@ -1,4 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
+import gsap from 'gsap'
+import { useGSAP } from '@gsap/react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -281,6 +283,19 @@ export function TerminalPane({ session, isActive }: TerminalPaneProps) {
     // Re-fit after font size change
     setTimeout(() => fitTerminal(), 20)
   }, [settings.fontFamily, settings.fontSize, settings.cursorBlink, settings.cursorStyle, settings.theme, fitTerminal])
+
+  // Terminal entrance animation on mount
+  useGSAP(() => {
+    if (!containerRef.current) return
+    gsap.from(containerRef.current, {
+      scaleY: 0,
+      opacity: 0,
+      transformOrigin: 'top center',
+      duration: 0.4,
+      ease: 'power3.out',
+      delay: 0.05
+    })
+  }, { scope: containerRef })
 
   return (
     <div

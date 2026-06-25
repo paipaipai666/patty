@@ -412,7 +412,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: 42px;
   padding-right: 10px;
   cursor: pointer;
   transition: background var(--transition-fast);
