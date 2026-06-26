@@ -3,12 +3,14 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { ImageAddon } from '@xterm/addon-image'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getThemeColors } from '../../styles/themes'
 import styles from './Terminal.module.css'
+import { createIIPStreamPatcher } from './iipStreamPatcher'
 
 interface TerminalPaneProps {
   session: TerminalSession
@@ -24,6 +26,14 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
   const fitAddonRef = useRef<FitAddon | null>(null)
   const webglAddonRef = useRef<WebglAddon | null>(null)
   const ptyCreatedRef = useRef(false)
+  // One IIP stream patcher per terminal instance. It holds a small bounded buffer
+  // across chunks, so it must live for the lifetime of the terminal (created once,
+  // disposed when the terminal unmounts). useRef gives us a stable instance without
+  // re-creating on every render.
+  const iipPatcherRef = useRef<((data: string) => string) | null>(null)
+  if (!iipPatcherRef.current) {
+    iipPatcherRef.current = createIIPStreamPatcher()
+  }
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
@@ -172,6 +182,28 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
       console.warn('WebGL addon failed to load, falling back to Canvas renderer')
     }
 
+    // Sixel / inline images
+    // ImageAddon's ImageRenderer creates a 2D canvas with desynchronized: true.
+    // In Electron/Chromium, desynchronized 2D canvases fail to alpha-composite
+    // over the WebGL text canvas, rendering opaque black instead of transparent.
+    // Override getContext globally — safe because only 2D+desynchronized is
+    // affected; WebGL contexts use getContext('webgl') which is untouched.
+    if (!(window as any).__imageAddonPatchApplied) {
+      const _orig = HTMLCanvasElement.prototype.getContext
+      HTMLCanvasElement.prototype.getContext = function (type: string, options?: any) {
+        if (type === '2d' && options?.desynchronized) {
+          options = { ...options, desynchronized: false }
+        }
+        return _orig.call(this, type, options)
+      } as typeof HTMLCanvasElement.prototype.getContext
+      ;(window as any).__imageAddonPatchApplied = true
+    }
+    try {
+      term.loadAddon(new ImageAddon())
+    } catch {
+      console.warn('Image addon failed to load')
+    }
+
     term.loadAddon(unicode11Addon)
     term.unicode.activeVersion = '11'
 
@@ -197,7 +229,7 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
             updatePid(session.id, result.pid)
             ptyCreatedRef.current = true
             cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
-              term.write(data)
+              term.write(iipPatcherRef.current!(data))
             })
             cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
               ptyCreatedRef.current = false

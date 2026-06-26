@@ -86,7 +86,7 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
       ...process.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
-      TERM_PROGRAM: 'TerminalSidebar',
+      TERM_PROGRAM: 'vscode',
       PATTY_PANE_ID: id,
       PATTY_PORT: hookPort.toString(),
       PATTY_PIPE: 'patty-attention',

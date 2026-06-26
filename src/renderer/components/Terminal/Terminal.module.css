@@ -76,3 +76,8 @@
   font-size: 12.5px;
   color: var(--text-muted);
 }
+
+/* ImageAddon: overlay canvas must not intercept events or block the WebGL layer */
+.pane :global(.xterm-image-layer) {
+  pointer-events: none;
+}
