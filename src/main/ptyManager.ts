@@ -87,6 +87,7 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'TerminalSidebar',
+      SIXEL: '1',
       PATTY_PANE_ID: id,
       PATTY_PORT: hookPort.toString(),
       PATTY_PIPE: 'patty-attention',

@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { ImageAddon } from '@xterm/addon-image'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
@@ -170,6 +171,13 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
       term.loadAddon(webglAddon)
     } catch {
       console.warn('WebGL addon failed to load, falling back to Canvas renderer')
+    }
+
+    // Sixel / inline images
+    try {
+      term.loadAddon(new ImageAddon())
+    } catch {
+      console.warn('Image addon failed to load')
     }
 
     term.loadAddon(unicode11Addon)
