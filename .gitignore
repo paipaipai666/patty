@@ -43,3 +43,5 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+/designs/
