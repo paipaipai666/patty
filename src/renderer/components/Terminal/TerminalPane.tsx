@@ -10,6 +10,7 @@ import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getThemeColors } from '../../styles/themes'
 import styles from './Terminal.module.css'
+import { createIIPStreamPatcher } from './iipStreamPatcher'
 
 interface TerminalPaneProps {
   session: TerminalSession
@@ -25,6 +26,14 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
   const fitAddonRef = useRef<FitAddon | null>(null)
   const webglAddonRef = useRef<WebglAddon | null>(null)
   const ptyCreatedRef = useRef(false)
+  // One IIP stream patcher per terminal instance. It holds a small bounded buffer
+  // across chunks, so it must live for the lifetime of the terminal (created once,
+  // disposed when the terminal unmounts). useRef gives us a stable instance without
+  // re-creating on every render.
+  const iipPatcherRef = useRef<((data: string) => string) | null>(null)
+  if (!iipPatcherRef.current) {
+    iipPatcherRef.current = createIIPStreamPatcher()
+  }
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
@@ -205,7 +214,7 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
             updatePid(session.id, result.pid)
             ptyCreatedRef.current = true
             cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
-              term.write(data)
+              term.write(iipPatcherRef.current!(data))
             })
             cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
               ptyCreatedRef.current = false
