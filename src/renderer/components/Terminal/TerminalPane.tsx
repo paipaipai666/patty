@@ -200,8 +200,8 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
     }
     try {
       term.loadAddon(new ImageAddon())
-    } catch (e) {
-      console.warn('Image addon failed to load', e)
+    } catch {
+      console.warn('Image addon failed to load')
     }
 
     term.loadAddon(unicode11Addon)
