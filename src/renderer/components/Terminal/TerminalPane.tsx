@@ -183,10 +183,25 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
     }
 
     // Sixel / inline images
+    // ImageAddon's ImageRenderer creates a 2D canvas with desynchronized: true.
+    // In Electron/Chromium, desynchronized 2D canvases fail to alpha-composite
+    // over the WebGL text canvas, rendering opaque black instead of transparent.
+    // Override getContext globally — safe because only 2D+desynchronized is
+    // affected; WebGL contexts use getContext('webgl') which is untouched.
+    if (!(window as any).__imageAddonPatchApplied) {
+      const _orig = HTMLCanvasElement.prototype.getContext
+      HTMLCanvasElement.prototype.getContext = function (type: string, options?: any) {
+        if (type === '2d' && options?.desynchronized) {
+          options = { ...options, desynchronized: false }
+        }
+        return _orig.call(this, type, options)
+      } as typeof HTMLCanvasElement.prototype.getContext
+      ;(window as any).__imageAddonPatchApplied = true
+    }
     try {
       term.loadAddon(new ImageAddon())
-    } catch {
-      console.warn('Image addon failed to load')
+    } catch (e) {
+      console.warn('Image addon failed to load', e)
     }
 
     term.loadAddon(unicode11Addon)
