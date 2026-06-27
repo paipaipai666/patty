@@ -26,6 +26,9 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
   const fitAddonRef = useRef<FitAddon | null>(null)
   const webglAddonRef = useRef<WebglAddon | null>(null)
   const ptyCreatedRef = useRef(false)
+  // Interval handle for the atlas page-count guard (see webglAddon init block).
+  // Cleared on unmount.
+  const atlasClearTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // One IIP stream patcher per terminal instance. It holds a small bounded buffer
   // across chunks, so it must live for the lifetime of the terminal (created once,
   // disposed when the terminal unmounts). useRef gives us a stable instance without
@@ -182,6 +185,35 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
       console.warn('WebGL addon failed to load, falling back to Canvas renderer')
     }
 
+    // ── 规避 @xterm/addon-webgl@0.18.0 atlas 合并 Bug ─────────────────────
+    // addon-webgl 的 TextureAtlas 在页数 >= max(4, maxAtlasPages)（NVIDIA 通常
+    // 16）时合并 4 页→1 页。合并会把 _requestClearModel 置 true 且永不复位，
+    // 此后每帧全屏重建；合并瞬态会把 glyph→纹理页映射写错，表现为整窗字符
+    // 重影/RGB 分离/上一帧残留。需要长时间高吞吐才填满，故仅长时运行后出现。
+    //
+    // 规避：高频探测 atlas 页数，到软上限（< 16，留余量）就 clearTextureAtlas，
+    // 让页数永远到不了 16 → 合并永不触发。检查只读 _pages.length，极廉价；
+    // 只有真到阈值才花成本清（一帧全量重光栅化）。
+    //
+    // 硬约束：阈值必须 < 16 且留足余量，间隔必须短到“两次检查间页数涨不到
+    // (16 - 阈值) 页”，否则第 1 次合并会在两次检查间漏网。只读 internal，
+    // 升级后字段改名最多让防护静默失效（退回不防护），不写坏状态。
+    if (webglAddon) {
+      const ATLAS_PAGE_SOFT_LIMIT = 12 // < 16，留 4 页余量
+      const ATLAS_CHECK_INTERVAL_MS = 2000 // 2s：远短于涨 4 页所需时间
+      atlasClearTimerRef.current = setInterval(() => {
+        const atlas = (webglAddonRef.current as any)?._renderer?._charAtlas
+        const pageCount = atlas?._pages?.length ?? 0
+        if (pageCount >= ATLAS_PAGE_SOFT_LIMIT) {
+          try {
+            webglAddonRef.current?.clearTextureAtlas()
+          } catch {
+            // addon 可能已 dispose，忽略
+          }
+        }
+      }, ATLAS_CHECK_INTERVAL_MS)
+    }
+
     // Sixel / inline images
     // ImageAddon's ImageRenderer creates a 2D canvas with desynchronized: true.
     // In Electron/Chromium, desynchronized 2D canvases fail to alpha-composite
@@ -248,6 +280,10 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
 
     return () => {
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
+      if (atlasClearTimerRef.current) {
+        clearInterval(atlasClearTimerRef.current)
+        atlasClearTimerRef.current = null
+      }
       if (isComposing) unblockTextareaStyles()
       textarea?.removeEventListener('compositionstart', onCompositionStart)
       textarea?.removeEventListener('compositionend', onCompositionEnd)
