@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS } from './store/sessionStore'
+import { usePaneStore } from './store/paneStore'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
@@ -71,17 +72,35 @@ export default function App() {
     settingsInit()
   }, [settingsInit])
 
-  // Load session state on mount
+  // Load session state on mount, then forward persisted pane tree to paneStore.
+  // sessionStore owns sessions/collections; paneStore owns the split tree. The
+  // two stores do not import each other — App is the single coordinator.
   useEffect(() => {
-    loadState()
-    return () => teardownSessionIPC()
+    let cancelled = false
+    loadState().then((persisted) => {
+      if (cancelled || !persisted) return
+      const sessions = useSessionStore.getState().sessions
+      usePaneStore.getState().loadFromPersisted(
+        persisted.paneTree ?? null,
+        persisted.focusedPaneId ?? null,
+        sessions.map((s) => s.id),
+        persisted.activeSessionId
+      )
+    })
+    return () => {
+      cancelled = true
+      teardownSessionIPC()
+    }
   }, [loadState])
 
   const handleNewTerminal = useCallback(async () => {
     try {
       const result = await window.terminalAPI.selectDirectory()
       if (result.canceled) return
-      addSession({ cwd: result.directory || undefined, shell: defaultShell })
+      const newId = addSession({ cwd: result.directory || undefined, shell: defaultShell })
+      // New terminal = replace the focused pane's session (old session goes to
+      // the sidebar background). Splitting is a separate explicit action.
+      usePaneStore.getState().replaceFocusedLeaf(newId)
     } catch (err) {
       console.error('Failed to create terminal:', err)
     }
@@ -91,6 +110,8 @@ export default function App() {
     (id: string) => {
       window.terminalAPI.kill(id)
       removeSession(id)
+      // Drop any pane leaves showing this session, then the tree reflows.
+      usePaneStore.getState().removeSessionEverywhere(id)
     },
     [removeSession]
   )

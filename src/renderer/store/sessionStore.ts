@@ -65,7 +65,7 @@ interface SessionStore {
   resetAttention: (id: string) => void
   setAiType: (id: string, aiType: 'claude' | 'opencode' | null) => void
 
-  loadState: () => Promise<void>
+  loadState: () => Promise<PersistedState | null>
   saveState: () => Promise<void>
 }
 
@@ -153,9 +153,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         offPtyExit()
         ipcCleanup = null
       }
+
+      // Return the raw persisted state so the caller (App) can forward the
+      // paneTree/focusedPaneId to paneStore without a second IPC or a
+      // cross-store import. sessionStore does not own pane state.
+      return state
     } catch (err) {
       console.error('Failed to load state:', err)
       set({ loaded: true })
+      return null
     }
   },
 
