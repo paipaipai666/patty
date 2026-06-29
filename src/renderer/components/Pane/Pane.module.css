@@ -149,3 +149,45 @@
   color: var(--text-muted);
   opacity: 0.6;
 }
+
+/* Drop target overlay (sidebar drag-in). Absolutely positioned inside
+ * .paneContent; pointer-events:none so it never blocks the drag. */
+.dropOverlay {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--accent-alpha);
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.drop_left {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 50%;
+}
+.drop_right {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 50%;
+}
+.drop_top {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 50%;
+}
+.drop_bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 50%;
+}
+.drop_center {
+  inset: 6px;
+  background: var(--accent-glow-soft);
+  border-style: dashed;
+}

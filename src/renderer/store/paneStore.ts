@@ -64,6 +64,20 @@ interface PaneStore {
     side: 'first' | 'second'
   ) => void
 
+  /** Drop-in on a specific pane: insert `sessionId` as its neighbor along
+   *  `direction` on `side`, then focus the new leaf. Used by sidebar drag-in
+   *  onto an arbitrary (not necessarily focused) pane edge. */
+  insertNeighborAt: (
+    paneId: string,
+    sessionId: string,
+    direction: SplitDirection,
+    side: 'first' | 'second'
+  ) => void
+
+  /** Drop-in on a specific pane center: replace that pane leaf's session with
+   *  `sessionId`, then focus it. Used by sidebar drag-in onto a pane body. */
+  replaceLeafAt: (paneId: string, sessionId: string) => void
+
   /** Remove the focused pane's leaf from the tree; focus moves to nearest. */
   closeFocused: () => void
 
@@ -140,6 +154,28 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
     const next = insertNeighbor(tree, focusedPaneId, sessionId, direction, side)
     const newLeafId = findLeafIdBySession(next, sessionId)
     set({ tree: next, focusedPaneId: newLeafId ?? focusedPaneId })
+  },
+
+  insertNeighborAt: (paneId, sessionId, direction, side) => {
+    const { tree } = get()
+    if (!tree) {
+      const t = singleLeafTree(sessionId)
+      set({ tree: t, focusedPaneId: t.id })
+      return
+    }
+    const next = insertNeighbor(tree, paneId, sessionId, direction, side)
+    const newLeafId = findLeafIdBySession(next, sessionId)
+    set({ tree: next, focusedPaneId: newLeafId ?? paneId })
+  },
+
+  replaceLeafAt: (paneId, sessionId) => {
+    const { tree } = get()
+    if (!tree) {
+      const t = singleLeafTree(sessionId)
+      set({ tree: t, focusedPaneId: t.id })
+      return
+    }
+    set({ tree: replaceLeafSession(tree, paneId, sessionId), focusedPaneId: paneId })
   },
 
   closeFocused: () => {
