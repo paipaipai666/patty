@@ -84,7 +84,13 @@ function debouncedSave(getState: () => SessionStore) {
       collections: state.collections,
       activeSessionId: state.activeSessionId,
       sidebarVisible: state.sidebarVisible,
-      sidebarWidth: state.sidebarWidth
+      sidebarWidth: state.sidebarWidth,
+      // paneTree/focusedPaneId are owned by paneStore; sessionStore saves null
+      // here and paneStore writes the real tree via its own save path. Keeping
+      // the field present preserves the PersistedState shape and is harmless
+      // (legacy readers ignore it). See commit "persist and restore pane tree".
+      paneTree: null,
+      focusedPaneId: null
     }
     if (perfEnabled) {
       const serializeTime = performance.now() - t0
@@ -160,7 +166,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       collections: state.collections,
       activeSessionId: state.activeSessionId,
       sidebarVisible: state.sidebarVisible,
-      sidebarWidth: state.sidebarWidth
+      sidebarWidth: state.sidebarWidth,
+      paneTree: null,
+      focusedPaneId: null
     }
     await window.terminalAPI.stateSave(persistedState)
   },

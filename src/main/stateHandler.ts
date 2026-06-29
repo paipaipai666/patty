@@ -8,7 +8,9 @@ const DEFAULT_STATE: PersistedState = {
   collections: [],
   activeSessionId: null,
   sidebarVisible: true,
-  sidebarWidth: 220
+  sidebarWidth: 220,
+  paneTree: null,
+  focusedPaneId: null
 }
 
 const STATE_FILE = join(app.getPath('userData'), 'state.json')
