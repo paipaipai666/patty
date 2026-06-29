@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type { TerminalSession } from '../../store/sessionStore'
+import { TerminalPane } from '../Terminal/TerminalPane'
 import styles from './Pane.module.css'
 
 interface PaneViewProps {
@@ -7,20 +8,24 @@ interface PaneViewProps {
   focused: boolean
   onFocus: (paneId: string) => void
   paneId: string
-  /** Pane body. During bring-up this is a placeholder; later the real TerminalPane. */
-  children?: React.ReactNode
 }
 
 /**
- * A single pane: header (session title + color dot) + content area.
+ * A single pane: header (session title + color dot) + the real terminal.
  *
  * Clicking anywhere focuses the pane. The header is a visual label only — no
- * tabs inside a pane (one session per pane by design). The content area is
- * filled by the caller; during layout bring-up it's a placeholder showing the
- * sessionId.
+ * tabs inside a pane (one session per pane by design). The content area holds
+ * a TerminalPane; typing/output in it bubbles up via onUsed so the pane claims
+ * focus (replacing the old LRU markUsed semantics — under the split-tree model
+ * only visible leaves mount a terminal, so LRU eviction of tree leaves is not
+ * needed; focus-on-activity is the surviving behavior).
  */
-export function PaneView({ session, focused, onFocus, paneId, children }: PaneViewProps) {
+export function PaneView({ session, focused, onFocus, paneId }: PaneViewProps) {
   const handleFocus = useCallback(() => onFocus(paneId), [onFocus, paneId])
+
+  // TerminalPane reports keyboard/output activity; under the new model that
+  // means "this pane is being used → it should hold focus".
+  const handleUsed = useCallback(() => onFocus(paneId), [onFocus, paneId])
 
   return (
     <div
@@ -32,7 +37,7 @@ export function PaneView({ session, focused, onFocus, paneId, children }: PaneVi
         <span className={styles.paneTitle}>{session.title}</span>
       </div>
       <div className={styles.paneContent}>
-        {children ?? <div className={styles.panePlaceholder}>pane: {session.id.slice(0, 8)}</div>}
+        <TerminalPane session={session} visible onUsed={handleUsed} />
       </div>
     </div>
   )

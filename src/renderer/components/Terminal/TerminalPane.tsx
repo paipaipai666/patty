@@ -14,13 +14,17 @@ import { createIIPStreamPatcher } from './iipStreamPatcher'
 
 interface TerminalPaneProps {
   session: TerminalSession
-  isActive: boolean
+  /** True when this pane is a visible leaf in the pane tree. In the new
+   *  split-tree model only visible leaves mount a TerminalPane at all, so this
+   *  is effectively always true for a mounted instance — but it also gates fit
+   *  so a pane that briefly has zero size (mid-split) does not fit to 0×0. */
+  visible: boolean
   onUsed?: (id: string) => void
 }
 
 const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
 
-export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
+export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -75,6 +79,17 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
   useEffect(() => {
     if (!containerRef.current) return
     const container = containerRef.current
+
+    // Reset per-session refs so a session swap (replaceLeafSession keeps the
+    // pane id but changes session.id, re-running this effect) starts clean.
+    // Without this, ptyCreatedRef stays true from the previous session and the
+    // resize guard / fit logic misbehave; stale onData/onExit callbacks from
+    // the previous session could also fire against the new terminal.
+    ptyCreatedRef.current = false
+    cleanupDataRef.current?.()
+    cleanupExitRef.current?.()
+    cleanupDataRef.current = null
+    cleanupExitRef.current = null
 
     const term = new Terminal({
       fontFamily: `'${settings.fontFamily}', Consolas, 'Courier New', monospace`,
@@ -298,13 +313,14 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
     }
   }, [session.id]) // Only re-run if session ID changes (shouldn't happen)
 
-  // ── Fit when becoming active ────────────────────────────────────────────
+  // ── Fit when becoming visible / mounted ─────────────────────────────────
 
   useEffect(() => {
-    if (isActive) {
+    if (visible) {
+      // Slight delay so the flex layout has settled after a split/insert.
       setTimeout(() => fitTerminal(!ptyCreatedRef.current), 10)
     }
-  }, [isActive, fitTerminal])
+  }, [visible, fitTerminal])
 
   // ── Resize observer ─────────────────────────────────────────────────────
 
@@ -312,7 +328,11 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
     if (!containerRef.current) return
 
     const observer = new ResizeObserver(() => {
-      if (!isActive || !ptyCreatedRef.current) return
+      // Only react when the pane has a real size and a live PTY. A hidden or
+      // zero-sized pane (mid-split transition) would otherwise fit to 0×0.
+      if (!visible || !ptyCreatedRef.current) return
+      const el = containerRef.current
+      if (el && (el.clientWidth === 0 || el.clientHeight === 0)) return
       if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current)
       resizeTimerRef.current = setTimeout(() => fitTerminal(), 50)
     })
@@ -322,7 +342,7 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
       observer.disconnect()
       if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current)
     }
-  }, [isActive, fitTerminal])
+  }, [visible, fitTerminal])
 
   // ── Settings changes ────────────────────────────────────────────────────
 
@@ -343,7 +363,7 @@ export function TerminalPane({ session, isActive, onUsed }: TerminalPaneProps) {
     <div
       ref={containerRef}
       className={styles.pane}
-      style={{ display: isActive ? 'block' : 'none', opacity: settings.opacity < 1 ? settings.opacity : undefined }}
+      style={{ opacity: settings.opacity < 1 ? settings.opacity : undefined }}
     />
   )
 }
