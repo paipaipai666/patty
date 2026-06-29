@@ -8,6 +8,7 @@ interface SessionItemProps {
   session: TerminalSession
   isActive: boolean
   onClose: (id: string) => void
+  onSelect: (id: string) => void
   depth?: number
 }
 
@@ -20,8 +21,7 @@ const COLOR_MAP: Record<string, string> = {
   gray: 'var(--color-gray)'
 }
 
-export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionItemProps) {
-  const setActive = useSessionStore((s) => s.setActive)
+export function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }: SessionItemProps) {
   const renameSession = useSessionStore((s) => s.renameSession)
   const attentionType = useSessionStore((s) => s.attentionMap[session.id] ?? null)
   const [isEditing, setIsEditing] = useState(false)
@@ -108,7 +108,7 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
     }
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      setActive(session.id)
+      onSelect(session.id)
     } else if (e.key === 'F2') {
       e.preventDefault()
       handleDoubleClick()
@@ -148,7 +148,7 @@ export function SessionItem({ session, isActive, onClose, depth = 0 }: SessionIt
       tabIndex={isEditing ? -1 : 0}
       aria-selected={isActive}
       aria-label={session.title}
-      onClick={() => setActive(session.id)}
+      onClick={() => onSelect(session.id)}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
       draggable={!isEditing}

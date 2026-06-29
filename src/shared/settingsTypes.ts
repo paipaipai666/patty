@@ -7,6 +7,9 @@ export interface ShortcutMap {
   prevTab: string
   toggleSidebar: string
   settings: string
+  splitHorizontal: string
+  splitVertical: string
+  closePane: string
 }
 
 export interface XtermTheme {

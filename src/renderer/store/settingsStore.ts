@@ -17,7 +17,10 @@ const DEFAULT_SETTINGS: AppSettings = {
     nextTab: 'Ctrl+]',
     prevTab: 'Ctrl+[',
     toggleSidebar: 'Ctrl+B',
-    settings: 'Ctrl+,'
+    settings: 'Ctrl+,',
+    splitHorizontal: 'Ctrl+Shift+D',
+    splitVertical: 'Ctrl+Shift+E',
+    closePane: 'Ctrl+Shift+W'
   },
   customThemes: []
 }

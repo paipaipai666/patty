@@ -195,7 +195,13 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
 
   ensureVisible: (sessionId) => {
     const { tree } = get()
-    if (tree && treeHasSession(tree, sessionId)) return true
+    if (tree && treeHasSession(tree, sessionId)) {
+      // Already visible → focus its pane (sidebar click on a visible session
+      // should move focus there, not be a no-op).
+      const leafId = findLeafIdBySession(tree, sessionId)
+      if (leafId) set({ focusedPaneId: leafId })
+      return true
+    }
     get().replaceFocusedLeaf(sessionId)
     return false
   },
@@ -215,3 +221,15 @@ function findLeafIdBySession(tree: PaneTree | null, sessionId: string): string |
 
 // Re-export for callers that need session visibility without importing ops directly.
 export { collectSessionIds, newPaneId }
+
+/**
+ * Read the sessionId of the currently focused leaf, or null if there is no
+ * tree / no focused leaf. Used by App to derive the cwd for a split (the new
+ * pane inherits the focused pane's session cwd, tmux-style).
+ */
+export function getFocusedSessionId(): string | null {
+  const { tree, focusedPaneId } = usePaneStore.getState()
+  if (!tree || !focusedPaneId) return null
+  const leaf = findLeaf(tree, focusedPaneId)
+  return leaf?.sessionId ?? null
+}

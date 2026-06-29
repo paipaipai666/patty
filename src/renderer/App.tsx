@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS } from './store/sessionStore'
-import { usePaneStore } from './store/paneStore'
+import { usePaneStore, getFocusedSessionId } from './store/paneStore'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
@@ -116,6 +116,40 @@ export default function App() {
     [removeSession]
   )
 
+  // Split the focused pane: the new half inherits the focused session's cwd
+  // (tmux-style) and shell. The new session becomes a leaf beside the focused
+  // one and receives focus.
+  const handleSplit = useCallback(
+    (direction: 'horizontal' | 'vertical') => {
+      const focusedSessionId = getFocusedSessionId()
+      const sessions = useSessionStore.getState().sessions
+      const focused = focusedSessionId ? sessions.find((s) => s.id === focusedSessionId) : undefined
+      const newId = addSession({
+        cwd: focused?.cwd || undefined,
+        shell: focused?.shell
+      })
+      usePaneStore.getState().splitFocused(newId, direction)
+    },
+    [addSession]
+  )
+
+  // Close the focused pane (not the session — the session goes to the sidebar
+  // background). Its PTY is killed when the TerminalPane unmounts.
+  const handleClosePane = useCallback(() => {
+    usePaneStore.getState().closeFocused()
+  }, [])
+
+  // Sidebar click on a session: make it the active session (sidebar highlight +
+  // status bar) and ensure it's visible in the pane tree — focusing its pane
+  // if already present, or replacing the focused pane's session if not.
+  const handleSelectSession = useCallback(
+    (id: string) => {
+      setActive(id)
+      usePaneStore.getState().ensureVisible(id)
+    },
+    [setActive]
+  )
+
   const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string) => {
     e.preventDefault()
     setContextMenu({ x: e.clientX, y: e.clientY, sessionId })
@@ -139,7 +173,10 @@ export default function App() {
       [sc.nextTab.toLowerCase()]: navigateNext,
       [sc.prevTab.toLowerCase()]: navigatePrev,
       [sc.toggleSidebar.toLowerCase()]: toggleSidebar,
-      [sc.settings.toLowerCase()]: openSettings
+      [sc.settings.toLowerCase()]: openSettings,
+      [sc.splitHorizontal.toLowerCase()]: () => handleSplit('horizontal'),
+      [sc.splitVertical.toLowerCase()]: () => handleSplit('vertical'),
+      [sc.closePane.toLowerCase()]: handleClosePane
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -175,13 +212,26 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleNewTerminal, handleCloseSession, navigateNext, navigatePrev, toggleSidebar, navigateToIndex, shortcuts, openSettings])
+  }, [handleNewTerminal, handleCloseSession, handleSplit, handleClosePane, navigateNext, navigatePrev, toggleSidebar, navigateToIndex, shortcuts, openSettings])
 
   const getContextMenuItems = (): MenuItem[] => {
     if (!contextMenu) return []
     const { sessionId } = contextMenu
 
     return [
+      {
+        label: 'Split Horizontal',
+        action: () => handleSplit('horizontal')
+      },
+      {
+        label: 'Split Vertical',
+        action: () => handleSplit('vertical')
+      },
+      {
+        label: 'Close Pane',
+        action: () => handleClosePane()
+      },
+      { separator: true, label: '', action: () => {} },
       {
         label: 'Rename',
         action: async () => {
@@ -257,7 +307,7 @@ export default function App() {
       <TitleBar onOpenSettings={openSettings} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         <div className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
-          <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} onCollectionContextMenu={handleCollectionContextMenu} />
+          <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
         </div>
         <div
           className={styles.content}

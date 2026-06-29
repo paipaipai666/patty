@@ -8,6 +8,7 @@ import styles from './Sidebar.module.css'
 
 interface SessionListProps {
   onClose: (id: string) => void
+  onSelect: (id: string) => void
   onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
   searchQuery?: string
 }
@@ -18,6 +19,7 @@ function renderCollection(
   sessions: TerminalSession[],
   activeSessionId: string | null,
   onClose: (id: string) => void,
+  onSelect: (id: string) => void,
   onCollectionContextMenu: ((e: React.MouseEvent, collectionId: string) => void) | undefined,
   depth: number
 ): React.ReactNode {
@@ -32,7 +34,7 @@ function renderCollection(
       onContextMenu={onCollectionContextMenu}
     >
       {childCollections.map((child) =>
-        renderCollection(child, collections, sessions, activeSessionId, onClose, onCollectionContextMenu, depth + 1)
+        renderCollection(child, collections, sessions, activeSessionId, onClose, onSelect, onCollectionContextMenu, depth + 1)
       )}
       {childSessions.map((session) => (
         <SessionItem
@@ -40,6 +42,7 @@ function renderCollection(
           session={session}
           isActive={session.id === activeSessionId}
           onClose={onClose}
+          onSelect={onSelect}
           depth={depth + 1}
         />
       ))}
@@ -47,7 +50,7 @@ function renderCollection(
   )
 }
 
-export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: SessionListProps) {
+export function SessionList({ onClose, onSelect, onCollectionContextMenu, searchQuery }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
@@ -131,7 +134,7 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
   return (
     <div className={styles.list} ref={listRef} role="tablist" aria-label="Terminal sessions">
       {topLevelCollections.map((collection) =>
-        renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onCollectionContextMenu, 0)
+        renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onSelect, onCollectionContextMenu, 0)
       )}
       {topLevelSessions.map((session) => (
         <SessionItem
@@ -139,6 +142,7 @@ export function SessionList({ onClose, onCollectionContextMenu, searchQuery }: S
           session={session}
           isActive={session.id === activeSessionId}
           onClose={onClose}
+          onSelect={onSelect}
           depth={0}
         />
       ))}
