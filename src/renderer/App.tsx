@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
-import { useSessionStore, teardownSessionIPC, SESSION_COLORS } from './store/sessionStore'
+import { useSessionStore, teardownSessionIPC, SESSION_COLORS, buildSessionPersistedState } from './store/sessionStore'
 import { usePaneStore, getFocusedSessionId } from './store/paneStore'
+import { configureStatePersistence } from './store/statePersistence'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
@@ -71,6 +72,22 @@ export default function App() {
   useEffect(() => {
     settingsInit()
   }, [settingsInit])
+
+  // Wire combined persistence once: sessionStore owns sessions/sidebar,
+  // paneStore owns paneTree/focus. A single builder prevents one store from
+  // overwriting the other's fields (previously sessionStore saved paneTree:null).
+  useEffect(() => {
+    configureStatePersistence(() => {
+      const sessionState = buildSessionPersistedState()
+      const paneState = usePaneStore.getState().toPersisted()
+      if (!useSessionStore.getState().loaded) return null
+      return {
+        ...sessionState,
+        paneTree: paneState.paneTree,
+        focusedPaneId: paneState.focusedPaneId
+      }
+    })
+  }, [])
 
   // Load session state on mount, then forward persisted pane tree to paneStore.
   // sessionStore owns sessions/collections; paneStore owns the split tree. The

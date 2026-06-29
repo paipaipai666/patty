@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { PaneTree, SplitDirection } from '../../shared/paneTypes'
+import { requestStateSave } from './statePersistence'
 import {
   normalizePersistedTree,
   singleLeafTree,
@@ -131,6 +132,7 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
     // Easiest: find the leaf holding newSessionId.
     const newLeafId = findLeafIdBySession(next, newSessionId)
     set({ tree: next, focusedPaneId: newLeafId ?? focusedPaneId })
+    requestStateSave()
   },
 
   replaceFocusedLeaf: (sessionId) => {
@@ -139,9 +141,11 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
       // No tree yet → start one with this session.
       const t = singleLeafTree(sessionId)
       set({ tree: t, focusedPaneId: t.id })
+      requestStateSave()
       return
     }
     set({ tree: replaceLeafSession(tree, focusedPaneId, sessionId) })
+    requestStateSave()
   },
 
   insertNeighborFocused: (sessionId, direction, side) => {
@@ -149,11 +153,13 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
     if (!tree || !focusedPaneId) {
       const t = singleLeafTree(sessionId)
       set({ tree: t, focusedPaneId: t.id })
+      requestStateSave()
       return
     }
     const next = insertNeighbor(tree, focusedPaneId, sessionId, direction, side)
     const newLeafId = findLeafIdBySession(next, sessionId)
     set({ tree: next, focusedPaneId: newLeafId ?? focusedPaneId })
+    requestStateSave()
   },
 
   insertNeighborAt: (paneId, sessionId, direction, side) => {
@@ -161,11 +167,13 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
     if (!tree) {
       const t = singleLeafTree(sessionId)
       set({ tree: t, focusedPaneId: t.id })
+      requestStateSave()
       return
     }
     const next = insertNeighbor(tree, paneId, sessionId, direction, side)
     const newLeafId = findLeafIdBySession(next, sessionId)
     set({ tree: next, focusedPaneId: newLeafId ?? paneId })
+    requestStateSave()
   },
 
   replaceLeafAt: (paneId, sessionId) => {
@@ -173,9 +181,11 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
     if (!tree) {
       const t = singleLeafTree(sessionId)
       set({ tree: t, focusedPaneId: t.id })
+      requestStateSave()
       return
     }
     set({ tree: replaceLeafSession(tree, paneId, sessionId), focusedPaneId: paneId })
+    requestStateSave()
   },
 
   closeFocused: () => {
@@ -183,6 +193,7 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
     if (!tree || !focusedPaneId) return
     const { tree: next, nextFocusId } = removeLeaf(tree, focusedPaneId)
     set({ tree: next, focusedPaneId: nextFocusId })
+    requestStateSave()
   },
 
   removeSessionEverywhere: (sessionId) => {
@@ -202,31 +213,43 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
       focused = cur ? firstLeafId(cur) : null
     }
     set({ tree: cur, focusedPaneId: focused })
+    requestStateSave()
   },
 
   setSplitRatio: (splitId, ratio) => {
     const { tree } = get()
     if (!tree) return
     set({ tree: setRatio(tree, splitId, ratio) })
+    requestStateSave()
   },
 
   focusPane: (paneId) => {
-    const { tree } = get()
-    if (tree && findLeaf(tree, paneId)) set({ focusedPaneId: paneId })
+    const { tree, focusedPaneId } = get()
+    if (focusedPaneId === paneId) return
+    if (tree && findLeaf(tree, paneId)) {
+      set({ focusedPaneId: paneId })
+      requestStateSave()
+    }
   },
 
   focusNext: () => {
     const { tree, focusedPaneId } = get()
     if (!tree) return
     const next = nextLeafId(tree, focusedPaneId)
-    if (next) set({ focusedPaneId: next })
+    if (next && next !== focusedPaneId) {
+      set({ focusedPaneId: next })
+      requestStateSave()
+    }
   },
 
   focusPrev: () => {
     const { tree, focusedPaneId } = get()
     if (!tree) return
     const prev = prevLeafId(tree, focusedPaneId)
-    if (prev) set({ focusedPaneId: prev })
+    if (prev && prev !== focusedPaneId) {
+      set({ focusedPaneId: prev })
+      requestStateSave()
+    }
   },
 
   ensureVisible: (sessionId) => {
@@ -235,7 +258,10 @@ export const usePaneStore = create<PaneStore>((set, get) => ({
       // Already visible → focus its pane (sidebar click on a visible session
       // should move focus there, not be a no-op).
       const leafId = findLeafIdBySession(tree, sessionId)
-      if (leafId) set({ focusedPaneId: leafId })
+      if (leafId && leafId !== get().focusedPaneId) {
+        set({ focusedPaneId: leafId })
+        requestStateSave()
+      }
       return true
     }
     get().replaceFocusedLeaf(sessionId)

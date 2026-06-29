@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import type { PersistedState } from '../shared/stateTypes'
-
-const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
+import { requestStateSave, saveStateNow } from './statePersistence'
 
 export type SessionColor = 'blue' | 'green' | 'amber' | 'coral' | 'purple' | 'gray'
 export type ShellType = 'powershell' | 'pwsh' | 'cmd' | 'gitbash' | 'wsl'
@@ -69,41 +68,8 @@ interface SessionStore {
   saveState: () => Promise<void>
 }
 
-let saveTimer: ReturnType<typeof setTimeout> | null = null
 const attentionTimers: Record<string, ReturnType<typeof setTimeout>> = {}
 let ipcCleanup: (() => void) | null = null
-
-function debouncedSave(getState: () => SessionStore) {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    const state = getState()
-    if (!state.loaded) return
-    const t0 = perfEnabled ? performance.now() : 0
-    const persistedState: PersistedState = {
-      sessions: state.sessions.map(({ pid, aiType, ...rest }) => rest),
-      collections: state.collections,
-      activeSessionId: state.activeSessionId,
-      sidebarVisible: state.sidebarVisible,
-      sidebarWidth: state.sidebarWidth,
-      // paneTree/focusedPaneId are owned by paneStore; sessionStore saves null
-      // here and paneStore writes the real tree via its own save path. Keeping
-      // the field present preserves the PersistedState shape and is harmless
-      // (legacy readers ignore it). See commit "persist and restore pane tree".
-      paneTree: null,
-      focusedPaneId: null
-    }
-    if (perfEnabled) {
-      const serializeTime = performance.now() - t0
-      console.log(`[perf] state:serialize ${serializeTime.toFixed(2)}ms (${persistedState.sessions.length} sessions)`)
-    }
-    const saveStart = perfEnabled ? performance.now() : 0
-    window.terminalAPI.stateSave(persistedState).then(() => {
-      if (perfEnabled) {
-        console.log(`[perf] state:save-ipc ${(performance.now() - saveStart).toFixed(2)}ms`)
-      }
-    }).catch(console.error)
-  }, 500)
-}
 
 export function teardownSessionIPC() {
   if (ipcCleanup) ipcCleanup()
@@ -166,17 +132,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   saveState: async () => {
-    const state = get()
-    const persistedState: PersistedState = {
-      sessions: state.sessions.map(({ pid, aiType, ...rest }) => rest),
-      collections: state.collections,
-      activeSessionId: state.activeSessionId,
-      sidebarVisible: state.sidebarVisible,
-      sidebarWidth: state.sidebarWidth,
-      paneTree: null,
-      focusedPaneId: null
-    }
-    await window.terminalAPI.stateSave(persistedState)
+    await saveStateNow()
   },
 
   addSession: (opts = {}) => {
@@ -197,7 +153,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       sessions: [...state.sessions, newSession],
       activeSessionId: id
     }))
-    debouncedSave(get)
+    requestStateSave()
     return id
   },
 
@@ -226,26 +182,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         activeSessionId: newActiveId
       }
     })
-    debouncedSave(get)
+    requestStateSave()
   },
 
   setActive: (id: string) => {
     set({ activeSessionId: id })
-    debouncedSave(get)
+    requestStateSave()
   },
 
   renameSession: (id: string, title: string) => {
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, title } : s))
     }))
-    debouncedSave(get)
+    requestStateSave()
   },
 
   setColor: (id: string, color: SessionColor) => {
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, color } : s))
     }))
-    debouncedSave(get)
+    requestStateSave()
   },
 
   updatePid: (id: string, pid: number) => {
@@ -260,7 +216,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         s.id === sessionId ? { ...s, collectionId } : s
       )
     }))
-    debouncedSave(get)
+    requestStateSave()
   },
 
   addCollection: (name: string, parentId: string | null = null) => {
@@ -275,7 +231,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       collections: [...state.collections, newCollection]
     }))
-    debouncedSave(get)
+    requestStateSave()
     return id
   },
 
@@ -297,7 +253,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         )
       }
     })
-    debouncedSave(get)
+    requestStateSave()
   },
 
   renameCollection: (id: string, name: string) => {
@@ -306,7 +262,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         c.id === id ? { ...c, name } : c
       )
     }))
-    debouncedSave(get)
+    requestStateSave()
   },
 
   toggleCollectionCollapse: (id: string) => {
@@ -315,7 +271,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         c.id === id ? { ...c, collapsed: !c.collapsed } : c
       )
     }))
-    debouncedSave(get)
+    requestStateSave()
   },
 
   moveCollection: (collectionId: string, newParentId: string | null) => {
@@ -336,19 +292,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         )
       }
     })
-    debouncedSave(get)
+    requestStateSave()
   },
 
   toggleSidebar: () => {
     set((state) => ({ sidebarVisible: !state.sidebarVisible }))
-    debouncedSave(get)
+    requestStateSave()
   },
 
   setSidebarWidth: (width: number) => {
     // Keep in sync with --sidebar-min-width / --sidebar-max-width in variables.css
     const clamped = Math.min(320, Math.max(160, width))
     set({ sidebarWidth: clamped })
-    debouncedSave(get)
+    requestStateSave()
   },
 
   navigateNext: () => {
@@ -357,7 +313,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const idx = sessions.findIndex((s) => s.id === activeSessionId)
     const nextIdx = (idx + 1) % sessions.length
     set({ activeSessionId: sessions[nextIdx].id })
-    debouncedSave(get)
+    requestStateSave()
   },
 
   navigatePrev: () => {
@@ -366,14 +322,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const idx = sessions.findIndex((s) => s.id === activeSessionId)
     const prevIdx = (idx - 1 + sessions.length) % sessions.length
     set({ activeSessionId: sessions[prevIdx].id })
-    debouncedSave(get)
+    requestStateSave()
   },
 
   navigateToIndex: (index: number) => {
     const { sessions } = get()
     if (index >= 0 && index < sessions.length) {
       set({ activeSessionId: sessions[index].id })
-      debouncedSave(get)
+      requestStateSave()
     }
   },
 
@@ -409,3 +365,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }))
   }
 }))
+
+/** Build the session-owned part of persisted state. paneStore fields are
+ *  intentionally left null here and filled by the statePersistence coordinator. */
+export function buildSessionPersistedState(): Omit<PersistedState, 'paneTree' | 'focusedPaneId'> {
+  const state = useSessionStore.getState()
+  return {
+    sessions: state.sessions.map(({ pid, aiType, ...rest }) => rest),
+    collections: state.collections,
+    activeSessionId: state.activeSessionId,
+    sidebarVisible: state.sidebarVisible,
+    sidebarWidth: state.sidebarWidth
+  }
+}
