@@ -8,15 +8,16 @@ let buildPersistedState: (() => PersistedState | null) | null = null
 /**
  * Register the app-level state builder.
  *
- * sessionStore owns sessions/sidebar/collections; paneStore owns paneTree and
- * focusedPaneId. This coordinator lets both stores request persistence without
- * importing each other. App wires the builder once both stores are available.
+ * sessionStore owns sessions/sidebar/collections; workspaceStore owns
+ * workspaces and the active workspace id. This coordinator lets both stores
+ * request persistence without importing each other. App wires the builder
+ * once both stores are available.
  */
 export function configureStatePersistence(builder: () => PersistedState | null): void {
   buildPersistedState = builder
 }
 
-/** Debounced save request used by both sessionStore and paneStore mutations. */
+/** Debounced save request used by both sessionStore and workspaceStore mutations. */
 export function requestStateSave(): void {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {

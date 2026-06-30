@@ -3,7 +3,7 @@
  *
  * Every function returns a new tree (or a result object) and never mutates
  * its input. Kept dependency-free so it can be unit-tested in isolation and
- * reused by paneStore without pulling in zustand/React.
+ * reused by workspaceStore without pulling in zustand/React.
  */
 import type { PaneTree, PaneLeaf, PaneSplit, SplitDirection } from '../../shared/paneTypes'
 import { clampRatio } from '../../shared/paneTypes'

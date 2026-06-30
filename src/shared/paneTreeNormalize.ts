@@ -2,8 +2,8 @@
  * Normalization helpers for the pane tree.
  *
  * Pure functions used both at load time (turn a persisted/legacy tree into a
- * trusted one) and inside paneStore operations. Kept out of paneStore so the
- * store imports nothing that depends on React/zustand.
+ * trusted one) and inside workspaceStore operations. Kept out of the store so
+ * it imports nothing that depends on React/zustand.
  */
 import type {
   PersistedPaneTree,
