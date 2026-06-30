@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { usePaneStore } from '../../store/paneStore'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { useSessionStore } from '../../store/sessionStore'
 import type { PaneTree as PaneTreeNode, PaneSplit } from '../../../shared/paneTypes'
@@ -14,17 +13,11 @@ import styles from './Pane.module.css'
  * participate in the parent flex layout). Non-active workspaces render
  * with display:none — their xterm instances stay mounted (preserving PTY
  * and scrollback) but don't paint or consume WebGL contexts.
- *
- * During transition (before App operations switch to workspaceStore) the
- * component falls back to deriving a single workspace from paneStore so
- * existing pane operations continue to render correctly.
  */
 export function PaneTreeRoot() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const paneTree = usePaneStore((s) => s.tree)
-  const paneFocusedPaneId = usePaneStore((s) => s.focusedPaneId)
-  const focusPane = usePaneStore((s) => s.focusPane)
+  const focusPane = useWorkspaceStore((s) => s.focusPane)
   const sessions = useSessionStore((s) => s.sessions)
 
   const sessionById = useMemo(() => {
@@ -34,14 +27,8 @@ export function PaneTreeRoot() {
   }, [sessions])
 
   const list = useMemo((): { id: string; tree: PaneTreeNode; focusedPaneId: string | null }[] => {
-    if (workspaces.length > 0) {
-      return workspaces.map((w) => ({ id: w.id, tree: w.paneTree, focusedPaneId: w.focusedPaneId }))
-    }
-    if (paneTree) {
-      return [{ id: 'default', tree: paneTree, focusedPaneId: paneFocusedPaneId }]
-    }
-    return []
-  }, [workspaces, paneTree, paneFocusedPaneId])
+    return workspaces.map((w) => ({ id: w.id, tree: w.paneTree, focusedPaneId: w.focusedPaneId }))
+  }, [workspaces])
 
   const activeId = activeWorkspaceId ?? (list[0]?.id ?? null)
 

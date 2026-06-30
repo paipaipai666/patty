@@ -1,11 +1,8 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS, buildSessionPersistedState } from './store/sessionStore'
-import { usePaneStore } from './store/paneStore'
 import { useWorkspaceStore, getFocusedSessionId } from './store/workspaceStore'
 import { configureStatePersistence } from './store/statePersistence'
 import { normalizeWorkspaces } from '../shared/workspaceNormalize'
-import { collectTreeSessionIds, singleLeafTree, toPersistedTree } from '../shared/paneTreeNormalize'
-import { newWorkspaceId } from '../shared/workspaceNormalize'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
@@ -77,67 +74,29 @@ export default function App() {
     settingsInit()
   }, [settingsInit])
 
-  // Wire combined persistence once: sessionStore owns sessions/sidebar,
-  // paneStore owns paneTree (legacy), workspaceStore owns workspaces.
-  // During transition, workspaces are derived from paneStore data on every
-  // save so persistence continues to work until App operations switch to
-  // workspaceStore in a later commit.
+  // Wire combined persistence: sessionStore owns sessions/sidebar/collections,
+  // workspaceStore owns workspaces[] + activeWorkspaceId.
   useEffect(() => {
     configureStatePersistence(() => {
       const sessionState = buildSessionPersistedState()
-      const paneState = usePaneStore.getState()
       if (!useSessionStore.getState().loaded) return null
-
-      const workspaces: import('../shared/workspaceTypes').PersistedWorkspace[] = []
-      if (paneState.tree) {
-        const treeSessionIds = collectTreeSessionIds(paneState.tree)
-        workspaces.push({
-          id: 'default',
-          name: 'Workspace 1',
-          collectionId: null,
-          paneTree: toPersistedTree(paneState.tree),
-          focusedPaneId: paneState.focusedPaneId
-        })
-        const sessions = useSessionStore.getState().sessions
-        for (const s of sessions) {
-          if (!treeSessionIds.has(s.id)) {
-            const leaf = singleLeafTree(s.id)
-            workspaces.push({
-              id: newWorkspaceId(),
-              name: s.title || `Workspace ${workspaces.length + 1}`,
-              collectionId: null,
-              paneTree: toPersistedTree(leaf),
-              focusedPaneId: leaf.id
-            })
-          }
-        }
-      }
-
+      const wsState = useWorkspaceStore.getState().toPersisted()
       return {
         ...sessionState,
-        workspaces,
-        activeWorkspaceId: workspaces.length > 0 ? workspaces[0].id : null
+        ...wsState
       }
     })
   }, [])
 
-  // Load session state on mount, then forward persisted state to both
-  // paneStore (legacy — UI still reads from it) and workspaceStore (target).
+  // Load session state on mount, then normalize and restore workspaces.
+  // Legacy paneTree/focusedPaneId fields are normalized into workspaces by
+  // normalizeWorkspaces so old state files upgrade seamlessly.
   useEffect(() => {
     let cancelled = false
     loadState().then((persisted) => {
       if (cancelled || !persisted) return
       const sessions = useSessionStore.getState().sessions
-      const sessionIds = sessions.map((s) => s.id)
-
-      usePaneStore.getState().loadFromPersisted(
-        persisted.paneTree ?? null,
-        persisted.focusedPaneId ?? null,
-        sessionIds,
-        persisted.activeSessionId
-      )
-
-      const knownIds = new Set(sessionIds)
+      const knownIds = new Set(sessions.map((s) => s.id))
       const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
         persisted.workspaces,
         persisted.activeWorkspaceId,
