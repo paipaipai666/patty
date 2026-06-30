@@ -525,3 +525,18 @@
   color: var(--color-amber);
   flex-shrink: 0;
 }
+
+/* ── Workspace grouping ─────────────────────────────────────────────── */
+
+.workspaceHeader {
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-top: 4px;
+  pointer-events: none;
+  user-select: none;
+}

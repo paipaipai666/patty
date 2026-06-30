@@ -2,6 +2,8 @@ import { useMemo, useRef } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { useSessionStore, type Collection, type TerminalSession } from '../../store/sessionStore'
+import { useWorkspaceStore } from '../../store/workspaceStore'
+import { collectTreeSessionIds } from '../../../shared/paneTreeNormalize'
 import { SessionItem } from './SessionItem'
 import { CollectionItem } from './CollectionItem'
 import styles from './Sidebar.module.css'
@@ -55,8 +57,21 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const loaded = useSessionStore((s) => s.loaded)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const listRef = useRef<HTMLDivElement>(null)
   const prevCount = useRef(0)
+
+  // Build session→workspace lookup for grouping sessions under their workspace.
+  const sessionWorkspaceMap = useMemo(() => {
+    const map = new Map<string, { wsId: string; wsName: string; wsCollId: string | null }>()
+    for (const ws of workspaces) {
+      for (const sid of collectTreeSessionIds(ws.paneTree)) {
+        map.set(sid, { wsId: ws.id, wsName: ws.name, wsCollId: ws.collectionId })
+      }
+    }
+    return map
+  }, [workspaces])
 
   // Stagger entrance animation for new items
   useGSAP(() => {
@@ -110,6 +125,21 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
   const topLevelCollections = filteredCollections.filter((c) => c.parentId === null)
   const topLevelSessions = filteredSessions.filter((s) => s.collectionId === null)
 
+  // Group top-level sessions by workspace when workspaces exist.
+  const topLevelWorkspaceGroups = useMemo(() => {
+    if (workspaces.length === 0) return null
+    const groups: { wsId: string; wsName: string; sessions: TerminalSession[] }[] = []
+    for (const ws of workspaces) {
+      if (ws.collectionId !== null) continue
+      const ids = collectTreeSessionIds(ws.paneTree)
+      const wsSessions = topLevelSessions.filter((s) => ids.has(s.id))
+      if (wsSessions.length > 0) {
+        groups.push({ wsId: ws.id, wsName: ws.name, sessions: wsSessions })
+      }
+    }
+    return groups
+  }, [workspaces, topLevelSessions])
+
   // While loading from disk, render nothing to avoid flashing the empty state
   if (!loaded) return null
 
@@ -136,16 +166,37 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
       {topLevelCollections.map((collection) =>
         renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onSelect, onCollectionContextMenu, 0)
       )}
-      {topLevelSessions.map((session) => (
-        <SessionItem
-          key={session.id}
-          session={session}
-          isActive={session.id === activeSessionId}
-          onClose={onClose}
-          onSelect={onSelect}
-          depth={0}
-        />
-      ))}
+      {topLevelWorkspaceGroups
+        ? topLevelWorkspaceGroups.flatMap((group) => [
+            group.sessions.length > 1 ? (
+              <div
+                key={`ws-hdr-${group.wsId}`}
+                className={styles.workspaceHeader}
+              >
+                {group.wsName}
+              </div>
+            ) : null,
+            ...group.sessions.map((session) => (
+              <SessionItem
+                key={session.id}
+                session={session}
+                isActive={session.id === activeSessionId}
+                onClose={onClose}
+                onSelect={onSelect}
+                depth={group.sessions.length > 1 ? 1 : 0}
+              />
+            ))
+          ])
+        : topLevelSessions.map((session) => (
+            <SessionItem
+              key={session.id}
+              session={session}
+              isActive={session.id === activeSessionId}
+              onClose={onClose}
+              onSelect={onSelect}
+              depth={0}
+            />
+          ))}
     </div>
   )
 }

@@ -201,12 +201,12 @@ export default function App() {
   }, [])
 
   // Sidebar click on a session: make it the active session (sidebar highlight +
-  // status bar) and ensure it's visible in the pane tree — focusing its pane
-  // if already present, or replacing the focused pane's session if not.
+  // status bar) and ensure it's visible. With workspaces, this switches to the
+  // workspace containing the session (creating one if needed) and focuses its pane.
   const handleSelectSession = useCallback(
     (id: string) => {
       setActive(id)
-      usePaneStore.getState().ensureVisible(id)
+      useWorkspaceStore.getState().ensureVisible(id)
     },
     [setActive]
   )
