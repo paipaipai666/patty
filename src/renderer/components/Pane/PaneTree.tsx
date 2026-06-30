@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { usePaneStore } from '../../store/paneStore'
+import { useWorkspaceStore } from '../../store/workspaceStore'
 import { useSessionStore } from '../../store/sessionStore'
 import type { PaneTree as PaneTreeNode, PaneSplit } from '../../../shared/paneTypes'
 import { PaneView } from './PaneView'
@@ -7,33 +8,61 @@ import { Sash } from './Sash'
 import styles from './Pane.module.css'
 
 /**
- * Recursively render the pane split tree.
+ * Recursively render the pane split trees of all workspaces.
  *
- * A leaf → PaneView (with the session from sessionStore). A split → two
- * subtrees with a Sash between them, laid out via flex: the first subtree's
- * flex-basis comes from the split ratio, the second takes the remainder.
+ * The active workspace renders normally (display:contents so children
+ * participate in the parent flex layout). Non-active workspaces render
+ * with display:none — their xterm instances stay mounted (preserving PTY
+ * and scrollback) but don't paint or consume WebGL contexts.
  *
- * Pane nodes are keyed by their stable pane id so React preserves subtree
- * instances across restructures (split/close/drag-in). This matters because
- * the real TerminalPane holds an xterm instance — remounting it would lose
- * scrollback and respawn the PTY.
+ * During transition (before App operations switch to workspaceStore) the
+ * component falls back to deriving a single workspace from paneStore so
+ * existing pane operations continue to render correctly.
  */
 export function PaneTreeRoot() {
-  const tree = usePaneStore((s) => s.tree)
-  const focusedPaneId = usePaneStore((s) => s.focusedPaneId)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const paneTree = usePaneStore((s) => s.tree)
+  const paneFocusedPaneId = usePaneStore((s) => s.focusedPaneId)
   const focusPane = usePaneStore((s) => s.focusPane)
   const sessions = useSessionStore((s) => s.sessions)
 
-  // Index sessions by id once per render change; lookup is O(1) per leaf.
   const sessionById = useMemo(() => {
     const m = new Map<string, (typeof sessions)[number]>()
     for (const s of sessions) m.set(s.id, s)
     return m
   }, [sessions])
 
-  if (!tree) return null
+  const list = useMemo((): { id: string; tree: PaneTreeNode; focusedPaneId: string | null }[] => {
+    if (workspaces.length > 0) {
+      return workspaces.map((w) => ({ id: w.id, tree: w.paneTree, focusedPaneId: w.focusedPaneId }))
+    }
+    if (paneTree) {
+      return [{ id: 'default', tree: paneTree, focusedPaneId: paneFocusedPaneId }]
+    }
+    return []
+  }, [workspaces, paneTree, paneFocusedPaneId])
 
-  return renderNode(tree, tree.id, focusedPaneId, focusPane, sessionById)
+  const activeId = activeWorkspaceId ?? (list[0]?.id ?? null)
+
+  if (list.length === 0) return null
+
+  return (
+    <>
+      {list.map((ws) => (
+        <div
+          key={ws.id}
+          style={{
+            display: ws.id === activeId ? 'contents' : 'none',
+            width: '100%',
+            height: '100%'
+          }}
+        >
+          {renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById)}
+        </div>
+      ))}
+    </>
+  )
 }
 
 function renderNode(
