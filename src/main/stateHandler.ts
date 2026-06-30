@@ -9,6 +9,8 @@ const DEFAULT_STATE: PersistedState = {
   activeSessionId: null,
   sidebarVisible: true,
   sidebarWidth: 220,
+  workspaces: [],
+  activeWorkspaceId: null,
   paneTree: null,
   focusedPaneId: null
 }

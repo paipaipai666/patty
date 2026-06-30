@@ -109,3 +109,25 @@ export function treeHasSession(node: PaneTree | null, sessionId: string): boolea
   if (node.type === 'leaf') return node.sessionId === sessionId
   return treeHasSession(node.first, sessionId) || treeHasSession(node.second, sessionId)
 }
+
+/** First (leftmost / topmost) leaf id in depth-first order, or null. */
+export function firstLeafId(node: PaneTree | null): string | null {
+  if (!node) return null
+  if (node.type === 'leaf') return node.id
+  return firstLeafId(node.first)
+}
+
+/** Collect every session id referenced by leaves in the tree. */
+export function collectTreeSessionIds(node: PaneTree | null): Set<string> {
+  const ids = new Set<string>()
+  function walk(n: PaneTree): void {
+    if (n.type === 'leaf') {
+      ids.add(n.sessionId)
+      return
+    }
+    walk(n.first)
+    walk(n.second)
+  }
+  if (node) walk(node)
+  return ids
+}

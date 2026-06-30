@@ -1,5 +1,6 @@
 import type { SessionColor, ShellType, Collection } from '../renderer/store/sessionStore'
 import type { PersistedPaneTree } from './paneTypes'
+import type { PersistedWorkspace } from './workspaceTypes'
 
 export interface PersistedSession {
   id: string
@@ -16,13 +17,16 @@ export interface PersistedState {
   activeSessionId: string | null
   sidebarVisible: boolean
   sidebarWidth: number
+  /** Workspace list (post-migration). Each owns its sessions and pane tree. */
+  workspaces: PersistedWorkspace[]
+  /** Currently active workspace id, or null if no workspaces exist. */
+  activeWorkspaceId: string | null
   /**
-   * Split tree of visible panes. null/missing on legacy state files → the
-   * loader normalizes to a single-leaf tree over `activeSessionId`. Legacy
-   * readers ignore an unknown field, so new state files stay readable by
-   * older versions.
+   * Legacy pre-workspace pane tree. Present in state files saved before the
+   * workspace feature. Read by the normalization step on load; no longer
+   * written by the save path once workspaceStore is wired.
    */
-  paneTree: PersistedPaneTree | null
-  /** Pane node id currently holding keyboard focus. */
-  focusedPaneId: string | null
+  paneTree?: PersistedPaneTree | null
+  /** Legacy focused pane id (paired with `paneTree`). */
+  focusedPaneId?: string | null
 }
