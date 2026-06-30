@@ -47,7 +47,7 @@ export function PaneTreeRoot() {
               height: '100%'
             }}
           >
-            {renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
+            {ws.tree && renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
           </div>
         )
       })}

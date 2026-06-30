@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS, buildSessionPersistedState } from './store/sessionStore'
 import { useWorkspaceStore, getFocusedSessionId } from './store/workspaceStore'
-import { configureStatePersistence } from './store/statePersistence'
+import { configureStatePersistence, requestStateSave } from './store/statePersistence'
 import { normalizeWorkspaces } from '../shared/workspaceNormalize'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
@@ -154,7 +154,21 @@ export default function App() {
   // background). Its PTY is killed when the TerminalPane unmounts.
   const handleClosePane = useCallback(() => {
     useWorkspaceStore.getState().closeFocused()
-  }, [])
+    // Sync sidebar highlight to whatever pane is now focused. When the last
+    // pane was closed, closeFocused() clears activeWorkspaceId, so this resolves
+    // to null and the sidebar highlight disappears.
+    const nextFocused = getFocusedSessionId()
+    const currentActive = useSessionStore.getState().activeSessionId
+    if (nextFocused === currentActive) return
+    if (nextFocused) {
+      setActive(nextFocused)
+    } else {
+      // No focused pane — clear the active session so the sidebar highlight
+      // and the terminal area both reflect the empty state.
+      useSessionStore.setState({ activeSessionId: null })
+      requestStateSave()
+    }
+  }, [setActive])
 
   // Sidebar click on a session: make it the active session (sidebar highlight +
   // status bar) and ensure it's visible. With workspaces, this switches to the

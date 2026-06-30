@@ -251,6 +251,16 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const ws = workspaces.find((w) => w.id === activeWorkspaceId)
     if (!ws || !ws.focusedPaneId) return
     const { tree: next, nextFocusId } = removeLeaf(ws.paneTree, ws.focusedPaneId)
+    // Removing the last leaf yields a null tree — remove the workspace and
+    // drop the active workspace id so the terminal area shows the empty
+    // state and the sidebar highlight clears. Other workspaces remain in
+    // the sidebar and can be re-entered by clicking their sessions.
+    if (!next) {
+      const nextWorkspaces = workspaces.filter((w) => w.id !== activeWorkspaceId)
+      set({ workspaces: nextWorkspaces, activeWorkspaceId: null })
+      requestStateSave()
+      return
+    }
     set({
       workspaces: patchWorkspace(workspaces, activeWorkspaceId, {
         paneTree: next,
