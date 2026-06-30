@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef } from 'react'
 import type { TerminalSession } from '../../store/sessionStore'
-import { usePaneStore } from '../../store/paneStore'
+import { useWorkspaceStore } from '../../store/workspaceStore'
 import { TerminalPane } from '../Terminal/TerminalPane'
 import { DropTargetOverlay, type DropZone } from './DropTargetOverlay'
 import styles from './Pane.module.css'
@@ -94,7 +94,7 @@ export function PaneView({ session, focused, onFocus, paneId, visible = true }: 
         const payload = JSON.parse(e.dataTransfer.getData('application/json'))
         if (payload?.type !== 'session' || typeof payload.id !== 'string') return
         const sessionId = payload.id
-        const store = usePaneStore.getState()
+        const store = useWorkspaceStore.getState()
         if (zone === 'center') {
           store.replaceLeafAt(paneId, sessionId)
         } else {

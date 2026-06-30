@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
-import { usePaneStore } from '../../store/paneStore'
+import { useWorkspaceStore } from '../../store/workspaceStore'
 import type { SplitDirection } from '../../../shared/paneTypes'
 import styles from './Pane.module.css'
 
@@ -17,7 +17,7 @@ interface SashProps {
  * by the store. The parent is the .split flex container that owns this sash.
  */
 export function Sash({ splitId, direction }: SashProps) {
-  const setSplitRatio = usePaneStore((s) => s.setSplitRatio)
+  const setSplitRatio = useWorkspaceStore((s) => s.setSplitRatio)
   const parentRef = useRef<HTMLElement | null>(null)
   const [dragging, setDragging] = useState(false)
 
