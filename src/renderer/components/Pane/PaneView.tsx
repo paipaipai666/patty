@@ -10,6 +10,9 @@ interface PaneViewProps {
   focused: boolean
   onFocus: (paneId: string) => void
   paneId: string
+  /** False when this pane belongs to a non-active workspace (display:none).
+   *  TerminalPane uses this to release the WebGL context while hidden. */
+  visible?: boolean
 }
 
 /** Edge threshold: within this fraction of a pane's half-size, the drop lands
@@ -53,7 +56,7 @@ function zoneFromPoint(x: number, y: number, rect: DOMRect): DropZone {
  * neighbor (split); dropping on the center replaces this pane's session. The
  * drop overlay highlights the target zone during dragover.
  */
-export function PaneView({ session, focused, onFocus, paneId }: PaneViewProps) {
+export function PaneView({ session, focused, onFocus, paneId, visible = true }: PaneViewProps) {
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const dropZoneRef = useRef<DropZone>(null)
 
@@ -121,7 +124,7 @@ export function PaneView({ session, focused, onFocus, paneId }: PaneViewProps) {
         <span className={styles.paneTitle}>{session.title}</span>
       </div>
       <div className={styles.paneContent}>
-        <TerminalPane session={session} visible onUsed={handleUsed} />
+        <TerminalPane session={session} visible={visible} onUsed={handleUsed} />
         <DropTargetOverlay zone={dropZone} />
       </div>
     </div>

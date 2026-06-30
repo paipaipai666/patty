@@ -49,18 +49,21 @@ export function PaneTreeRoot() {
 
   return (
     <>
-      {list.map((ws) => (
-        <div
-          key={ws.id}
-          style={{
-            display: ws.id === activeId ? 'contents' : 'none',
-            width: '100%',
-            height: '100%'
-          }}
-        >
-          {renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById)}
-        </div>
-      ))}
+      {list.map((ws) => {
+        const active = ws.id === activeId
+        return (
+          <div
+            key={ws.id}
+            style={{
+              display: active ? 'contents' : 'none',
+              width: '100%',
+              height: '100%'
+            }}
+          >
+            {renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
+          </div>
+        )
+      })}
     </>
   )
 }
@@ -70,7 +73,8 @@ function renderNode(
   key: string,
   focusedPaneId: string | null,
   focusPane: (id: string) => void,
-  sessionById: Map<string, import('../../store/sessionStore').TerminalSession>
+  sessionById: Map<string, import('../../store/sessionStore').TerminalSession>,
+  visible: boolean = true
 ): React.ReactNode {
   if (node.type === 'leaf') {
     const session = sessionById.get(node.sessionId)
@@ -86,11 +90,12 @@ function renderNode(
         paneId={node.id}
         focused={focusedPaneId === node.id}
         onFocus={focusPane}
+        visible={visible}
       />
     )
   }
 
-  return renderSplit(node, key, focusedPaneId, focusPane, sessionById)
+  return renderSplit(node, key, focusedPaneId, focusPane, sessionById, visible)
 }
 
 function renderSplit(
@@ -98,7 +103,8 @@ function renderSplit(
   key: string,
   focusedPaneId: string | null,
   focusPane: (id: string) => void,
-  sessionById: Map<string, import('../../store/sessionStore').TerminalSession>
+  sessionById: Map<string, import('../../store/sessionStore').TerminalSession>,
+  visible: boolean = true
 ): React.ReactNode {
   const dirClass = node.direction === 'horizontal' ? styles.splitHorizontal : styles.splitVertical
   // ratio is the first subtree's share; express as flex-basis percentage.
@@ -107,11 +113,11 @@ function renderSplit(
   return (
     <div key={key} className={`${styles.split} ${dirClass}`}>
       <div className={styles.first} style={{ flexBasis: firstBasis, flexGrow: 0, flexShrink: 0 }}>
-        {renderNode(node.first, node.first.id, focusedPaneId, focusPane, sessionById)}
+        {renderNode(node.first, node.first.id, focusedPaneId, focusPane, sessionById, visible)}
       </div>
       <Sash splitId={node.id} direction={node.direction} />
       <div className={styles.second}>
-        {renderNode(node.second, node.second.id, focusedPaneId, focusPane, sessionById)}
+        {renderNode(node.second, node.second.id, focusedPaneId, focusPane, sessionById, visible)}
       </div>
     </div>
   )

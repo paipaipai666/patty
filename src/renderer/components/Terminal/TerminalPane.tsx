@@ -305,13 +305,53 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       window.terminalAPI.kill(session.id)
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
-      webglAddon?.dispose()
+      webglAddonRef.current?.dispose()
       term.dispose()
       termRef.current = null
       fitAddonRef.current = null
       webglAddonRef.current = null
     }
   }, [session.id]) // Only re-run if session ID changes (shouldn't happen)
+
+  // ── WebGL context lifecycle: release when hidden ──────────────────────
+  // Non-active workspaces use display:none, keeping the xterm instance and
+  // PTY alive but wasting a WebGL context. Dispose the WebGL addon when the
+  // pane is not visible and re-create it on re-activation so the browser's
+  // WebGL context cap (typically ~16) is never hit.
+
+  useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+
+    if (visible) {
+      if (!webglAddonRef.current) {
+        try {
+          const wgl = new WebglAddon()
+          term.loadAddon(wgl)
+          webglAddonRef.current = wgl
+          atlasClearTimerRef.current = setInterval(() => {
+            const atlas = (wgl as any)?._renderer?._charAtlas
+            const pageCount = atlas?._pages?.length ?? 0
+            if (pageCount >= 12) {
+              try { wgl.clearTextureAtlas() } catch { /* disposed in race */ }
+            }
+          }, 2000)
+        } catch {
+          // WebGL unavailable — canvas fallback works fine
+        }
+      }
+    } else {
+      if (atlasClearTimerRef.current) {
+        clearInterval(atlasClearTimerRef.current)
+        atlasClearTimerRef.current = null
+      }
+      if (webglAddonRef.current) {
+        try { webglAddonRef.current.dispose() } catch { /* already disposed */ }
+        webglAddonRef.current = null
+      }
+    }
+    // Cleanup on unmount: dispose if still alive (handled by main effect below)
+  }, [visible])
 
   // ── Fit when becoming visible / mounted ─────────────────────────────────
 
