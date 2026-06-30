@@ -366,9 +366,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   }
 }))
 
-/** Build the session-owned part of persisted state. paneStore fields are
- *  intentionally left null here and filled by the statePersistence coordinator. */
-export function buildSessionPersistedState(): Omit<PersistedState, 'paneTree' | 'focusedPaneId'> {
+/** Build the session-owned part of persisted state. Workspace fields are
+ *  filled by the statePersistence coordinator via workspaceStore. */
+export function buildSessionPersistedState(): Pick<PersistedState, 'sessions' | 'collections' | 'activeSessionId' | 'sidebarVisible' | 'sidebarWidth'> {
   const state = useSessionStore.getState()
   return {
     sessions: state.sessions.map(({ pid, aiType, ...rest }) => rest),
