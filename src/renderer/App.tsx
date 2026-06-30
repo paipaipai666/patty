@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS, buildSessionPersistedState } from './store/sessionStore'
-import { usePaneStore, getFocusedSessionId } from './store/paneStore'
-import { useWorkspaceStore } from './store/workspaceStore'
+import { usePaneStore } from './store/paneStore'
+import { useWorkspaceStore, getFocusedSessionId } from './store/workspaceStore'
 import { configureStatePersistence } from './store/statePersistence'
 import { normalizeWorkspaces } from '../shared/workspaceNormalize'
 import { collectTreeSessionIds, singleLeafTree, toPersistedTree } from '../shared/paneTreeNormalize'
@@ -159,9 +159,7 @@ export default function App() {
       const result = await window.terminalAPI.selectDirectory()
       if (result.canceled) return
       const newId = addSession({ cwd: result.directory || undefined, shell: defaultShell })
-      // New terminal = replace the focused pane's session (old session goes to
-      // the sidebar background). Splitting is a separate explicit action.
-      usePaneStore.getState().replaceFocusedLeaf(newId)
+      useWorkspaceStore.getState().createWorkspace(newId)
     } catch (err) {
       console.error('Failed to create terminal:', err)
     }
@@ -171,8 +169,7 @@ export default function App() {
     (id: string) => {
       window.terminalAPI.kill(id)
       removeSession(id)
-      // Drop any pane leaves showing this session, then the tree reflows.
-      usePaneStore.getState().removeSessionEverywhere(id)
+      useWorkspaceStore.getState().removeSessionEverywhere(id)
     },
     [removeSession]
   )
@@ -189,7 +186,7 @@ export default function App() {
         cwd: focused?.cwd || undefined,
         shell: focused?.shell
       })
-      usePaneStore.getState().splitFocused(newId, direction)
+      useWorkspaceStore.getState().splitFocused(newId, direction)
     },
     [addSession]
   )
@@ -197,7 +194,7 @@ export default function App() {
   // Close the focused pane (not the session — the session goes to the sidebar
   // background). Its PTY is killed when the TerminalPane unmounts.
   const handleClosePane = useCallback(() => {
-    usePaneStore.getState().closeFocused()
+    useWorkspaceStore.getState().closeFocused()
   }, [])
 
   // Sidebar click on a session: make it the active session (sidebar highlight +
