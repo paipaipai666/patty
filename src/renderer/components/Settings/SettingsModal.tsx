@@ -788,6 +788,13 @@ function NotificationsSection({
     })
   }
 
+  const toggleCodex = () => {
+    updateSetting('notifications', {
+      ...settings.notifications,
+      codex: !settings.notifications.codex
+    })
+  }
+
   return (
     <div className={styles.section}>
       <div className={styles.sectionTitle}>Attention Notifications</div>
@@ -831,8 +838,26 @@ function NotificationsSection({
         </button>
       </div>
 
+      <div className={styles.settingRow}>
+        <div>
+          <span className={styles.settingLabel}>Codex CLI</span>
+          <div className={styles.settingDesc}>
+            Show indicators when Codex CLI needs your attention
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.notifications.codex}
+          className={`${styles.toggle} ${settings.notifications.codex ? styles.toggleOn : ''}`}
+          onClick={toggleCodex}
+        >
+          <div className={styles.toggleKnob} />
+        </button>
+      </div>
+
       <div className={styles.settingDesc} style={{ marginTop: '16px' }}>
-        ℹ️ When disabled, external config files (Claude Code settings.json, OpenCode plugin) will not be modified.
+        ℹ️ When disabled, external config files (Claude Code settings.json, OpenCode plugin, Codex hooks.json) will not be modified.
       </div>
     </div>
   )

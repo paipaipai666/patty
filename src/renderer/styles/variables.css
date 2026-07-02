@@ -12,16 +12,23 @@
   --ai-opencode-color:     rgba(255,255,255,0.8);
   --ai-opencode-bg:        rgba(255,255,255,0.06);
   --ai-opencode-glow:      rgba(255,255,255,0.12);
+  --ai-codex-color:        #19c59f;
+  --ai-codex-bg:           rgba(25, 197, 159, 0.12);
+  --ai-codex-glow:         rgba(25, 197, 159, 0.25);
 
   /* Fire effect - ContributionGrid */
   --fire-claude:       #cc785c;
   --fire-opencode:     #ffffff;
+  --fire-codex:        #19c59f;
   --fire-glow-claude-3:    rgba(204, 120, 92, 0.25);
   --fire-glow-claude-4:    rgba(204, 120, 92, 0.5);
   --fire-glow-opencode-3:  rgba(255, 255, 255, 0.25);
   --fire-glow-opencode-4:  rgba(255, 255, 255, 0.5);
+  --fire-glow-codex-3:     rgba(25, 197, 159, 0.25);
+  --fire-glow-codex-4:     rgba(25, 197, 159, 0.5);
   --fire-gradient-claude:    linear-gradient(90deg, transparent 0%, rgba(204, 120, 92, 0.10) 40%, rgba(204, 120, 92, 0.22) 100%);
   --fire-gradient-opencode:  linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.08) 40%, rgba(255, 255, 255, 0.18) 100%);
+  --fire-gradient-codex:     linear-gradient(90deg, transparent 0%, rgba(25, 197, 159, 0.10) 40%, rgba(25, 197, 159, 0.22) 100%);
 
   /* Attention states (session list) */
   --attention-complete-bg:     rgba(52, 211, 153, 0.12);
@@ -158,8 +165,11 @@
   --ai-claude-bg:      rgba(184,90,58,0.10);
   --ai-opencode-color: #3d4f6e;
   --ai-opencode-bg:    rgba(61,79,110,0.08);
+  --ai-codex-color:    #0d8f71;
+  --ai-codex-bg:       rgba(13,143,113,0.10);
   --fire-claude:       #b0553a;
   --fire-opencode:     #3d4f6e;
+  --fire-codex:        #0d8f71;
   --overlay-bg:        rgba(0, 0, 0, 0.25);
   --scrollbar-thumb:   rgba(0,0,0,0.12);
   --neutral:           #6b7280;

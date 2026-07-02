@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react'
 import styles from './ContributionGrid.module.css'
 
 interface Props {
-  aiType: 'claude' | 'opencode' | null
+  aiType: 'claude' | 'opencode' | 'codex' | null
 }
 
 const ROWS = 5
@@ -46,7 +46,9 @@ export function ContributionGrid({ aiType }: Props) {
     const cellSize = Math.floor((parentH - PAD * 2 - (ROWS - 1) * GAP) / ROWS)
     const usableW = parentW - PAD * 2 - 20
     const COLS = Math.max(16, Math.floor((usableW + GAP) / (cellSize + GAP)))
-    const palette = buildPalette(aiType === 'claude' ? '--fire-claude' : '--fire-opencode')
+    const palette = buildPalette(
+      aiType === 'claude' ? '--fire-claude' : aiType === 'codex' ? '--fire-codex' : '--fire-opencode'
+    )
 
     container.dataset.type = aiType
     container.style.gridTemplateColumns = `repeat(${COLS}, ${cellSize}px)`

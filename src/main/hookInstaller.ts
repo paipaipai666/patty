@@ -258,3 +258,96 @@ export async function ensureOpenCodePlugin(): Promise<void> {
     console.error('Failed to install OpenCode plugin:', error)
   }
 }
+
+interface CodexHooks {
+  hooks?: {
+    SessionStart?: NotificationHook[]
+    PermissionRequest?: NotificationHook[]
+    Stop?: NotificationHook[]
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+function getCodexSettingsPath(): string {
+  const homeDir = process.env.USERPROFILE || process.env.HOME || ''
+  return path.join(homeDir, '.codex', 'hooks.json')
+}
+
+export async function ensureCodexHook(): Promise<void> {
+  try {
+    const settingsPath = getCodexSettingsPath()
+    const hookScriptPath = ensureHookScriptExists()
+
+    const hookCommand = `powershell -ExecutionPolicy Bypass -File "${hookScriptPath}" -Source "codex"`
+
+    let settings: CodexHooks = {}
+
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const content = fs.readFileSync(settingsPath, 'utf-8')
+        settings = JSON.parse(content)
+      } catch {
+        settings = {}
+      }
+    }
+
+    if (!settings.hooks) {
+      settings.hooks = {}
+    }
+
+    const findPattyIndex = (hooks: NotificationHook[] = []) =>
+      hooks.findIndex(
+        (n) => n.hooks?.some((h) => h.command && h.command.includes('patty-hook.ps1') && h.command.includes('-Source "codex"'))
+      )
+
+    const sessionStartEntry: NotificationHook = {
+      matcher: 'startup|resume',
+      hooks: [{ type: 'command', command: hookCommand }]
+    }
+    const sessionStartHooks = settings.hooks.SessionStart || []
+    const existingStartIndex = findPattyIndex(sessionStartHooks)
+    if (existingStartIndex >= 0) {
+      sessionStartHooks[existingStartIndex] = sessionStartEntry
+    } else {
+      sessionStartHooks.push(sessionStartEntry)
+    }
+    settings.hooks.SessionStart = sessionStartHooks
+
+    const permissionEntry: NotificationHook = {
+      matcher: '',
+      hooks: [{ type: 'command', command: hookCommand }]
+    }
+    const permissionHooks = settings.hooks.PermissionRequest || []
+    const existingPermissionIndex = findPattyIndex(permissionHooks)
+    if (existingPermissionIndex >= 0) {
+      permissionHooks[existingPermissionIndex] = permissionEntry
+    } else {
+      permissionHooks.push(permissionEntry)
+    }
+    settings.hooks.PermissionRequest = permissionHooks
+
+    const stopEntry: NotificationHook = {
+      matcher: '',
+      hooks: [{ type: 'command', command: hookCommand }]
+    }
+    const stopHooks = settings.hooks.Stop || []
+    const existingStopIndex = findPattyIndex(stopHooks)
+    if (existingStopIndex >= 0) {
+      stopHooks[existingStopIndex] = stopEntry
+    } else {
+      stopHooks.push(stopEntry)
+    }
+    settings.hooks.Stop = stopHooks
+
+    const settingsDir = path.dirname(settingsPath)
+    if (!fs.existsSync(settingsDir)) {
+      fs.mkdirSync(settingsDir, { recursive: true })
+    }
+
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8')
+    console.log('Codex CLI hook installed successfully')
+  } catch (error) {
+    console.error('Failed to install Codex CLI hook:', error)
+  }
+}

@@ -38,6 +38,14 @@
   box-shadow: 0 0 8px var(--fire-glow-opencode-4);
 }
 
+.grid[data-type="codex"] .glow-3 {
+  box-shadow: 0 0 4px var(--fire-glow-codex-3);
+}
+
+.grid[data-type="codex"] .glow-4 {
+  box-shadow: 0 0 8px var(--fire-glow-codex-4);
+}
+
 .grid::after {
   content: '';
   position: absolute;
@@ -60,4 +68,8 @@
 
 .grid[data-type="opencode"]::after {
   background: var(--fire-gradient-opencode);
+}
+
+.grid[data-type="codex"]::after {
+  background: var(--fire-gradient-codex);
 }

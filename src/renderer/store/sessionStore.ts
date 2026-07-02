@@ -22,7 +22,7 @@ export interface TerminalSession {
   pid: number
   createdAt: number
   collectionId: string | null
-  aiType?: 'claude' | 'opencode' | null
+  aiType?: 'claude' | 'opencode' | 'codex' | null
 }
 
 export const SESSION_COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
@@ -62,7 +62,7 @@ interface SessionStore {
 
   setAttention: (id: string, eventType: string | null) => void
   resetAttention: (id: string) => void
-  setAiType: (id: string, aiType: 'claude' | 'opencode' | null) => void
+  setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | null) => void
 
   loadState: () => Promise<PersistedState | null>
   saveState: () => Promise<void>
@@ -357,7 +357,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     window.terminalAPI.resetAttention(id)
   },
 
-  setAiType: (id: string, aiType: 'claude' | 'opencode' | null) => {
+  setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | null) => {
     set((state) => ({
       sessions: state.sessions.map((s) =>
         s.id === id ? { ...s, aiType } : s

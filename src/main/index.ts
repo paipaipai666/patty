@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipcHandlers'
 import { startHookServer, stopHookServer } from './ptyManager'
-import { ensureClaudeCodeHook, ensureOpenCodePlugin } from './hookInstaller'
+import { ensureClaudeCodeHook, ensureOpenCodePlugin, ensureCodexHook } from './hookInstaller'
 import { loadSettings } from './settingsHandler'
 import { perfMark, perfMeasure, perfMemoryMain, perfReport, perfDump, perfEnabled } from '../shared/perf'
 
@@ -54,9 +54,10 @@ process.on('unhandledRejection', (reason) => {
     return null
   }
 
-  function mapSourceToAiType(source: string): 'claude' | 'opencode' | null {
+  function mapSourceToAiType(source: string): 'claude' | 'opencode' | 'codex' | null {
     if (source === 'claude-code') return 'claude'
     if (source === 'opencode') return 'opencode'
+    if (source === 'codex') return 'codex'
     return null
   }
 
@@ -130,6 +131,7 @@ app.whenReady().then(async () => {
     const settings = loadSettings()
     if (source === 'claude-code' && !settings.notifications.claudeCode) return
     if (source === 'opencode' && !settings.notifications.openCode) return
+    if (source === 'codex' && !settings.notifications.codex) return
 
     const aiType = mapSourceToAiType(source)
 
@@ -165,6 +167,9 @@ app.whenReady().then(async () => {
   }
   if (settings.notifications.openCode) {
     await ensureOpenCodePlugin()
+  }
+  if (settings.notifications.codex) {
+    await ensureCodexHook()
   }
   perfMeasure('app:hooks-install', 'app:hooks-install-start')
 

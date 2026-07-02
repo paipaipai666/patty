@@ -1,16 +1,22 @@
-# patty-hook.ps1 - Claude Code Notification Hook for Patty
-# This script is called by Claude Code when a notification event occurs.
+# patty-hook.ps1 - AI CLI Notification Hook for Patty
+# This script is called by Claude Code or Codex CLI when a notification event occurs.
 # It sends the event to the Patty main process via HTTP POST.
 #
 # Supported events:
 # - SessionStart: agent session started/ resumed
-# - SessionEnd: agent session terminated
-# - Notification: permission_prompt, idle_prompt, elicitation_dialog
+# - SessionEnd: agent session terminated (Claude Code)
+# - Notification: permission_prompt, idle_prompt, elicitation_dialog (Claude Code)
 # - Stop: agent finished answering
-# - StopFailure: API errors (rate_limit, overloaded, server_error, etc.)
+# - StopFailure: API errors (rate_limit, overloaded, server_error, etc.) (Claude Code)
+# - PermissionRequest: tool approval request (Codex CLI)
+#
+# Usage:
+#   Claude Code: powershell -ExecutionPolicy Bypass -File patty-hook.ps1
+#   Codex CLI:   powershell -ExecutionPolicy Bypass -File patty-hook.ps1 -Source "codex"
 
 param(
-    [string]$EventType = ""
+    [string]$EventType = "",
+    [string]$Source = "claude-code"
 )
 
 # Debug logging
@@ -38,7 +44,16 @@ try {
         if ($stdinInput) {
             try {
                 $inputData = $stdinInput | ConvertFrom-Json
-                if ($inputData.notification_type) {
+                if ($inputData.hook_event_name) {
+                    # Codex CLI hook events: SessionStart, PermissionRequest, Stop, etc.
+                    $hookName = $inputData.hook_event_name.ToString().ToLower()
+                    switch ($hookName) {
+                        "sessionstart" { $eventType = "session_start" }
+                        "permissionrequest" { $eventType = "permission_prompt" }
+                        "stop" { $eventType = "stop" }
+                        default { $eventType = $hookName }
+                    }
+                } elseif ($inputData.notification_type) {
                     # Notification hook: permission_prompt, idle_prompt, elicitation_dialog
                     $eventType = $inputData.notification_type
                 } elseif ($inputData.reason) {
@@ -67,10 +82,10 @@ try {
     $body = @{
         paneId = $env:PATTY_PANE_ID
         event  = $eventType
-        source = "claude-code"
+        source = $Source
     } | ConvertTo-Json -Compress
 
-    "Request body: $body" | Out-File -FilePath $logFile -Append
+    "Source: $Source" | Out-File -FilePath $logFile -Append
 
     # Send notification to Patty main process
     $response = Invoke-RestMethod `

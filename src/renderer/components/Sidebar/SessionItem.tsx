@@ -136,6 +136,11 @@ export function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }:
       <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor">
         <path fill-rule="evenodd" clip-rule="evenodd" d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z" />
       </svg>
+    ),
+    codex: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M21.3 11.1c.2.4.2.8 0 1.2l-4.4 7.6c-.2.3-.5.6-.9.6H8c-.4 0-.7-.2-.9-.6L2.7 12.3c-.2-.4-.2-.8 0-1.2l4.4-7.6c.2-.3.5-.6.9-.6h8c.4 0 .7.2.9.6l4.4 7.6zM12 7.5c-2.5 0-4.5 2-4.5 4.5s2 4.5 4.5 4.5 4.5-2 4.5-4.5-2-4.5-4.5-4.5z" />
+      </svg>
     )
   }
 
@@ -157,7 +162,15 @@ export function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }:
       {isAi && <ContributionGrid aiType={session.aiType!} />}
       <div className={styles.itemContent}>
         {isAi ? (
-          <span className={`${styles.aiIcon} ${session.aiType === 'claude' ? styles.aiIconClaude : styles.aiIconOpencode}`}>
+          <span
+            className={`${styles.aiIcon} ${
+              session.aiType === 'claude'
+                ? styles.aiIconClaude
+                : session.aiType === 'codex'
+                  ? styles.aiIconCodex
+                  : styles.aiIconOpencode
+            }`}
+          >
             {AI_ICONS[session.aiType!]}
           </span>
         ) : (

@@ -19,6 +19,7 @@ Thumbs.db
 *.swp
 *.swo
 CLAUDE**.md
+AGENTS.md
 
 # Logs
 *.log

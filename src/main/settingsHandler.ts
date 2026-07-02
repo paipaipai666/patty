@@ -26,7 +26,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customThemes: [],
   notifications: {
     claudeCode: true,
-    openCode: true
+    openCode: true,
+    codex: true
   }
 }
 
