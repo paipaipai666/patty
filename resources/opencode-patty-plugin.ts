@@ -19,14 +19,19 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
   }
 
   const notifyPatty = async (event: string) => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 1500)
     try {
       await fetch(`http://127.0.0.1:${PATTY_PORT}/hook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paneId: PANE_ID, event, source: 'opencode' })
+        body: JSON.stringify({ paneId: PANE_ID, event, source: 'opencode' }),
+        signal: controller.signal
       })
     } catch {
       // 静默忽略网络错误
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 

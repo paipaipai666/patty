@@ -1,6 +1,7 @@
 import * as pty from 'node-pty'
 import * as fs from 'fs'
 import * as http from 'http'
+import type { Socket } from 'net'
 import { execSync } from 'child_process'
 import { BrowserWindow } from 'electron'
 import { perfTimerStart, perfTimerEnd, perfCounter } from '../shared/perf'
@@ -14,6 +15,13 @@ const sessions = new Map<string, PtySession>()
 let hookServer: http.Server | null = null
 let hookPort = 0
 let onHookRequest: ((paneId: string, event: string, source: string) => void) | null = null
+const activeSockets = new Set<Socket>()
+
+function isIgnorableNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const code = (error as { code?: string }).code
+  return code === 'EPIPE' || code === 'ECONNRESET' || code === 'ECONNABORTED'
+}
 
 const SHELL_PATHS: Record<string, string> = {
   powershell: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
@@ -155,6 +163,26 @@ export function startHookServer(handler: (paneId: string, event: string, source:
     onHookRequest = handler
 
     hookServer = http.createServer((req, res) => {
+      // Catch EPIPE / ECONNRESET on broken connections so they don't bubble up
+      // as uncaught exceptions in the main process.
+      const socket = req.socket
+      const onRequestError = (err: Error) => {
+        if (!isIgnorableNetworkError(err)) {
+          console.error('[hook-server] request error:', err)
+        }
+      }
+      req.on('error', onRequestError)
+      res.on('error', onRequestError)
+      socket.on('error', onRequestError)
+
+      const detachRequestErrorHandlers = () => {
+        req.off('error', onRequestError)
+        res.off('error', onRequestError)
+        socket.off('error', onRequestError)
+      }
+      req.on('close', detachRequestErrorHandlers)
+      res.on('finish', detachRequestErrorHandlers)
+
       if (req.method !== 'POST' || req.url !== '/hook') {
         res.writeHead(404)
         res.end()
@@ -189,6 +217,11 @@ export function startHookServer(handler: (paneId: string, event: string, source:
       })
     })
 
+    hookServer.on('connection', (socket) => {
+      activeSockets.add(socket)
+      socket.once('close', () => activeSockets.delete(socket))
+    })
+
     hookServer.listen(0, '127.0.0.1', () => {
       const address = hookServer!.address()
       if (address && typeof address === 'object') {
@@ -204,12 +237,27 @@ export function startHookServer(handler: (paneId: string, event: string, source:
 }
 
 export function stopHookServer(): void {
-  if (hookServer) {
+  if (!hookServer) return
+
+  // Stop accepting new connections and destroy any active sockets so the
+  // process can shut down promptly even if a client (e.g. OpenCode) has
+  // already closed its end of the connection.
+  try {
     hookServer.close()
-    hookServer = null
-    hookPort = 0
-    onHookRequest = null
+  } catch (err) {
+    console.error('[hook-server] close error:', err)
   }
+
+  for (const socket of activeSockets) {
+    if (!socket.destroyed) {
+      socket.destroy()
+    }
+  }
+  activeSockets.clear()
+
+  hookServer = null
+  hookPort = 0
+  onHookRequest = null
 }
 
 export function getHookPort(): number {

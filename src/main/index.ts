@@ -9,6 +9,32 @@ import { perfMark, perfMeasure, perfMemoryMain, perfReport, perfDump, perfEnable
 
 let mainWindow: BrowserWindow | null = null
 
+function isIgnorableMainError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const code = (error as { code?: string }).code
+  // Network/pipe aborts from hook clients (e.g. OpenCode exiting) should not
+  // crash the app with a system error dialog.
+  return code === 'EPIPE' || code === 'ECONNRESET' || code === 'ECONNABORTED'
+}
+
+process.on('uncaughtException', (error) => {
+  if (isIgnorableMainError(error)) {
+    console.error('[main] ignored uncaught network abort:', error.message)
+    return
+  }
+  console.error('[main] fatal uncaught exception:', error)
+  process.exit(1)
+})
+
+process.on('unhandledRejection', (reason) => {
+  if (reason instanceof Error && isIgnorableMainError(reason)) {
+    console.error('[main] ignored unhandled network abort:', reason.message)
+    return
+  }
+  console.error('[main] fatal unhandled rejection:', reason)
+  process.exit(1)
+})
+
   // 映射原始事件到注意力类型
   function mapEventToAttentionType(event: string): string | null {
     // 权限请求/询问问题 → 蓝色
