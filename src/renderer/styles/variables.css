@@ -206,3 +206,63 @@
   --overlay-bg:        rgba(0, 0, 0, 0.20);
   --scrollbar-thumb:   rgba(0,0,0,0.12);
 }
+
+:root[data-theme="dracula"] {
+  --bg-app:            #282a36;
+  --bg-titlebar:       rgba(40,42,54,0.70);
+  --bg-sidebar:        rgba(40,42,54,0.70);
+  --bg-main:           rgba(30,31,40,0.50);
+  --bg-terminal:       #282a36;
+  --bg-input:          rgba(98,114,164,0.10);
+  --bg-context-menu:   rgba(40,42,54,0.90);
+  --bg-dropdown-menu:  rgba(40,42,54,0.92);
+  --text-primary:      #f8f8f2;
+  --text-secondary:    #bfbfbf;
+  --text-muted:        #6272a4;
+  --border-subtle:     rgba(98,114,164,0.15);
+  --border-medium:     rgba(98,114,164,0.25);
+  --accent:            #bd93f9;
+  --accent-hover:      #a375f1;
+  --neutral:           #6272a4;
+  --scrollbar-thumb:   rgba(98,114,164,0.20);
+}
+
+:root[data-theme="nord"] {
+  --bg-app:            #2e3440;
+  --bg-titlebar:       rgba(46,52,64,0.70);
+  --bg-sidebar:        rgba(46,52,64,0.70);
+  --bg-main:           rgba(36,40,50,0.50);
+  --bg-terminal:       #2e3440;
+  --bg-input:          rgba(136,192,208,0.08);
+  --bg-context-menu:   rgba(46,52,64,0.90);
+  --bg-dropdown-menu:  rgba(46,52,64,0.92);
+  --text-primary:      #eceff4;
+  --text-secondary:    #d8dee9;
+  --text-muted:        #4c566a;
+  --border-subtle:     rgba(136,192,208,0.10);
+  --border-medium:     rgba(136,192,208,0.18);
+  --accent:            #88c0d0;
+  --accent-hover:      #6fa8bc;
+  --neutral:           #4c566a;
+  --scrollbar-thumb:   rgba(136,192,208,0.15);
+}
+
+:root[data-theme="tokyo-night"] {
+  --bg-app:            #1a1b26;
+  --bg-titlebar:       rgba(26,27,38,0.70);
+  --bg-sidebar:        rgba(26,27,38,0.70);
+  --bg-main:           rgba(16,17,26,0.50);
+  --bg-terminal:       #1a1b26;
+  --bg-input:          rgba(125,133,175,0.08);
+  --bg-context-menu:   rgba(26,27,38,0.90);
+  --bg-dropdown-menu:  rgba(26,27,38,0.92);
+  --text-primary:      #c0caf5;
+  --text-secondary:    #a9b1d6;
+  --text-muted:        #565f89;
+  --border-subtle:     rgba(125,133,175,0.10);
+  --border-medium:     rgba(125,133,175,0.18);
+  --accent:            #7aa2f7;
+  --accent-hover:      #5d86e8;
+  --neutral:           #565f89;
+  --scrollbar-thumb:   rgba(125,133,175,0.15);
+}

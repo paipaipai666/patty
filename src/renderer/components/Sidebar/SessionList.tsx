@@ -58,20 +58,8 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const loaded = useSessionStore((s) => s.loaded)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const listRef = useRef<HTMLDivElement>(null)
   const prevCount = useRef(0)
-
-  // Build session→workspace lookup for grouping sessions under their workspace.
-  const sessionWorkspaceMap = useMemo(() => {
-    const map = new Map<string, { wsId: string; wsName: string; wsCollId: string | null }>()
-    for (const ws of workspaces) {
-      for (const sid of collectTreeSessionIds(ws.paneTree)) {
-        map.set(sid, { wsId: ws.id, wsName: ws.name, wsCollId: ws.collectionId })
-      }
-    }
-    return map
-  }, [workspaces])
 
   // Stagger entrance animation for new items
   useGSAP(() => {

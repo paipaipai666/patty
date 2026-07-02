@@ -15,11 +15,6 @@ import {
 import { singleLeafTree } from '../../shared/paneTreeNormalize'
 import type { PaneTree } from '../../shared/paneTypes'
 
-/** Build a single-leaf tree over a session id, with a stable pane id we control. */
-function leaf(sessionId: string, id = sessionId): PaneTree {
-  return { id, type: 'leaf', sessionId }
-}
-
 describe('splitLeaf', () => {
   it('turns a leaf into a split holding the original and new session', () => {
     const tree = singleLeafTree('s1', 'p1')

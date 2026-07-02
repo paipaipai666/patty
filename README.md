@@ -7,7 +7,6 @@ A modern, minimal terminal manager for Windows with a sidebar layout.
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 ![Electron](https://img.shields.io/badge/electron-33-47848F.svg)
-![Version](https://img.shields.io/badge/version-1.2.2-78489F.svg)
 
 </div>
 
@@ -23,7 +22,7 @@ A modern, minimal terminal manager for Windows with a sidebar layout.
 - **Status Bar** - Shows active session name, shell type, current working directory, and PID
 - **Configurable Shortcuts** - All keyboard shortcuts remappable in settings
 - **Session Persistence** - Sessions and collections survive restarts with auto-save
-- **AI Attention Notifications** - Visual indicators when Claude Code or OpenCode needs your input
+- **AI Attention Notifications** - Visual indicators when Claude Code, OpenCode, or Codex CLI needs your input
 
 ## Screenshot
 
@@ -70,12 +69,13 @@ Notification events trigger an animated contribution-grid style effect and a col
 
 - **Claude Code** - Via Notification and Stop hooks (PowerShell hook script)
 - **OpenCode** - Via plugin system (TypeScript plugin)
+- **Codex CLI** - Via lifecycle hooks (PowerShell hook script)
 
 ### Configuration
 
 Go to **Settings → Notifications** to enable or disable for each AI tool independently.
 
-> When disabled, external config files (Claude Code `settings.json`, OpenCode plugin directory) will not be modified.
+> When disabled, external config files (Claude Code `settings.json`, OpenCode plugin directory, Codex CLI `hooks.json`) will not be modified.
 
 ## Settings
 
@@ -87,7 +87,7 @@ The settings modal covers 5 categories:
 | **Terminal** | Cursor style (block/underline/bar), cursor blink, terminal opacity (40-100%), default shell |
 | **Shortcuts** | Remap all keyboard shortcuts via key capture |
 | **Layout** | Sidebar position (left/right) |
-| **Notifications** | Toggle AI notifications for Claude Code and OpenCode independently |
+| **Notifications** | Toggle AI notifications for Claude Code, OpenCode, and Codex CLI independently |
 
 Custom themes can be edited visually with color pickers or directly as JSON, with import/export support.
 

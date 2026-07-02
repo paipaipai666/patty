@@ -8,6 +8,8 @@
     "jsx": "react-jsx",
     "outDir": "./out",
     "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "baseUrl": ".",

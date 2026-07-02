@@ -3,10 +3,8 @@ import type { PaneTree, SplitDirection } from '../../shared/paneTypes'
 import type { Workspace, PersistedWorkspace } from '../../shared/workspaceTypes'
 import { newWorkspaceId } from '../../shared/workspaceNormalize'
 import {
-  normalizePersistedTree,
   singleLeafTree,
   toPersistedTree,
-  findLeafById,
   firstLeafId,
   treeHasSession,
   newPaneId

@@ -47,7 +47,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const initTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
-  const cleanupImeRef = useRef<(() => void) | null>(null)
   const renderCountRef = useRef(0)
   const updatePid = useSessionStore((s) => s.updatePid)
   const settings = useSettingsStore((s) => s.settings)

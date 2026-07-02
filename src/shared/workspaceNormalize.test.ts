@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { normalizeWorkspaces } from './workspaceNormalize'
-import { singleLeafTree } from './paneTreeNormalize'
-import type { PersistedWorkspace, Workspace } from './workspaceTypes'
+import type { PersistedWorkspace } from './workspaceTypes'
 import type { PersistedPaneTree } from './paneTypes'
 
 function known(...ids: string[]): Set<string> {
@@ -22,20 +21,6 @@ function pSplit(
   second: PersistedPaneTree
 ): PersistedPaneTree {
   return { id, type: 'split', direction, ratio, first, second }
-}
-
-function wsOf(w: Workspace): PersistedWorkspace {
-  // For test inputs we only need id/name/collectionId + a leaf tree.
-  return {
-    id: w.id,
-    name: w.name,
-    collectionId: w.collectionId,
-    paneTree:
-      w.paneTree.type === 'leaf'
-        ? pLeaf(w.paneTree.sessionId, w.paneTree.id)
-        : null,
-    focusedPaneId: w.focusedPaneId
-  }
 }
 
 describe('normalizeWorkspaces — modern path', () => {
