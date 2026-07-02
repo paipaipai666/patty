@@ -153,7 +153,15 @@ export default function App() {
   // Close the focused pane (not the session — the session goes to the sidebar
   // background). Its PTY is killed when the TerminalPane unmounts.
   const handleClosePane = useCallback(() => {
+    const focusedId = getFocusedSessionId()
     useWorkspaceStore.getState().closeFocused()
+    // Clear AI state for the closed pane. The session stays in the sidebar but
+    // its PTY is about to be killed by the unmounting TerminalPane — fallback
+    // cleanup (onPtyExit → setAiType) would be blocked by ptyManager's stale
+    // sessions.has() check, so we clear aiType here synchronously.
+    if (focusedId) {
+      useSessionStore.getState().setAiType(focusedId, null)
+    }
     // Sync sidebar highlight to whatever pane is now focused. When the last
     // pane was closed, closeFocused() clears activeWorkspaceId, so this resolves
     // to null and the sidebar highlight disappears.

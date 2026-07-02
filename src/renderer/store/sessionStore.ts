@@ -111,6 +111,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // TerminalPane's onExit handler writes "[Process exited]" to the terminal.
       const offPtyExit = window.terminalAPI.onPtyExit((paneId) => {
         get().setAttention(paneId, null)
+        get().setAiType(paneId, null)
       })
 
       ipcCleanup = () => {
