@@ -1,6 +1,16 @@
-import type { SessionColor, ShellType, Collection } from '../renderer/store/sessionStore'
+import type { ShellType } from './settingsTypes'
 import type { PersistedPaneTree } from './paneTypes'
 import type { PersistedWorkspace } from './workspaceTypes'
+
+export type SessionColor = 'blue' | 'green' | 'amber' | 'coral' | 'purple' | 'gray'
+
+export interface Collection {
+  id: string
+  name: string
+  parentId: string | null
+  collapsed: boolean
+  createdAt: number
+}
 
 export interface PersistedSession {
   id: string

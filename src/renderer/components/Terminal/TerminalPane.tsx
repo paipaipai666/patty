@@ -33,6 +33,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   // Interval handle for the atlas page-count guard (see webglAddon init block).
   // Cleared on unmount.
   const atlasClearTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const ptyRetryCountRef = useRef(0)
+  const PTY_MAX_RETRIES = 5
   // One IIP stream patcher per terminal instance. It holds a small bounded buffer
   // across chunks, so it must live for the lifetime of the terminal (created once,
   // disposed when the terminal unmounts). useRef gives us a stable instance without
@@ -266,6 +268,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     })
 
     // PTY lifecycle
+    ptyRetryCountRef.current = 0
     const startPty = () => {
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
@@ -275,13 +278,19 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
           if (result.success && result.pid) {
             updatePid(session.id, result.pid)
             ptyCreatedRef.current = true
+            ptyRetryCountRef.current = 0
             cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
               term.write(iipPatcherRef.current!(data))
             })
             cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
               ptyCreatedRef.current = false
               term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
-              setTimeout(() => startPty(), 500)
+              ptyRetryCountRef.current++
+              if (ptyRetryCountRef.current < PTY_MAX_RETRIES) {
+                setTimeout(() => startPty(), 500)
+              } else {
+                term.write('\x1b[90m[Auto-restart limit reached]\x1b[0m\r\n')
+              }
             })
           }
         })

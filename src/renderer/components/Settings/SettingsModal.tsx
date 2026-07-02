@@ -777,21 +777,21 @@ function NotificationsSection({
   const toggleClaudeCode = () => {
     updateSetting('notifications', {
       ...settings.notifications,
-      claudeCode: !settings.notifications.claudeCode
+      claudeCode: !settings.notifications?.claudeCode
     })
   }
 
   const toggleOpenCode = () => {
     updateSetting('notifications', {
       ...settings.notifications,
-      openCode: !settings.notifications.openCode
+      openCode: !settings.notifications?.openCode
     })
   }
 
   const toggleCodex = () => {
     updateSetting('notifications', {
       ...settings.notifications,
-      codex: !settings.notifications.codex
+      codex: !settings.notifications?.codex
     })
   }
 

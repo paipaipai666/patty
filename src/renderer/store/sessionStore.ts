@@ -1,17 +1,7 @@
 import { create } from 'zustand'
-import type { PersistedState } from '../shared/stateTypes'
+import type { PersistedState, SessionColor, Collection } from '../shared/stateTypes'
+import type { ShellType } from '../shared/settingsTypes'
 import { requestStateSave, saveStateNow } from './statePersistence'
-
-export type SessionColor = 'blue' | 'green' | 'amber' | 'coral' | 'purple' | 'gray'
-export type ShellType = 'powershell' | 'pwsh' | 'cmd' | 'gitbash' | 'wsl'
-
-export interface Collection {
-  id: string
-  name: string
-  parentId: string | null
-  collapsed: boolean
-  createdAt: number
-}
 
 export interface TerminalSession {
   id: string
