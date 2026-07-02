@@ -1,0 +1,33 @@
+.split {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.splitHorizontal {
+  flex-direction: row;
+}
+
+.splitVertical {
+  flex-direction: column;
+}
+
+.first {
+  flex: var(--pane-first-flex, 1 1 0);
+  min-width: 0;
+  min-height: 0;
+}
+
+.second {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .split {
+    transition: none;
+  }
+}

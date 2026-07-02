@@ -17,6 +17,15 @@ export interface TerminalSession {
 
 export const SESSION_COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
 
+export const SESSION_COLOR_VARS: Record<SessionColor, string> = {
+  blue: 'var(--color-blue)',
+  green: 'var(--color-green)',
+  amber: 'var(--color-amber)',
+  coral: 'var(--color-coral)',
+  purple: 'var(--color-purple)',
+  gray: 'var(--color-gray)'
+}
+
 function getNextColor(index: number): SessionColor {
   return SESSION_COLORS[index % SESSION_COLORS.length]
 }

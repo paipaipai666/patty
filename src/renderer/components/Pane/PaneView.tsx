@@ -1,9 +1,9 @@
 import { useCallback, useState, useRef } from 'react'
-import type { TerminalSession } from '../../store/sessionStore'
+import { SESSION_COLOR_VARS, type TerminalSession } from '../../store/sessionStore'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { TerminalPane } from '../Terminal/TerminalPane'
 import { DropTargetOverlay, type DropZone } from './DropTargetOverlay'
-import styles from './Pane.module.css'
+import styles from './PaneView.module.css'
 
 interface PaneViewProps {
   session: TerminalSession
@@ -131,15 +131,7 @@ export function PaneView({ session, focused, onFocus, paneId, visible = true }: 
   )
 }
 
-/** Map a session color to the CSS var used by SessionItem's COLOR_MAP. */
+/** Map a session color to the matching CSS custom property. */
 function dotColor(color: TerminalSession['color']): string {
-  const map: Record<TerminalSession['color'], string> = {
-    blue: 'var(--color-blue)',
-    green: 'var(--color-green)',
-    amber: 'var(--color-amber)',
-    coral: 'var(--color-coral)',
-    purple: 'var(--color-purple)',
-    gray: 'var(--color-gray)'
-  }
-  return map[color] ?? 'var(--color-blue)'
+  return SESSION_COLOR_VARS[color] ?? 'var(--color-blue)'
 }

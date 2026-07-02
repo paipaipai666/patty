@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import type { SplitDirection } from '../../../shared/paneTypes'
-import styles from './Pane.module.css'
+import styles from './Sash.module.css'
 
 interface SashProps {
   /** The split node this sash belongs to. Dragging updates its ratio. */

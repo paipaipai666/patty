@@ -4,7 +4,7 @@ import { useSessionStore } from '../../store/sessionStore'
 import type { PaneTree as PaneTreeNode, PaneSplit } from '../../../shared/paneTypes'
 import { PaneView } from './PaneView'
 import { Sash } from './Sash'
-import styles from './Pane.module.css'
+import styles from './PaneTree.module.css'
 
 /**
  * Recursively render the pane split trees of all workspaces.

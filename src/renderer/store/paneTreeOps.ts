@@ -7,7 +7,7 @@
  */
 import type { PaneTree, PaneLeaf, PaneSplit, SplitDirection } from '../../shared/paneTypes'
 import { clampRatio } from '../../shared/paneTypes'
-import { newPaneId } from '../../shared/paneTreeNormalize'
+import { newPaneId, firstLeafId as normalizeFirstLeafId, collectTreeSessionIds } from '../../shared/paneTreeNormalize'
 
 /** A update applied to the node whose id == targetId. Returns the new subtree. */
 type NodeUpdate = (node: PaneTree) => PaneTree
@@ -158,8 +158,7 @@ export function findLeaf(tree: PaneTree, leafId: string): PaneLeaf | null {
 
 /** First leaf id in document order (top-left-most). */
 export function firstLeafId(tree: PaneTree): string {
-  if (tree.type === 'leaf') return tree.id
-  return firstLeafId(tree.first)
+  return normalizeFirstLeafId(tree)!
 }
 
 /** All leaf pane ids in document order. */
@@ -171,9 +170,7 @@ export function collectLeafIds(tree: PaneTree | null): string[] {
 
 /** All session ids currently visible in the tree, in document order. */
 export function collectSessionIds(tree: PaneTree | null): string[] {
-  if (!tree) return []
-  if (tree.type === 'leaf') return [tree.sessionId]
-  return [...collectSessionIds(tree.first), ...collectSessionIds(tree.second)]
+  return [...collectTreeSessionIds(tree)]
 }
 
 /** Nearest leaf id following `currentId` in document order, wrapping around. */

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import gsap from 'gsap'
-import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
+import { useSessionStore, SESSION_COLOR_VARS, type TerminalSession } from '../../store/sessionStore'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
@@ -10,15 +10,6 @@ interface SessionItemProps {
   onClose: (id: string) => void
   onSelect: (id: string) => void
   depth?: number
-}
-
-const COLOR_MAP: Record<string, string> = {
-  blue: 'var(--color-blue)',
-  green: 'var(--color-green)',
-  amber: 'var(--color-amber)',
-  coral: 'var(--color-coral)',
-  purple: 'var(--color-purple)',
-  gray: 'var(--color-gray)'
 }
 
 export function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }: SessionItemProps) {
@@ -176,7 +167,7 @@ export function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }:
         ) : (
           <span
             className={styles.colorDot}
-            style={{ backgroundColor: COLOR_MAP[session.color] || COLOR_MAP.blue }}
+            style={{ backgroundColor: SESSION_COLOR_VARS[session.color] || 'var(--color-blue)' }}
           />
         )}
         {isEditing ? (

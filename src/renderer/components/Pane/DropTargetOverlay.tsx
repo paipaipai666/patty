@@ -1,4 +1,4 @@
-import styles from './Pane.module.css'
+import styles from './DropTargetOverlay.module.css'
 
 export type DropZone = 'left' | 'right' | 'top' | 'bottom' | 'center' | null
 

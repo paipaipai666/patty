@@ -1,0 +1,49 @@
+.sash {
+  flex: 0 0 6px;
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+
+.sash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--border-subtle);
+  transition: background var(--transition-fast);
+}
+
+.sash:hover::before,
+.sashDragging::before {
+  background: var(--accent);
+}
+
+.sashHorizontal {
+  cursor: col-resize;
+}
+.sashHorizontal::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
+
+.sashVertical {
+  cursor: row-resize;
+}
+.sashVertical::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -4px;
+  bottom: -4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sash::before {
+    transition: none;
+  }
+}

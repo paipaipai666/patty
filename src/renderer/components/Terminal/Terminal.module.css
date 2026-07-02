@@ -81,3 +81,12 @@
 .pane :global(.xterm-image-layer) {
   pointer-events: none;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .area {
+    transition: none;
+  }
+  .area::after {
+    transition: none;
+  }
+}
