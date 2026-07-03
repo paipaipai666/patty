@@ -155,6 +155,15 @@ describe('insertNeighbor', () => {
     insertNeighbor(tree, 'p1', 's2', 'horizontal', 'second')
     expect(JSON.stringify(tree)).toBe(snapshot)
   })
+
+  it('places the new leaf on the first side when side=first', () => {
+    const tree = singleLeafTree('s1', 'p1')
+    const next = insertNeighbor(tree, 'p1', 's2', 'vertical', 'first', 0.3)
+    if (next.type !== 'split') return
+    expect(next.first).toEqual(expect.objectContaining({ sessionId: 's2' }))
+    expect(next.second).toEqual(expect.objectContaining({ sessionId: 's1' }))
+    expect(next.ratio).toBeCloseTo(0.7, 10)
+  })
 })
 
 describe('removeLeavesBySession', () => {
@@ -242,8 +251,21 @@ describe('navigation helpers', () => {
     expect(collectLeafIds(buildTree()).length).toBe(3)
   })
 
+  it('collectLeafIds returns empty array for null tree', () => {
+    expect(collectLeafIds(null)).toEqual([])
+  })
+
+  it('collectLeafIds returns id of a single leaf', () => {
+    const ids = collectLeafIds(singleLeafTree('s1', 'p1'))
+    expect(ids).toEqual(['p1'])
+  })
+
   it('collectSessionIds returns sessions in document order', () => {
     expect(collectSessionIds(buildTree())).toEqual(['s1', 's2', 's3'])
+  })
+
+  it('collectSessionIds returns empty set for null tree', () => {
+    expect(collectSessionIds(null)).toEqual([])
   })
 
   it('firstLeafId returns the top-left-most leaf', () => {
@@ -259,10 +281,39 @@ describe('navigation helpers', () => {
     expect(nextLeafId(t, null)).toBe(ids[0])
   })
 
+  it('nextLeafId returns null for empty tree', () => {
+    const t = singleLeafTree('s1', 'p1')
+    const { tree: empty } = removeLeaf(t, 'p1')
+    expect(nextLeafId(empty as any, null)).toBeNull()
+  })
+
+  it('nextLeafId defaults to first id when currentId is not in tree', () => {
+    const t = buildTree()
+    expect(nextLeafId(t, 'nonexistent')).toBe(collectLeafIds(t)[0])
+  })
+
   it('prevLeafId wraps around the document order', () => {
     const t = buildTree()
     const ids = collectLeafIds(t)
     expect(prevLeafId(t, ids[1])).toBe(ids[0])
     expect(prevLeafId(t, ids[0])).toBe(ids[2]) // wrap
+  })
+
+  it('prevLeafId returns null for empty tree', () => {
+    const t = singleLeafTree('s1', 'p1')
+    const { tree: empty } = removeLeaf(t, 'p1')
+    expect(prevLeafId(empty as any, null)).toBeNull()
+  })
+
+  it('prevLeafId defaults to last id when currentId is null', () => {
+    const t = buildTree()
+    const ids = collectLeafIds(t)
+    expect(prevLeafId(t, null)).toBe(ids[ids.length - 1])
+  })
+
+  it('prevLeafId defaults to last id when currentId is not in tree', () => {
+    const t = buildTree()
+    const ids = collectLeafIds(t)
+    expect(prevLeafId(t, 'nonexistent')).toBe(ids[ids.length - 1])
   })
 })

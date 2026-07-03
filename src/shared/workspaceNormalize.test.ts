@@ -114,6 +114,18 @@ describe('normalizeWorkspaces — modern path', () => {
     const { workspaces } = normalizeWorkspaces([ws], 'w1', null, null, known('s1'), null)
     expect(workspaces[0].name).toBe('Workspace 1')
   })
+
+  it('activates the first workspace when persistedActiveWorkspaceId is null', () => {
+    const ws: PersistedWorkspace = { id: 'w1', name: 'A', collectionId: null, paneTree: pLeaf('s1'), focusedPaneId: 's1' }
+    const { activeWorkspaceId } = normalizeWorkspaces([ws], null, null, null, known('s1'), null)
+    expect(activeWorkspaceId).toBe('w1')
+  })
+
+  it('activates the first workspace when persistedActiveWorkspaceId is undefined', () => {
+    const ws: PersistedWorkspace = { id: 'w1', name: 'A', collectionId: null, paneTree: pLeaf('s1'), focusedPaneId: 's1' }
+    const { activeWorkspaceId } = normalizeWorkspaces([ws], undefined, null, null, known('s1'), null)
+    expect(activeWorkspaceId).toBe('w1')
+  })
 })
 
 describe('normalizeWorkspaces — legacy migration', () => {
@@ -173,6 +185,28 @@ describe('normalizeWorkspaces — legacy migration', () => {
     const legacyTree = pSplit('sp', 'horizontal', 0.5, pLeaf('s1', 'a'), pLeaf('s2', 'b'))
     const { workspaces } = normalizeWorkspaces(undefined, null, legacyTree, 'b', known('s1', 's2'), 's1')
     expect(workspaces[0].focusedPaneId).toBe('b')
+  })
+
+  it('falls back to first leaf when legacy focused pane id is pruned', () => {
+    const legacyTree = pSplit('sp', 'horizontal', 0.5, pLeaf('s1', 'a'), pLeaf('dead', 'b'))
+    const { workspaces } = normalizeWorkspaces(undefined, null, legacyTree, 'dead', known('s1'), 's1')
+    expect(workspaces[0].focusedPaneId).toBe('a')
+  })
+
+  it('defaults active workspace to first when legacyActiveSessionId is null', () => {
+    const legacyTree = pSplit('sp', 'horizontal', 0.5, pLeaf('s1', 'a'), pLeaf('s2', 'b'))
+    const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
+      undefined, null, legacyTree, 'a', known('s1', 's2'), null
+    )
+    expect(activeWorkspaceId).toBe(workspaces[0].id)
+  })
+
+  it('defaults active workspace to first when legacyActiveSessionId does not match any', () => {
+    const legacyTree = pSplit('sp', 'horizontal', 0.5, pLeaf('s1', 'a'), pLeaf('s2', 'b'))
+    const { activeWorkspaceId } = normalizeWorkspaces(
+      undefined, null, legacyTree, 'a', known('s1', 's2'), 'nonexistent'
+    )
+    expect(activeWorkspaceId).toBeDefined()
   })
 })
 
