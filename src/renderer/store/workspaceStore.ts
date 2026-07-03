@@ -12,6 +12,7 @@ import {
 import {
   splitLeaf,
   removeLeaf,
+  removeLeavesBySession,
   replaceLeafSession,
   setRatio,
   insertNeighbor,
@@ -270,18 +271,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   removeSessionEverywhere: (sessionId) => {
     const { workspaces, activeWorkspaceId } = get()
-    let nextWorkspaces = [...workspaces]
-    let nextActiveId = activeWorkspaceId
-
-    nextWorkspaces = nextWorkspaces
+    const nextWorkspaces = workspaces
       .map((w) => {
-        let tree: PaneTree | null = w.paneTree
-        let leafId = findLeafIdBySession(tree, sessionId)
-        while (leafId) {
-          const res = removeLeaf(tree!, leafId)
-          tree = res.tree
-          leafId = findLeafIdBySession(tree, sessionId)
-        }
+        const { tree, removedCount } = removeLeavesBySession(w.paneTree, sessionId)
+        if (removedCount === 0) return w
         if (!tree) return null
         let focused = w.focusedPaneId
         if (focused && !findLeaf(tree, focused)) {
@@ -291,9 +284,10 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       })
       .filter(Boolean) as Workspace[]
 
-    if (nextActiveId && !nextWorkspaces.some((w) => w.id === nextActiveId)) {
-      nextActiveId = nextWorkspaces[0]?.id ?? null
-    }
+    const nextActiveId =
+      activeWorkspaceId && nextWorkspaces.some((w) => w.id === activeWorkspaceId)
+        ? activeWorkspaceId
+        : nextWorkspaces[0]?.id ?? null
 
     set({ workspaces: nextWorkspaces, activeWorkspaceId: nextActiveId })
     requestStateSave()

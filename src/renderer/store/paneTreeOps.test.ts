@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   splitLeaf,
   removeLeaf,
+  removeLeavesBySession,
   replaceLeafSession,
   setRatio,
   insertNeighbor,
@@ -152,6 +153,77 @@ describe('insertNeighbor', () => {
     const tree = singleLeafTree('s1', 'p1')
     const snapshot = JSON.stringify(tree)
     insertNeighbor(tree, 'p1', 's2', 'horizontal', 'second')
+    expect(JSON.stringify(tree)).toBe(snapshot)
+  })
+})
+
+describe('removeLeavesBySession', () => {
+  it('removes a single matching leaf and collapses the tree', () => {
+    let tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
+    const { tree: next, removedCount } = removeLeavesBySession(tree, 's2')
+
+    expect(removedCount).toBe(1)
+    expect(next?.type).toBe('leaf')
+    expect((next as any)?.sessionId).toBe('s1')
+  })
+
+  it('removes multiple leaves with the same sessionId in one traversal', () => {
+    let tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 'sX', 'horizontal')
+    const s1Id = collectLeafIds(tree).find((id) => findLeaf(tree, id)?.sessionId === 's1')!
+    tree = splitLeaf(tree, s1Id, 'sX', 'vertical')
+
+    const { tree: next, removedCount } = removeLeavesBySession(tree, 'sX')
+
+    expect(removedCount).toBe(2)
+    expect(next?.type).toBe('leaf')
+    expect((next as any)?.sessionId).toBe('s1')
+  })
+
+  it('collapses recursively when both children of a split are removed', () => {
+    let tree = singleLeafTree('sX', 'p1')
+    tree = splitLeaf(tree, 'p1', 'sY', 'horizontal')
+    const sYId = collectLeafIds(tree).find((id) => findLeaf(tree, id)?.sessionId === 'sY')!
+    tree = splitLeaf(tree, sYId, 'sX', 'vertical')
+
+    const { tree: next, removedCount } = removeLeavesBySession(tree, 'sX')
+
+    expect(removedCount).toBe(2)
+    expect(next?.type).toBe('leaf')
+    expect((next as any)?.sessionId).toBe('sY')
+  })
+
+  it('returns the same tree reference when no leaf matches', () => {
+    const tree = singleLeafTree('s1', 'p1')
+    const { tree: next, removedCount } = removeLeavesBySession(tree, 'nonexistent')
+
+    expect(removedCount).toBe(0)
+    expect(next).toBe(tree)
+  })
+
+  it('returns null when every leaf matches', () => {
+    let tree = splitLeaf(singleLeafTree('sX', 'p1'), 'p1', 'sX', 'horizontal')
+    const { tree: next, removedCount } = removeLeavesBySession(tree, 'sX')
+
+    expect(removedCount).toBe(2)
+    expect(next).toBeNull()
+  })
+
+  it('preserves siblings when removing from one side of a split', () => {
+    let tree = singleLeafTree('s1', 'p1')
+    tree = splitLeaf(tree, 'p1', 's2', 'horizontal')
+    const s2Id = collectLeafIds(tree).find((id) => findLeaf(tree, id)?.sessionId === 's2')!
+    tree = splitLeaf(tree, s2Id, 'sX', 'vertical')
+
+    const { tree: next, removedCount } = removeLeavesBySession(tree, 'sX')
+
+    expect(removedCount).toBe(1)
+    expect(collectSessionIds(next!)).toEqual(['s1', 's2'])
+  })
+
+  it('does not mutate the input tree', () => {
+    let tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
+    const snapshot = JSON.stringify(tree)
+    removeLeavesBySession(tree, 's2')
     expect(JSON.stringify(tree)).toBe(snapshot)
   })
 })

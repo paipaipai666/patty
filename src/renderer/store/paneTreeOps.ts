@@ -90,6 +90,40 @@ export function removeLeaf(tree: PaneTree, leafId: string): RemoveResult {
   return { tree: after, nextFocusId: next }
 }
 
+export interface RemoveManyResult {
+  tree: PaneTree | null
+  removedCount: number
+}
+
+/**
+ * Remove every leaf whose sessionId matches `sessionId` in a single
+ * traversal. Collapsing propagates upward naturally: a split whose both
+ * children vanish simply returns null itself. When no leaf matches, the
+ * original tree reference is returned unchanged.
+ */
+export function removeLeavesBySession(tree: PaneTree, sessionId: string): RemoveManyResult {
+  let removedCount = 0
+
+  function recurse(node: PaneTree): PaneTree | null {
+    if (node.type === 'leaf') {
+      if (node.sessionId === sessionId) {
+        removedCount++
+        return null
+      }
+      return node
+    }
+    const first = recurse(node.first)
+    const second = recurse(node.second)
+    if (first && second) {
+      if (first === node.first && second === node.second) return node
+      return { ...node, first, second }
+    }
+    return first ?? second ?? null
+  }
+
+  return { tree: recurse(tree), removedCount }
+}
+
 /** Remove a node by id; returns null if the whole tree is gone. */
 function removeNode(tree: PaneTree, removeId: string): PaneTree | null {
   if (tree.id === removeId) return null // this node is the one being removed
