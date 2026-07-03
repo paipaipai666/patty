@@ -40,18 +40,18 @@ const terminalAPI = {
     ipcRenderer.send('pty:resetAttention', id)
   },
 
-  onAttentionChange: (callback: (paneId: string, eventType: string | null, aiType?: string | null) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, paneId: string, eventType: string | null, aiType?: string | null) =>
-      callback(paneId, eventType, aiType)
+  onAttentionChange: (callback: (sessionId: string, eventType: string | null, aiType?: string | null) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, sessionId: string, eventType: string | null, aiType?: string | null) =>
+      callback(sessionId, eventType, aiType)
     ipcRenderer.on('pty:attn', handler)
     return () => {
       ipcRenderer.removeListener('pty:attn', handler)
     }
   },
 
-  onPtyExit: (callback: (paneId: string, exitCode: number) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, paneId: string, exitCode: number) =>
-      callback(paneId, exitCode)
+  onPtyExit: (callback: (sessionId: string, exitCode: number) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, sessionId: string, exitCode: number) =>
+      callback(sessionId, exitCode)
     ipcRenderer.on('pty:exit', handler)
     return () => {
       ipcRenderer.removeListener('pty:exit', handler)
@@ -96,8 +96,9 @@ const terminalAPI = {
 
   // State persistence
   stateLoad: () => ipcRenderer.invoke('state:load') as Promise<PersistedState>,
-  stateSave: (state: PersistedState) =>
-    ipcRenderer.invoke('state:save', state) as Promise<{ success: boolean }>,
+  stateSave: (state: PersistedState) => {
+    ipcRenderer.send('state:save', state)
+  },
 
   // Perf
   perfEnabled: process.env.PATTY_PERF === '1',

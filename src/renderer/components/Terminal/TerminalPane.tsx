@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
-import { Terminal } from '@xterm/xterm'
+import { Terminal, type ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
@@ -92,7 +92,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     cleanupDataRef.current = null
     cleanupExitRef.current = null
 
-    const term = new Terminal({
+    const termOptions: Record<string, unknown> = {
       fontFamily: `'${settings.fontFamily}', Consolas, 'Courier New', monospace`,
       fontSize: settings.fontSize,
       lineHeight: 1.2,
@@ -106,7 +106,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       scrollback: 10000,
       convertEol: false,
       rescaleOverlappingGlyphs: true
-    })
+    }
+    const term = new Terminal(termOptions as ITerminalOptions)
 
     // Copy/paste
     term.attachCustomKeyEventHandler((e) => {
@@ -238,7 +239,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     // affected; WebGL contexts use getContext('webgl') which is untouched.
     if (!(window as any).__imageAddonPatchApplied) {
       const _orig = HTMLCanvasElement.prototype.getContext
-      HTMLCanvasElement.prototype.getContext = function (type: string, options?: any) {
+      HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, options?: any) {
         if (type === '2d' && options?.desynchronized) {
           options = { ...options, desynchronized: false }
         }

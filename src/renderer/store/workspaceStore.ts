@@ -278,7 +278,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         let tree: PaneTree | null = w.paneTree
         let leafId = findLeafIdBySession(tree, sessionId)
         while (leafId) {
-          const res = removeLeaf(tree, leafId)
+          const res = removeLeaf(tree!, leafId)
           tree = res.tree
           leafId = findLeafIdBySession(tree, sessionId)
         }

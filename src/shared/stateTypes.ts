@@ -18,6 +18,7 @@ export interface PersistedSession {
   color: SessionColor
   cwd: string
   shell: ShellType
+  createdAt: number
   collectionId: string | null
 }
 

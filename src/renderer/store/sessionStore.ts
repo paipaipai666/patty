@@ -1,7 +1,9 @@
 import { create } from 'zustand'
-import type { PersistedState, SessionColor, Collection } from '../shared/stateTypes'
-import type { ShellType } from '../shared/settingsTypes'
+import type { PersistedState, SessionColor, Collection } from '../../shared/stateTypes'
+import type { ShellType } from '../../shared/settingsTypes'
 import { requestStateSave, saveStateNow } from './statePersistence'
+
+export type { Collection }
 
 export interface TerminalSession {
   id: string
@@ -87,7 +89,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     try {
       const state = await window.terminalAPI.stateLoad()
       set({
-        sessions: state.sessions.map((s) => ({ ...s, pid: 0, aiType: null })),
+        sessions: state.sessions.map((s) => ({ ...s, createdAt: s.createdAt ?? Date.now(), pid: 0, aiType: null })),
         collections: state.collections,
         activeSessionId: state.activeSessionId,
         sidebarVisible: state.sidebarVisible,
@@ -98,20 +100,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Listen for attention changes from hook server
       // Guard against duplicate registration (e.g. React StrictMode remount)
       if (ipcCleanup) ipcCleanup()
-      const offAttention = window.terminalAPI.onAttentionChange((paneId, eventType, aiType) => {
-        get().setAttention(paneId, eventType)
-        // Sync aiType when the parameter is not undefined
+      const offAttention = window.terminalAPI.onAttentionChange((sessionId, eventType, aiType) => {
+        get().setAttention(sessionId, eventType)
         if (aiType !== undefined) {
-          get().setAiType(paneId, aiType ?? null)
+          get().setAiType(sessionId, (aiType ?? null) as 'claude' | 'opencode' | 'codex' | null)
         }
       })
 
       // Listen for PTY exit to cleanup attention state
       // Don't remove the session — let the user close it manually.
       // TerminalPane's onExit handler writes "[Process exited]" to the terminal.
-      const offPtyExit = window.terminalAPI.onPtyExit((paneId) => {
-        get().setAttention(paneId, null)
-        get().setAiType(paneId, null)
+      const offPtyExit = window.terminalAPI.onPtyExit((sessionId) => {
+        get().setAttention(sessionId, null)
+        get().setAiType(sessionId, null)
       })
 
       ipcCleanup = () => {
@@ -132,7 +133,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   saveState: async () => {
-    await saveStateNow()
+    saveStateNow()
   },
 
   addSession: (opts = {}) => {
@@ -334,18 +335,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setAttention: (id: string, eventType: string | null) => {
-    if (eventType !== null) {
-      // Setting attention: debounce if within 1 second window
-      if (attentionTimers[id]) return
-      attentionTimers[id] = setTimeout(() => {
-        delete attentionTimers[id]
-      }, 1000)
-    } else {
-      // Reset: clear debounce timer so next notification isn't blocked
+    if (eventType === null) {
+      // Reset: clear any active timer and write immediately
       if (attentionTimers[id]) {
         clearTimeout(attentionTimers[id])
         delete attentionTimers[id]
       }
+    } else {
+      // Coalesce attention-on events within 1s window
+      if (attentionTimers[id]) return
+      attentionTimers[id] = setTimeout(() => {
+        delete attentionTimers[id]
+      }, 1000)
     }
     set((state) => ({
       attentionMap: { ...state.attentionMap, [id]: eventType }

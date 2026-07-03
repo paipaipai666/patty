@@ -21,14 +21,26 @@ export function configureStatePersistence(builder: () => PersistedState | null):
 export function requestStateSave(): void {
   if (saveTimer) clearTimeout(saveTimer)
   saveTimer = setTimeout(() => {
-    void saveStateNow()
+    saveStateNow()
   }, SAVE_DELAY_MS)
 }
 
 /** Flush state immediately. Used by explicit saveState calls and tests/manual checks. */
-export async function saveStateNow(): Promise<void> {
+export function saveStateNow(): void {
   if (!buildPersistedState) return
   const state = buildPersistedState()
-  if (!state) return
-  await window.terminalAPI.stateSave(state)
+  if (state) {
+    window.terminalAPI.stateSave(state)
+  }
+}
+
+/** Register flush-on-close handler so pending writes aren't lost. */
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+      saveStateNow()
+    }
+  })
 }

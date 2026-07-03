@@ -60,9 +60,8 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
     return loadState()
   })
 
-  ipcMain.handle('state:save', (_event, state: PersistedState) => {
+  ipcMain.on('state:save', (_event, state: PersistedState) => {
     saveState(state)
-    return { success: true }
   })
 
   // Directory picker
