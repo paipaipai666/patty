@@ -1,0 +1,1 @@
+@set PROMPT=$E]7;file://%COMPUTERNAME%/$P$E\$P$G

@@ -11,6 +11,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { getThemeColors } from '../../styles/themes'
 import styles from './Terminal.module.css'
 import { createIIPStreamPatcher } from './iipStreamPatcher'
+import { registerOsc7Handler } from '../../utils/osc7Handler'
 
 interface TerminalPaneProps {
   session: TerminalSession
@@ -49,6 +50,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const cleanupExitRef = useRef<(() => void) | null>(null)
   const renderCountRef = useRef(0)
   const updatePid = useSessionStore((s) => s.updatePid)
+  const updateCwd = useSessionStore((s) => s.updateCwd)
   const settings = useSettingsStore((s) => s.settings)
 
   if (perfEnabled) {
@@ -260,6 +262,11 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     fitAddonRef.current = fitAddon
     webglAddonRef.current = webglAddon
 
+    // OSC 7 — shell cwd reporting injected by pwsh.ps1 / cmd-prompt.cmd
+    const osc7Disposable = registerOsc7Handler(term, session.id, (id, cwd) => {
+      updateCwd(id, cwd)
+    })
+
     // Keyboard input → PTY + mark used
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
@@ -303,6 +310,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }, 50)
 
     return () => {
+      osc7Disposable.dispose()
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
       if (atlasClearTimerRef.current) {
         clearInterval(atlasClearTimerRef.current)

@@ -72,6 +72,10 @@
       {
         "from": "resources/opencode-patty-plugin.ts",
         "to": "resources/opencode-patty-plugin.ts"
+      },
+      {
+        "from": "scripts/shell-integration",
+        "to": "scripts/shell-integration"
       }
     ],
     "win": {
