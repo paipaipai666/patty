@@ -47,6 +47,7 @@ interface SessionStore {
   renameSession: (id: string, title: string) => void
   setColor: (id: string, color: SessionColor) => void
   updatePid: (id: string, pid: number) => void
+  updateCwd: (id: string, cwd: string) => void
   moveSessionToCollection: (sessionId: string, collectionId: string | null) => void
 
   addCollection: (name: string, parentId?: string | null) => string
@@ -209,6 +210,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, pid } : s))
     }))
+  },
+
+  updateCwd: (id: string, cwd: string) => {
+    const session = get().sessions.find((s) => s.id === id)
+    if (!session || session.cwd === cwd) return
+    set((state) => ({
+      sessions: state.sessions.map((s) => (s.id === id ? { ...s, cwd } : s))
+    }))
+    requestStateSave()
   },
 
   moveSessionToCollection: (sessionId: string, collectionId: string | null) => {

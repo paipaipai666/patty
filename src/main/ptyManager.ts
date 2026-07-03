@@ -1,9 +1,10 @@
 import * as pty from 'node-pty'
 import * as fs from 'fs'
+import * as path from 'path'
 import * as http from 'http'
 import type { Socket } from 'net'
 import { execSync } from 'child_process'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, app } from 'electron'
 import { perfTimerStart, perfTimerEnd, perfCounter } from '../shared/perf'
 
 export interface PtySession {
@@ -80,12 +81,41 @@ export function getShellPath(shellName?: string): string {
   return detectDefaultShell()
 }
 
+function getScriptPath(filename: string): string {
+  const base = app.isPackaged
+    ? process.resourcesPath
+    : app.getAppPath()
+  return path.join(base, 'scripts', 'shell-integration', filename)
+}
+
+function getShellSpawnArgs(shellPath: string): string[] {
+  const name = path.basename(shellPath, '.exe').toLowerCase()
+
+  // pwsh / powershell (含 pwsh-preview)
+  // Shell integration loaded via -Command so it runs after $PROFILE.
+  // -ExecutionPolicy Bypass only affects this pwsh instance.
+  if (name.startsWith('pwsh') || name.startsWith('powershell')) {
+    const scriptPath = getScriptPath('pwsh.ps1')
+    return ['-NoLogo', '-NoExit', '-ExecutionPolicy', 'Bypass', '-Command', `. '${scriptPath}'`]
+  }
+
+  // cmd.exe
+  if (name === 'cmd') {
+    const cmdFile = getScriptPath('cmd-prompt.cmd')
+    return ['/k', cmdFile]
+  }
+
+  // gitbash / wsl / other — 不注入，维持现状
+  return []
+}
+
 export function createPty(id: string, cwd?: string, shell?: string, cols?: number, rows?: number): pty.IPty {
   perfTimerStart('pty:create')
   const shellPath = getShellPath(shell)
   const workingDir = cwd || process.env.USERPROFILE || 'C:\\Users'
+  const shellArgs = getShellSpawnArgs(shellPath)
 
-  const term = pty.spawn(shellPath, [], {
+  const term = pty.spawn(shellPath, shellArgs, {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,
