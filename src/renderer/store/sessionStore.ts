@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { PersistedState, SessionColor, Collection } from '../../shared/stateTypes'
 import type { ShellType } from '../../shared/settingsTypes'
-import { requestStateSave, saveStateNow } from './statePersistence'
+import { markDirty, saveStateNow } from './statePersistence'
 
 export type { Collection }
 
@@ -155,7 +155,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       sessions: [...state.sessions, newSession],
       activeSessionId: id
     }))
-    requestStateSave()
+    markDirty()
     return id
   },
 
@@ -184,26 +184,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         activeSessionId: newActiveId
       }
     })
-    requestStateSave()
+    markDirty()
   },
 
   setActive: (id: string) => {
     set({ activeSessionId: id })
-    requestStateSave()
+    markDirty()
   },
 
   renameSession: (id: string, title: string) => {
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, title } : s))
     }))
-    requestStateSave()
+    markDirty()
   },
 
   setColor: (id: string, color: SessionColor) => {
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, color } : s))
     }))
-    requestStateSave()
+    markDirty()
   },
 
   updatePid: (id: string, pid: number) => {
@@ -218,7 +218,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       sessions: state.sessions.map((s) => (s.id === id ? { ...s, cwd } : s))
     }))
-    requestStateSave()
+    markDirty()
   },
 
   moveSessionToCollection: (sessionId: string, collectionId: string | null) => {
@@ -227,7 +227,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         s.id === sessionId ? { ...s, collectionId } : s
       )
     }))
-    requestStateSave()
+    markDirty()
   },
 
   addCollection: (name: string, parentId: string | null = null) => {
@@ -242,7 +242,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((state) => ({
       collections: [...state.collections, newCollection]
     }))
-    requestStateSave()
+    markDirty()
     return id
   },
 
@@ -264,7 +264,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         )
       }
     })
-    requestStateSave()
+    markDirty()
   },
 
   renameCollection: (id: string, name: string) => {
@@ -273,7 +273,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         c.id === id ? { ...c, name } : c
       )
     }))
-    requestStateSave()
+    markDirty()
   },
 
   toggleCollectionCollapse: (id: string) => {
@@ -282,7 +282,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         c.id === id ? { ...c, collapsed: !c.collapsed } : c
       )
     }))
-    requestStateSave()
+    markDirty()
   },
 
   moveCollection: (collectionId: string, newParentId: string | null) => {
@@ -303,19 +303,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         )
       }
     })
-    requestStateSave()
+    markDirty()
   },
 
   toggleSidebar: () => {
     set((state) => ({ sidebarVisible: !state.sidebarVisible }))
-    requestStateSave()
+    markDirty()
   },
 
   setSidebarWidth: (width: number) => {
     // Keep in sync with --sidebar-min-width / --sidebar-max-width in variables.css
     const clamped = Math.min(320, Math.max(160, width))
     set({ sidebarWidth: clamped })
-    requestStateSave()
+    markDirty()
   },
 
   navigateNext: () => {
@@ -324,7 +324,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const idx = sessions.findIndex((s) => s.id === activeSessionId)
     const nextIdx = (idx + 1) % sessions.length
     set({ activeSessionId: sessions[nextIdx].id })
-    requestStateSave()
+    markDirty()
   },
 
   navigatePrev: () => {
@@ -333,14 +333,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const idx = sessions.findIndex((s) => s.id === activeSessionId)
     const prevIdx = (idx - 1 + sessions.length) % sessions.length
     set({ activeSessionId: sessions[prevIdx].id })
-    requestStateSave()
+    markDirty()
   },
 
   navigateToIndex: (index: number) => {
     const { sessions } = get()
     if (index >= 0 && index < sessions.length) {
       set({ activeSessionId: sessions[index].id })
-      requestStateSave()
+      markDirty()
     }
   },
 
@@ -358,9 +358,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         delete attentionTimers[id]
       }, 1000)
     }
-    set((state) => ({
-      attentionMap: { ...state.attentionMap, [id]: eventType }
-    }))
+    set((state) => {
+      if (state.attentionMap[id] === eventType) return state
+      return { attentionMap: { ...state.attentionMap, [id]: eventType } }
+    })
   },
 
   resetAttention: (id: string) => {

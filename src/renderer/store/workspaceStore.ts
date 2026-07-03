@@ -21,7 +21,7 @@ import {
   prevLeafId,
   collectSessionIds
 } from './paneTreeOps'
-import { requestStateSave } from './statePersistence'
+import { markDirty } from './statePersistence'
 
 interface WorkspaceStore {
   workspaces: Workspace[]
@@ -105,7 +105,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       workspaces: [...state.workspaces, workspace],
       activeWorkspaceId: id
     }))
-    requestStateSave()
+    markDirty()
     return id
   },
 
@@ -114,7 +114,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (id === activeWorkspaceId) return
     if (!workspaces.some((w) => w.id === id)) return
     set({ activeWorkspaceId: id })
-    requestStateSave()
+    markDirty()
   },
 
   deleteWorkspace: (id) => {
@@ -126,21 +126,21 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       nextActive = filtered[0]?.id ?? null
     }
     set({ workspaces: filtered, activeWorkspaceId: nextActive })
-    requestStateSave()
+    markDirty()
   },
 
   renameWorkspace: (id, name) => {
     set((state) => ({
       workspaces: patchWorkspace(state.workspaces, id, { name })
     }))
-    requestStateSave()
+    markDirty()
   },
 
   moveWorkspaceToCollection: (id, collectionId) => {
     set((state) => ({
       workspaces: patchWorkspace(state.workspaces, id, { collectionId })
     }))
-    requestStateSave()
+    markDirty()
   },
 
   // ── Tree ops ────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: newLeafId ?? ws.focusedPaneId
       })
     })
-    requestStateSave()
+    markDirty()
   },
 
   replaceFocusedLeaf: (sessionId) => {
@@ -177,7 +177,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         paneTree: replaceLeafSession(ws.paneTree, ws.focusedPaneId, sessionId)
       })
     })
-    requestStateSave()
+    markDirty()
   },
 
   insertNeighborFocused: (sessionId, direction, side) => {
@@ -199,7 +199,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: newLeafId ?? ws.focusedPaneId
       })
     })
-    requestStateSave()
+    markDirty()
   },
 
   insertNeighborAt: (paneId, sessionId, direction, side) => {
@@ -221,7 +221,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: newLeafId ?? paneId
       })
     })
-    requestStateSave()
+    markDirty()
   },
 
   replaceLeafAt: (paneId, sessionId) => {
@@ -241,7 +241,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: paneId
       })
     })
-    requestStateSave()
+    markDirty()
   },
 
   closeFocused: () => {
@@ -257,7 +257,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (!next) {
       const nextWorkspaces = workspaces.filter((w) => w.id !== activeWorkspaceId)
       set({ workspaces: nextWorkspaces, activeWorkspaceId: null })
-      requestStateSave()
+      markDirty()
       return
     }
     set({
@@ -266,7 +266,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: nextFocusId
       })
     })
-    requestStateSave()
+    markDirty()
   },
 
   removeSessionEverywhere: (sessionId) => {
@@ -290,7 +290,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         : nextWorkspaces[0]?.id ?? null
 
     set({ workspaces: nextWorkspaces, activeWorkspaceId: nextActiveId })
-    requestStateSave()
+    markDirty()
   },
 
   setSplitRatio: (splitId, ratio) => {
@@ -303,7 +303,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         paneTree: setRatio(ws.paneTree, splitId, ratio)
       })
     })
-    requestStateSave()
+    markDirty()
   },
 
   focusPane: (paneId) => {
@@ -315,7 +315,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     set({
       workspaces: patchWorkspace(workspaces, activeWorkspaceId, { focusedPaneId: paneId })
     })
-    requestStateSave()
+    markDirty()
   },
 
   focusNext: () => {
@@ -328,7 +328,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       set({
         workspaces: patchWorkspace(workspaces, activeWorkspaceId, { focusedPaneId: next })
       })
-      requestStateSave()
+      markDirty()
     }
   },
 
@@ -342,7 +342,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       set({
         workspaces: patchWorkspace(workspaces, activeWorkspaceId, { focusedPaneId: prev })
       })
-      requestStateSave()
+      markDirty()
     }
   },
 
@@ -359,7 +359,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         set({
           workspaces: patchWorkspace(workspaces, activeWorkspaceId!, { focusedPaneId: leafId })
         })
-        requestStateSave()
+        markDirty()
       }
       return true
     }

@@ -193,24 +193,6 @@
   flex-shrink: 0;
 }
 
-.select {
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  padding: 4px 8px;
-  outline: none;
-  cursor: pointer;
-  min-width: 140px;
-  transition: border-color var(--transition-fast);
-}
-
-.select:focus {
-  border-color: var(--accent);
-}
-
 .numberInput {
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);

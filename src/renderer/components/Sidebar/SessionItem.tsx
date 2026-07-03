@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import gsap from 'gsap'
 import { useSessionStore, SESSION_COLOR_VARS, type TerminalSession } from '../../store/sessionStore'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
@@ -12,7 +12,7 @@ interface SessionItemProps {
   depth?: number
 }
 
-export function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }: SessionItemProps) {
+export const SessionItem = memo(function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }: SessionItemProps) {
   const renameSession = useSessionStore((s) => s.renameSession)
   const attentionType = useSessionStore((s) => s.attentionMap[session.id] ?? null)
   const [isEditing, setIsEditing] = useState(false)
@@ -200,4 +200,4 @@ export function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }:
       </div>
     </div>
   )
-}
+})

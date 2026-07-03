@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react'
+import { registerGrid, unregisterGrid } from '../../utils/gridScheduler'
 import styles from './ContributionGrid.module.css'
 
 interface Props {
@@ -29,6 +30,50 @@ function buildPalette(varName: string): string[] {
     `rgba(${r},${g},${b},0.65)`,
     `rgba(${r},${g},${b},1.0)`,
   ]
+}
+
+function updateHeat(heat: number[][], tick: number, COLS: number): void {
+  const swing = Math.sin(tick * 0.25) * 1.5
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const p = c / COLS
+      if (p > 0.92) {
+        heat[r][c] = Math.random() < 0.15 ? 3 : 4
+        continue
+      }
+      const rightCol = c + 1
+      let rightHeat = rightCol < COLS ? heat[r][rightCol] : 0
+      if (r > 0 && Math.random() < 0.35) rightHeat = Math.max(rightHeat, heat[r - 1][c])
+      if (r < ROWS - 1 && Math.random() < 0.35) rightHeat = Math.max(rightHeat, heat[r + 1][c])
+      if (rightHeat > 0) {
+        const distDecay = (1.0 - p) * 0.50
+        const decayChance = 0.25 + distDecay + (swing * 0.03)
+        const decay = Math.random() < decayChance ? 1 : 0
+        heat[r][c] = Math.max(0, rightHeat - decay)
+      } else {
+        heat[r][c] = 0
+      }
+      if (r <= 1 && p < 0.75 && heat[r][c] > 0) {
+        if (Math.random() < 0.45) heat[r][c] = Math.max(0, heat[r][c] - 1)
+      }
+      if (p < 0.35 && heat[r][c] > 0) {
+        if (Math.random() < 0.5) heat[r][c] = Math.max(0, heat[r][c] - 1)
+      }
+    }
+  }
+}
+
+function renderCells(cells: HTMLDivElement[], heat: number[][], palette: string[]): void {
+  let idx = 0
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < heat[r].length; c++) {
+      const cell = cells[idx]
+      const level = heat[r][c]
+      cell.style.backgroundColor = palette[level]
+      cell.className = styles.cell + (level >= 3 ? ` ${styles['glow-' + level]}` : '')
+      idx++
+    }
+  }
 }
 
 export function ContributionGrid({ aiType }: Props) {
@@ -66,82 +111,31 @@ export function ContributionGrid({ aiType }: Props) {
 
     const heat: number[][] = Array.from({ length: ROWS }, () => new Array(COLS).fill(0))
     let tick = 0
-    let intervalId: ReturnType<typeof setInterval> | null = null
 
-    function update() {
-      tick++
-      const swing = Math.sin(tick * 0.25) * 1.5
-
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          const p = c / COLS
-
-          if (p > 0.92) {
-            heat[r][c] = Math.random() < 0.15 ? 3 : 4
-            continue
-          }
-
-          const rightCol = c + 1
-          let rightHeat = rightCol < COLS ? heat[r][rightCol] : 0
-
-          if (r > 0 && Math.random() < 0.35) rightHeat = Math.max(rightHeat, heat[r - 1][c])
-          if (r < ROWS - 1 && Math.random() < 0.35) rightHeat = Math.max(rightHeat, heat[r + 1][c])
-
-          if (rightHeat > 0) {
-            const distDecay = (1.0 - p) * 0.50
-            const decayChance = 0.25 + distDecay + (swing * 0.03)
-            const decay = Math.random() < decayChance ? 1 : 0
-            heat[r][c] = Math.max(0, rightHeat - decay)
-          } else {
-            heat[r][c] = 0
-          }
-
-          if (r <= 1 && p < 0.75 && heat[r][c] > 0) {
-            if (Math.random() < 0.45) heat[r][c] = Math.max(0, heat[r][c] - 1)
-          }
-
-          if (p < 0.35 && heat[r][c] > 0) {
-            if (Math.random() < 0.5) heat[r][c] = Math.max(0, heat[r][c] - 1)
-          }
-        }
+    const grid = {
+      tick() {
+        tick++
+        updateHeat(heat, tick, COLS)
+        renderCells(cells, heat, palette)
       }
     }
 
-    function render() {
-      let idx = 0
-      for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-          const cell = cells[idx]
-          const level = heat[r][c]
-          cell.style.backgroundColor = palette[level]
-          cell.className = styles.cell + (level >= 3 ? ` ${styles['glow-' + level]}` : '')
-          idx++
+    registerGrid(grid)
+
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          registerGrid(grid)
+        } else {
+          unregisterGrid(grid)
         }
       }
-    }
-
-    update()
-    render()
-    intervalId = setInterval(() => { update(); render() }, 200)
-
-    // Pause animation when the window is hidden to save CPU/battery
-    const onVisibilityChange = () => {
-      if (document.hidden) {
-        if (intervalId) {
-          clearInterval(intervalId)
-          intervalId = null
-        }
-      } else if (!intervalId) {
-        update()
-        render()
-        intervalId = setInterval(() => { update(); render() }, 200)
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    })
+    observer.observe(container)
 
     return () => {
-      if (intervalId) clearInterval(intervalId)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      observer.disconnect()
+      unregisterGrid(grid)
       container.innerHTML = ''
     }
   }, [aiType])

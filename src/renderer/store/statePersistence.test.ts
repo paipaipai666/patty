@@ -24,7 +24,7 @@ describe('configureStatePersistence', () => {
     const builder = vi.fn((): PersistedState | null => null)
     configureStatePersistence(builder)
     requestStateSave()
-    vi.advanceTimersByTime(500)
+    vi.advanceTimersByTime(1000)
     expect(builder).toHaveBeenCalled()
   })
 })
@@ -47,7 +47,7 @@ describe('requestStateSave', () => {
     requestStateSave()
     expect(builder).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(500)
+    vi.advanceTimersByTime(1000)
     expect(builder).toHaveBeenCalledTimes(1)
     expect(mockStateSave).toHaveBeenCalled()
   })
@@ -55,13 +55,13 @@ describe('requestStateSave', () => {
   it('does not call stateSave when builder returns null', () => {
     configureStatePersistence(() => null)
     requestStateSave()
-    vi.advanceTimersByTime(500)
+    vi.advanceTimersByTime(1000)
     expect(mockStateSave).not.toHaveBeenCalled()
   })
 
   it('does nothing when no builder is configured', () => {
     requestStateSave()
-    vi.advanceTimersByTime(500)
+    vi.advanceTimersByTime(1000)
     expect(mockStateSave).not.toHaveBeenCalled()
   })
 })

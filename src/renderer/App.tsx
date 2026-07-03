@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS, buildSessionPersistedState } from './store/sessionStore'
 import { useWorkspaceStore, getFocusedSessionId } from './store/workspaceStore'
-import { configureStatePersistence, requestStateSave } from './store/statePersistence'
+import { configureStatePersistence, markDirty } from './store/statePersistence'
 import { normalizeWorkspaces } from '../shared/workspaceNormalize'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
@@ -174,7 +174,7 @@ export default function App() {
       // No focused pane — clear the active session so the sidebar highlight
       // and the terminal area both reflect the empty state.
       useSessionStore.setState({ activeSessionId: null })
-      requestStateSave()
+      markDirty()
     }
   }, [setActive])
 

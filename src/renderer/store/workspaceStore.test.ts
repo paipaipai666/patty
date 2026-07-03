@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('./statePersistence', () => ({
   requestStateSave: vi.fn(),
+  markDirty: vi.fn(),
   saveStateNow: vi.fn()
 }))
 

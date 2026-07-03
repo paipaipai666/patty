@@ -4,7 +4,7 @@ import { themeRipple } from '../../utils/themeRipple'
 import { getThemeColors } from '../../styles/themes'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useAnimatedMount } from '../../hooks/useAnimatedMount'
-import type { AppSettings, CustomTheme, ShortcutMap } from '../../../shared/settingsTypes'
+import type { AppSettings, CustomTheme, ShellType, ShortcutMap } from '../../../shared/settingsTypes'
 import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS, BUILTIN_THEMES } from '../../styles/themes'
 import styles from './SettingsModal.module.css'
 
@@ -27,14 +27,6 @@ const CATEGORIES: { key: Category; label: string }[] = [
   { key: 'shortcuts', label: 'Shortcuts' },
   { key: 'layout', label: 'Layout' },
   { key: 'notifications', label: 'Notifications' }
-]
-
-const SHELL_OPTIONS: { value: AppSettings['defaultShell']; label: string }[] = [
-  { value: 'powershell', label: 'Windows PowerShell' },
-  { value: 'pwsh', label: 'PowerShell 7' },
-  { value: 'cmd', label: 'CMD' },
-  { value: 'gitbash', label: 'Git Bash' },
-  { value: 'wsl', label: 'WSL' }
 ]
 
 const SHORTCUT_KEYS: { key: keyof ShortcutMap; label: string }[] = [
@@ -385,6 +377,60 @@ function FontPicker({ value, onChange }: { value: string; onChange: (font: strin
   )
 }
 
+function ShellPicker({
+  value,
+  onChange
+}: {
+  value: ShellType
+  onChange: (shell: ShellType) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  const SHELL_OPTIONS: { value: ShellType; label: string }[] = [
+    { value: 'powershell', label: 'Windows PowerShell' },
+    { value: 'pwsh', label: 'PowerShell 7' },
+    { value: 'cmd', label: 'CMD' },
+    { value: 'gitbash', label: 'Git Bash' },
+    { value: 'wsl', label: 'WSL' }
+  ]
+
+  const currentLabel = SHELL_OPTIONS.find((s) => s.value === value)?.label ?? value
+
+  return (
+    <div className={styles.fontPicker} ref={containerRef}>
+      <input
+        className={styles.fontPickerInput}
+        value={currentLabel}
+        readOnly
+        onClick={() => setOpen(!open)}
+      />
+      {open && (
+        <div className={styles.fontPickerList}>
+          {SHELL_OPTIONS.map((s) => (
+            <div
+              key={s.value}
+              className={`${styles.fontPickerItem} ${s.value === value ? styles.fontPickerItemActive : ''}`}
+              onClick={() => { onChange(s.value); setOpen(false) }}
+            >
+              {s.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ThemeEditor({
   customThemes,
   currentTheme,
@@ -691,15 +737,7 @@ function TerminalSection({
       <div className={styles.sectionTitle}>Shell</div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Default Shell</span>
-        <select
-          className={styles.select}
-          value={settings.defaultShell}
-          onChange={(e) => updateSetting('defaultShell', e.target.value as AppSettings['defaultShell'])}
-        >
-          {SHELL_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+        <ShellPicker value={settings.defaultShell} onChange={(shell) => updateSetting('defaultShell', shell)} />
       </div>
     </div>
   )
