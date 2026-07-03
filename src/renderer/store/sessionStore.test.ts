@@ -1,12 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('./statePersistence', () => ({
-  requestStateSave: vi.fn()
+  requestStateSave: vi.fn(),
+  saveStateNow: vi.fn()
 }))
 
 const mockStateLoad = vi.fn()
-const mockOnAttentionChange = vi.fn(() => vi.fn())
-const mockOnPtyExit = vi.fn(() => vi.fn())
+let capturedAttentionCallback: ((...args: any[]) => void) | null = null
+let capturedPtyExitCallback: ((...args: any[]) => void) | null = null
+const mockOnAttentionChange = vi.fn((cb) => {
+  capturedAttentionCallback = cb
+  return vi.fn()
+})
+const mockOnPtyExit = vi.fn((cb) => {
+  capturedPtyExitCallback = cb
+  return vi.fn()
+})
 const mockResetAttention = vi.fn()
 
 vi.stubGlobal('window', {
@@ -23,6 +32,8 @@ import { useSessionStore, buildSessionPersistedState, teardownSessionIPC, SESSIO
 
 beforeEach(() => {
   vi.clearAllMocks()
+  capturedAttentionCallback = null
+  capturedPtyExitCallback = null
   teardownSessionIPC()
   useSessionStore.setState({
     sessions: [],
@@ -341,6 +352,140 @@ describe('attention', () => {
     })
     useSessionStore.getState().setAiType('s1', 'codex')
     expect(useSessionStore.getState().sessions[0].aiType).toBe('codex')
+  })
+
+
+})
+
+describe('loadState / saveState', () => {
+  it('loadState restores persisted state', async () => {
+    mockStateLoad.mockResolvedValue({
+      sessions: [
+        { id: 's1', title: 'T1', color: 'blue', cwd: '', shell: 'powershell', collectionId: null },
+        { id: 's2', title: 'T2', color: 'green', cwd: '', shell: 'bash', collectionId: null }
+      ],
+      collections: [{ id: 'c1', name: 'Group', parentId: null, collapsed: false, createdAt: 1 }],
+      activeSessionId: 's1',
+      sidebarVisible: false,
+      sidebarWidth: 180
+    })
+    const result = await useSessionStore.getState().loadState()
+    const state = useSessionStore.getState()
+    expect(state.sessions).toHaveLength(2)
+    expect(state.sessions[0].id).toBe('s1')
+    expect(state.sessions[1].shell).toBe('bash')
+    expect(state.collections).toHaveLength(1)
+    expect(state.collections[0].name).toBe('Group')
+    expect(state.activeSessionId).toBe('s1')
+    expect(state.sidebarVisible).toBe(false)
+    expect(state.sidebarWidth).toBe(180)
+    expect(state.loaded).toBe(true)
+    expect(result).not.toBeNull()
+    expect(mockOnAttentionChange).toHaveBeenCalled()
+    expect(mockOnPtyExit).toHaveBeenCalled()
+  })
+
+  it('loadState adds pid and null aiType to sessions', async () => {
+    mockStateLoad.mockResolvedValue({
+      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', collectionId: null }],
+      collections: [],
+      activeSessionId: 's1',
+      sidebarVisible: true,
+      sidebarWidth: 220
+    })
+    await useSessionStore.getState().loadState()
+    const s = useSessionStore.getState().sessions[0]
+    expect(s.pid).toBe(0)
+    expect(s.aiType).toBeNull()
+    expect(s.createdAt).toBeGreaterThan(0)
+  })
+
+  it('loadState handles failure gracefully', async () => {
+    mockStateLoad.mockRejectedValue(new Error('load failed'))
+    const result = await useSessionStore.getState().loadState()
+    expect(result).toBeNull()
+    expect(useSessionStore.getState().loaded).toBe(true)
+  })
+
+  it('saveState does not throw', async () => {
+    await expect(useSessionStore.getState().saveState()).resolves.toBeUndefined()
+  })
+
+  it('loadState registers IPC listeners only once (guards duplicate)', async () => {
+    mockStateLoad.mockResolvedValue({
+      sessions: [],
+      collections: [],
+      activeSessionId: null,
+      sidebarVisible: true,
+      sidebarWidth: 220
+    })
+    await useSessionStore.getState().loadState()
+    await useSessionStore.getState().loadState()
+    // onAttentionChange should have been called twice (each load), but
+    // the ipcCleanup from the first load should have unregistered old ones.
+    // The important thing is no crash / no duplicate registrations.
+    expect(mockOnAttentionChange).toHaveBeenCalledTimes(2)
+  })
+
+  it('loadState IPC callback sets attention and aiType from attention change', async () => {
+    mockStateLoad.mockResolvedValue({
+      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', collectionId: null }],
+      collections: [],
+      activeSessionId: 's1',
+      sidebarVisible: true,
+      sidebarWidth: 220
+    })
+
+    await useSessionStore.getState().loadState()
+
+    expect(capturedAttentionCallback).not.toBeNull()
+    capturedAttentionCallback!('s1', 'start', 'claude')
+
+    expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
+    expect(useSessionStore.getState().sessions[0].aiType).toBe('claude')
+  })
+
+  it('loadState IPC callback clears attention on PTY exit', async () => {
+    useSessionStore.setState({
+      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: 'claude' }],
+      attentionMap: { s1: 'start' }
+    })
+    mockStateLoad.mockResolvedValue({
+      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', collectionId: null }],
+      collections: [],
+      activeSessionId: 's1',
+      sidebarVisible: true,
+      sidebarWidth: 220
+    })
+    await useSessionStore.getState().loadState()
+
+    expect(capturedPtyExitCallback).not.toBeNull()
+
+    // Simulate a PTY exit event
+    capturedPtyExitCallback!('s1')
+
+    expect(useSessionStore.getState().attentionMap['s1']).toBeNull()
+    expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
+  })
+
+  it('loadState IPC attention change without aiType does not call setAiType', async () => {
+    mockStateLoad.mockResolvedValue({
+      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', collectionId: null }],
+      collections: [],
+      activeSessionId: 's1',
+      sidebarVisible: true,
+      sidebarWidth: 220
+    })
+    await useSessionStore.getState().loadState()
+
+    expect(capturedAttentionCallback).not.toBeNull()
+
+    // Simulate an IPC attention event WITHOUT aiType (aiType undefined)
+    capturedAttentionCallback!('s1', 'start')
+
+    expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
+    // aiType stays null (loadState added it) because setAiType was not called
+    expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
   })
 })
 

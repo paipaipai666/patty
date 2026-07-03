@@ -137,4 +137,17 @@ describe('createIIPStreamPatcher', () => {
     expect(patcher('b\x1b')).toBe('\x1bb')
     expect(patcher('c\x1b')).toBe('\x1bc')
   })
+
+  it('flushes held partial marker when next chunk does not continue it', () => {
+    const patcher = createIIPStreamPatcher()
+    expect(patcher('\x1b')).toBe('')          // holds \x1b
+    expect(patcher('\n')).toBe('\x1b\n')       // \n doesn't continue marker → flush both
+  })
+
+  it('holds payload tail that is entirely a marker prefix for next chunk', () => {
+    const patcher = createIIPStreamPatcher()
+    const input = `${ESC}]1337;File=name=a.png;:\x1b`
+    expect(patcher(input)).toBe(`${ESC}]1337;File=size=0;name=a.png;:`) // holds \x1b
+    expect(patcher(']1337;File=name=b.png;:data')).toBe(`${ESC}]1337;File=size=0;name=b.png;:data`)
+  })
 })

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('./statePersistence', () => ({
-  requestStateSave: vi.fn()
+  requestStateSave: vi.fn(),
+  saveStateNow: vi.fn()
 }))
 
 import { useWorkspaceStore, getFocusedSessionId } from './workspaceStore'
@@ -203,6 +204,55 @@ describe('insertNeighborFocused / insertNeighborAt / replaceLeafAt', () => {
     useWorkspaceStore.getState().replaceLeafAt('p1', 's1')
     expect(useWorkspaceStore.getState().workspaces).toHaveLength(1)
   })
+
+  it('replaceLeafAt replaces session at a specific pane when workspace exists', () => {
+    const tree: any = {
+      id: 'sp', type: 'split', direction: 'horizontal', ratio: 0.5,
+      first: { id: 'a', type: 'leaf', sessionId: 's1' },
+      second: { id: 'b', type: 'leaf', sessionId: 's2' }
+    }
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1', paneTree: tree, focusedPaneId: 'a' })], 'w1')
+    useWorkspaceStore.getState().replaceLeafAt('b', 's3')
+    const tree2 = useWorkspaceStore.getState().workspaces[0].paneTree as any
+    expect(tree2.second.sessionId).toBe('s3')
+  })
+
+  it('insertNeighborFocused splits focused leaf when workspace exists', () => {
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
+    useWorkspaceStore.getState().insertNeighborFocused('s2', 'horizontal', 'second')
+    const tree = useWorkspaceStore.getState().workspaces[0].paneTree
+    expect(tree.type).toBe('split')
+    expect((tree as any).second.sessionId).toBe('s2')
+  })
+
+  it('insertNeighborFocused creates workspace when active workspace has no focused pane', () => {
+    const ws = makeWorkspace({ id: 'w1' })
+    ws.focusedPaneId = null
+    useWorkspaceStore.getState().loadFromPersisted([ws], 'w1')
+    useWorkspaceStore.getState().insertNeighborFocused('s2', 'horizontal', 'second')
+    expect(useWorkspaceStore.getState().workspaces).toHaveLength(2)
+  })
+
+  it('insertNeighborAt splits at a specific pane when workspace exists', () => {
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
+    useWorkspaceStore.getState().insertNeighborAt('leaf1', 's2', 'horizontal', 'second')
+    const tree = useWorkspaceStore.getState().workspaces[0].paneTree
+    expect(tree.type).toBe('split')
+  })
+
+  it('insertNeighborAt creates workspace when active workspace id has no match', () => {
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
+    useWorkspaceStore.setState({ workspaces: [] })
+    useWorkspaceStore.getState().insertNeighborAt('p1', 's2', 'horizontal', 'second')
+    expect(useWorkspaceStore.getState().workspaces).toHaveLength(1)
+  })
+
+  it('replaceLeafAt creates workspace when active workspace id has no match', () => {
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
+    useWorkspaceStore.setState({ workspaces: [] })
+    useWorkspaceStore.getState().replaceLeafAt('p1', 'sX')
+    expect(useWorkspaceStore.getState().workspaces).toHaveLength(1)
+  })
 })
 
 describe('removeSessionEverywhere', () => {
@@ -250,10 +300,15 @@ describe('removeSessionEverywhere', () => {
 })
 
 describe('focusPane / focusNext / focusPrev', () => {
-  it('focusPane updates focusedPaneId', () => {
-    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
-    useWorkspaceStore.getState().focusPane('leaf1')
-    expect(useWorkspaceStore.getState().workspaces[0].focusedPaneId).toBe('leaf1')
+  it('focusPane updates focusedPaneId to a different pane', () => {
+    const tree: any = {
+      id: 'sp', type: 'split', direction: 'horizontal', ratio: 0.5,
+      first: { id: 'a', type: 'leaf', sessionId: 's1' },
+      second: { id: 'b', type: 'leaf', sessionId: 's2' }
+    }
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1', paneTree: tree, focusedPaneId: 'a' })], 'w1')
+    useWorkspaceStore.getState().focusPane('b')
+    expect(useWorkspaceStore.getState().workspaces[0].focusedPaneId).toBe('b')
   })
 
   it('focusPane ignores non-existent pane id', () => {
