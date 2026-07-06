@@ -113,23 +113,48 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
     // Copy/paste
     term.attachCustomKeyEventHandler((e) => {
-      if (e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
-        if (e.key === 'C' || e.key === 'c') {
-          if (e.type === 'keydown') {
+      if (!e.ctrlKey || e.altKey || e.metaKey) return true
+
+      const isDown = e.type === 'keydown'
+      const key = e.key
+      const hasSelection = term.hasSelection()
+
+      if (e.shiftKey) {
+        if (key === 'C' || key === 'c') {
+          if (isDown) {
             const selection = term.getSelection()
             if (selection) navigator.clipboard.writeText(selection)
           }
           return false
         }
-        if (e.key === 'V' || e.key === 'v') {
-          if (e.type === 'keydown') {
+        if (key === 'V' || key === 'v') {
+          if (isDown) {
             navigator.clipboard.readText().then((text) => {
               if (text) window.terminalAPI.write(session.id, text)
             })
           }
           return false
         }
+        return true
       }
+
+      if (key === 'C' || key === 'c') {
+        if (hasSelection) {
+          if (isDown) navigator.clipboard.writeText(term.getSelection())
+          return false
+        }
+        return true
+      }
+
+      if (key === 'V' || key === 'v') {
+        if (isDown) {
+          navigator.clipboard.readText().then((text) => {
+            if (text) window.terminalAPI.write(session.id, text)
+          })
+        }
+        return false
+      }
+
       return true
     })
 

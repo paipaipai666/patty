@@ -1,5 +1,7 @@
 <div align="center">
 
+![Patty Logo](logo/patty-icon.svg)
+
 # Patty
 
 A modern, minimal terminal manager for Windows with a sidebar layout.
@@ -100,6 +102,8 @@ Custom themes can be edited visually with color pickers or directly as JSON, wit
 | `Ctrl+]` / `Ctrl+[` | Next / Previous terminal |
 | `Ctrl+B` | Toggle sidebar |
 | `Ctrl+1-9` | Jump to terminal by index |
+| `Ctrl+C` | Copy selection in terminal, or send interrupt if no selection |
+| `Ctrl+V` | Paste in terminal |
 | `Ctrl+Shift+C` | Copy in terminal |
 | `Ctrl+Shift+V` | Paste in terminal |
 
