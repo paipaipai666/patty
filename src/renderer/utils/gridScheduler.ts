@@ -1,4 +1,4 @@
-const TICK_INTERVAL_MS = 200
+const TICK_INTERVAL_MS = 180
 
 export interface Tickable {
   tick: () => void
