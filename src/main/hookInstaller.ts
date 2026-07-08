@@ -58,6 +58,9 @@ interface ClaudeSettings {
     StopFailure?: NotificationHook[]
     SessionStart?: NotificationHook[]
     SessionEnd?: NotificationHook[]
+    PreToolUse?: NotificationHook[]
+    PostToolUse?: NotificationHook[]
+    UserPromptSubmit?: NotificationHook[]
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -215,6 +218,84 @@ export async function ensureClaudeCodeHook(hookPort: number): Promise<void> {
     }
     settings.hooks.SessionEnd = sessionEndHooks
 
+    // PreToolUse keepalive hook — fires before each tool use
+    const preToolUseHooks = settings.hooks.PreToolUse || []
+    const existingPreToolUseIndex = preToolUseHooks.findIndex(
+      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
+    )
+    const newPreToolUseEntry: NotificationHook = {
+      matcher: '',
+      hooks: [
+        {
+          type: 'command',
+          command: 'powershell',
+          args: [
+            '-ExecutionPolicy', 'Bypass',
+            '-File', hookScriptPath,
+            '-EventType', 'pre_tool_use'
+          ]
+        }
+      ]
+    }
+    if (existingPreToolUseIndex >= 0) {
+      preToolUseHooks[existingPreToolUseIndex] = newPreToolUseEntry
+    } else {
+      preToolUseHooks.push(newPreToolUseEntry)
+    }
+    settings.hooks.PreToolUse = preToolUseHooks
+
+    // PostToolUse keepalive hook — fires after each tool use
+    const postToolUseHooks = settings.hooks.PostToolUse || []
+    const existingPostToolUseIndex = postToolUseHooks.findIndex(
+      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
+    )
+    const newPostToolUseEntry: NotificationHook = {
+      matcher: '',
+      hooks: [
+        {
+          type: 'command',
+          command: 'powershell',
+          args: [
+            '-ExecutionPolicy', 'Bypass',
+            '-File', hookScriptPath,
+            '-EventType', 'post_tool_use'
+          ]
+        }
+      ]
+    }
+    if (existingPostToolUseIndex >= 0) {
+      postToolUseHooks[existingPostToolUseIndex] = newPostToolUseEntry
+    } else {
+      postToolUseHooks.push(newPostToolUseEntry)
+    }
+    settings.hooks.PostToolUse = postToolUseHooks
+
+    // UserPromptSubmit keepalive hook — fires when user submits a prompt
+    const userPromptSubmitHooks = settings.hooks.UserPromptSubmit || []
+    const existingUserPromptSubmitIndex = userPromptSubmitHooks.findIndex(
+      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
+    )
+    const newUserPromptSubmitEntry: NotificationHook = {
+      matcher: '',
+      hooks: [
+        {
+          type: 'command',
+          command: 'powershell',
+          args: [
+            '-ExecutionPolicy', 'Bypass',
+            '-File', hookScriptPath,
+            '-EventType', 'user_prompt_submit'
+          ]
+        }
+      ]
+    }
+    if (existingUserPromptSubmitIndex >= 0) {
+      userPromptSubmitHooks[existingUserPromptSubmitIndex] = newUserPromptSubmitEntry
+    } else {
+      userPromptSubmitHooks.push(newUserPromptSubmitEntry)
+    }
+    settings.hooks.UserPromptSubmit = userPromptSubmitHooks
+
     // Ensure settings directory exists
     const settingsDir = path.dirname(settingsPath)
     if (!fs.existsSync(settingsDir)) {
@@ -264,6 +345,9 @@ interface CodexHooks {
     SessionStart?: NotificationHook[]
     PermissionRequest?: NotificationHook[]
     Stop?: NotificationHook[]
+    PreToolUse?: NotificationHook[]
+    PostToolUse?: NotificationHook[]
+    UserPromptSubmit?: NotificationHook[]
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -339,6 +423,24 @@ export async function ensureCodexHook(): Promise<void> {
       stopHooks.push(stopEntry)
     }
     settings.hooks.Stop = stopHooks
+
+    const keepaliveEntry: NotificationHook = {
+      matcher: '',
+      hooks: [{ type: 'command', command: hookCommand }]
+    }
+    const addKeepaliveHook = (key: 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit') => {
+      const hooks = settings.hooks[key] || []
+      const existingIndex = findPattyIndex(hooks)
+      if (existingIndex >= 0) {
+        hooks[existingIndex] = keepaliveEntry
+      } else {
+        hooks.push(keepaliveEntry)
+      }
+      settings.hooks[key] = hooks
+    }
+    addKeepaliveHook('PreToolUse')
+    addKeepaliveHook('PostToolUse')
+    addKeepaliveHook('UserPromptSubmit')
 
     const settingsDir = path.dirname(settingsPath)
     if (!fs.existsSync(settingsDir)) {

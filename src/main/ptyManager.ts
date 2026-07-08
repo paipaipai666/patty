@@ -6,6 +6,7 @@ import type { Socket } from 'net'
 import { execSync } from 'child_process'
 import { BrowserWindow, app } from 'electron'
 import { perfTimerStart, perfTimerEnd, perfCounter } from '../shared/perf'
+import { removePane } from './heartbeat'
 
 export interface PtySession {
   pty: pty.IPty
@@ -137,6 +138,7 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
 
   // Handle PTY exit - cleanup session and notify renderer
   term.onExit(({ exitCode }) => {
+    removePane(id)
     sessions.delete(id)
     const mainWindow = BrowserWindow.getAllWindows()[0]
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -175,6 +177,7 @@ export function killPty(id: string): void {
   const session = sessions.get(id)
   if (session) {
     session.pty.kill()
+    removePane(id)
     sessions.delete(id)
   }
 }

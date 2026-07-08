@@ -18,6 +18,8 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
     return {}
   }
 
+  let aliveInterval: ReturnType<typeof setInterval> | null = null
+
   const notifyPatty = async (event: string) => {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 1500)
@@ -40,9 +42,18 @@ export const PattyNotifier = async ({ project, directory, $ }) => {
       switch (event.type) {
         case 'session.created':
           await notifyPatty('session_created')
+          if (aliveInterval) clearInterval(aliveInterval)
+          aliveInterval = setInterval(() => notifyPatty('alive'), 5000)
+          if (aliveInterval && typeof aliveInterval === 'object' && 'unref' in aliveInterval) {
+            ;(aliveInterval as any).unref()
+          }
           break
 
         case 'session.deleted':
+          if (aliveInterval) {
+            clearInterval(aliveInterval)
+            aliveInterval = null
+          }
           await notifyPatty('session_deleted')
           break
 

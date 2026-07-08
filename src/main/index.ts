@@ -6,6 +6,7 @@ import { startHookServer, stopHookServer } from './ptyManager'
 import { ensureClaudeCodeHook, ensureOpenCodePlugin, ensureCodexHook } from './hookInstaller'
 import { loadSettings } from './settingsHandler'
 import { perfMark, perfMeasure, perfMemoryMain, perfReport, perfDump, perfEnabled } from '../shared/perf'
+import { noteEvent, startHeartbeatWatchdog, flushStats, setStatsPath } from './heartbeat'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -59,6 +60,14 @@ process.on('unhandledRejection', (reason) => {
     if (source === 'opencode') return 'opencode'
     if (source === 'codex') return 'codex'
     return null
+  }
+
+  function sendClear(paneId: string): void {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) {
+        w.webContents.send('pty:attn', paneId, null, null)
+      }
+    }
   }
 
 function createWindow(): void {
@@ -127,6 +136,9 @@ app.whenReady().then(async () => {
   // Start hook server for notifications
   perfMark('app:hook-server-start')
   const hookPort = await startHookServer((paneId, event, source) => {
+    // 心跳租约：所有来源事件都刷新该 pane 的 keepalive
+    noteEvent(paneId, event, source)
+
     // 检查对应工具是否启用
     const settings = loadSettings()
     if (source === 'claude-code' && !settings.notifications.claudeCode) return
@@ -173,6 +185,10 @@ app.whenReady().then(async () => {
   }
   perfMeasure('app:hooks-install', 'app:hooks-install-start')
 
+  // Heartbeat watchdog: clears flame when a source stops sending keepalives.
+  setStatsPath(join(app.getPath('appData'), 'Patty', 'heartbeat-stats.json'))
+  startHeartbeatWatchdog(sendClear)
+
   perfMark('app:create-window-start')
   createWindow()
 
@@ -191,6 +207,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  flushStats()
   perfDump()
   stopHookServer()
 })
