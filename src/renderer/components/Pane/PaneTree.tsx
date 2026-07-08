@@ -125,10 +125,6 @@ function PaneViewPlaceholder({
       className={`${styles.paneView} ${focused ? styles.paneViewFocused : ''}`}
       onPointerDown={() => onFocus(paneId)}
     >
-      <div className={styles.paneHeader}>
-        <span className={styles.paneDot} />
-        <span className={styles.paneTitle}>—</span>
-      </div>
       <div className={styles.paneContent}>
         <div className={styles.panePlaceholder}>session missing</div>
       </div>

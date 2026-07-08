@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef } from 'react'
-import { SESSION_COLOR_VARS, type TerminalSession } from '../../store/sessionStore'
+import { type TerminalSession } from '../../store/sessionStore'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { TerminalPane } from '../Terminal/TerminalPane'
 import { DropTargetOverlay, type DropZone } from './DropTargetOverlay'
@@ -50,7 +50,7 @@ function zoneFromPoint(x: number, y: number, rect: DOMRect): DropZone {
 }
 
 /**
- * A single pane: header (session title + color dot) + the real terminal.
+ * A single pane wrapping a terminal session.
  *
  * Accepts sidebar drag-in: dropping a session on an edge inserts it as a
  * neighbor (split); dropping on the center replaces this pane's session. The
@@ -119,10 +119,6 @@ export function PaneView({ session, focused, onFocus, paneId, visible = true }: 
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <div className={styles.paneHeader}>
-        <span className={styles.paneDot} style={{ background: dotColor(session.color) }} />
-        <span className={styles.paneTitle}>{session.title}</span>
-      </div>
       <div className={styles.paneContent}>
         <TerminalPane session={session} visible={visible} onUsed={handleUsed} />
         <DropTargetOverlay zone={dropZone} />
@@ -131,7 +127,4 @@ export function PaneView({ session, focused, onFocus, paneId, visible = true }: 
   )
 }
 
-/** Map a session color to the matching CSS custom property. */
-function dotColor(color: TerminalSession['color']): string {
-  return SESSION_COLOR_VARS[color] ?? 'var(--color-blue)'
-}
+
