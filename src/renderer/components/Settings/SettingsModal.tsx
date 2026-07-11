@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import gsap from 'gsap'
 import { themeRipple } from '../../utils/themeRipple'
 import { getThemeColors } from '../../styles/themes'
@@ -66,37 +66,43 @@ export function SettingsModal() {
   const prevCategory = useRef<Category>('appearance')
   const previouslyFocused = useRef<HTMLElement | null>(null)
 
-  // Modal entrance animation (after mount, not useLayoutEffect)
-  useEffect(() => {
+  // Modal entrance animation. Runs in useLayoutEffect so the hidden start
+  // state is applied before first paint — otherwise the panel flashes at full
+  // opacity for one frame before GSAP sets the "from" values (the old
+  // post-paint useEffect caused the disappear/reappear blink on open).
+  // gsap.context + revert keeps React StrictMode's double-invoke clean.
+  useLayoutEffect(() => {
     if (!mounted || !modalRef.current) return
     const panel = modalRef.current
     const navItems = navRef.current?.children
     const fields = contentRef.current?.children
 
-    const tl = gsap.timeline()
-    tl.from(panel, {
-      y: 24, scale: 0.96, opacity: 0,
-      duration: 0.45, ease: 'back.out(1.2)',
-      clearProps: 'transform,opacity'
-    })
-    if (navItems && navItems.length > 0) {
-      tl.from(Array.from(navItems), {
-        x: -12, opacity: 0,
-        duration: 0.3, stagger: 0.04,
-        ease: 'power2.out',
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline()
+      tl.from(panel, {
+        y: 24, scale: 0.96, opacity: 0,
+        duration: 0.45, ease: 'back.out(1.2)',
         clearProps: 'transform,opacity'
-      }, '-=0.2')
-    }
-    if (fields && fields.length > 0) {
-      tl.from(Array.from(fields), {
-        y: 12, opacity: 0,
-        duration: 0.3, stagger: 0.04,
-        ease: 'power2.out',
-        clearProps: 'transform,opacity'
-      }, '-=0.2')
-    }
+      })
+      if (navItems && navItems.length > 0) {
+        tl.from(Array.from(navItems), {
+          x: -12, opacity: 0,
+          duration: 0.3, stagger: 0.04,
+          ease: 'power2.out',
+          clearProps: 'transform,opacity'
+        }, '-=0.2')
+      }
+      if (fields && fields.length > 0) {
+        tl.from(Array.from(fields), {
+          y: 12, opacity: 0,
+          duration: 0.3, stagger: 0.04,
+          ease: 'power2.out',
+          clearProps: 'transform,opacity'
+        }, '-=0.2')
+      }
+    }, modalRef)
 
-    return () => { tl.kill() }
+    return () => { ctx.revert() }
   }, [mounted])
 
   // Tab content crossfade animation

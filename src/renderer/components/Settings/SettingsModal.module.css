@@ -8,12 +8,6 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 150ms var(--ease-out);
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .overlayExit {
@@ -23,11 +17,6 @@
 @keyframes fadeOut {
   from { opacity: 1; }
   to { opacity: 0; }
-}
-
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .modalExit {
@@ -51,7 +40,6 @@
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
-  animation: slideIn 200ms var(--ease-out);
   user-select: none;
 }
 
