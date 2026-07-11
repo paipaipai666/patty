@@ -1,36 +1,27 @@
 .area {
   flex: 1;
   position: relative;
-  margin: 8px;
-  border-radius: var(--radius-md);
+  margin: var(--space-2);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--bg-terminal);
-  border: 1px solid var(--border-subtle);
-  box-shadow: inset 0 1px 0 var(--surface-highlight);
-  transition: all var(--transition-normal);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-normal);
 }
 
 .area::after {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   transition: opacity var(--transition-fast);
   pointer-events: none;
   opacity: 0;
 }
 
-.area:hover::after {
-  opacity: 1;
-  box-shadow:
-    inset 0 0 0 1px var(--accent-alpha),
-    0 0 20px var(--accent-glow-soft);
-}
-
 .area:hover {
-  box-shadow:
-    inset 0 1px 0 var(--surface-highlight),
-    0 0 24px var(--accent-glow-subtle);
+  box-shadow: var(--shadow-md);
 }
 
 .pane {
@@ -49,9 +40,9 @@
   align-items: center;
   justify-content: center;
   background: var(--bg-terminal);
-  margin: 8px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
+  margin: var(--space-2);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
 }
 
 .emptyContent {

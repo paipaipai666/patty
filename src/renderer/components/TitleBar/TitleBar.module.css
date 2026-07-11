@@ -3,6 +3,7 @@
   align-items: center;
   justify-content: space-between;
   height: var(--titlebar-height);
+  padding: 0 var(--space-5);
   background: var(--bg-titlebar);
   backdrop-filter: blur(var(--glass-blur-sm));
   -webkit-backdrop-filter: blur(var(--glass-blur-sm));
@@ -11,17 +12,6 @@
   flex-shrink: 0;
   position: relative;
   z-index: 2;
-}
-
-.titlebar::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent 5%, var(--accent-alpha) 30%, var(--cyan-glow-medium) 60%, transparent 95%);
-  pointer-events: none;
 }
 
 .dragRegion {
@@ -34,10 +24,10 @@
 }
 
 .title {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.3px;
-  color: var(--text-secondary);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -45,6 +35,7 @@
 
 .controls {
   display: flex;
+  align-items: center;
   -webkit-app-region: no-drag;
   height: 100%;
 }
@@ -53,9 +44,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 100%;
-  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  color: var(--text-secondary);
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
@@ -63,13 +54,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   margin-right: 2px;
   border: none;
   background: transparent;
-  border-radius: 6px;
-  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
@@ -77,12 +68,12 @@
 }
 
 .btnToggle:hover {
-  background: var(--neutral-8);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 
 .btnControl:hover {
-  background: var(--neutral-8);
+  background: var(--bg-hover);
   color: var(--text-primary);
 }
 

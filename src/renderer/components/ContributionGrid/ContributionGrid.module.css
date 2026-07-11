@@ -3,13 +3,13 @@
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.60;
+  opacity: 0.45;
   transition: opacity 150ms cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
 
 .grid:hover {
-  opacity: 0.90;
+  opacity: 0.75;
 }
 
 .grid canvas {

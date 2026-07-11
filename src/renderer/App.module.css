@@ -5,22 +5,7 @@
   width: 100vw;
   overflow: hidden;
   position: relative;
-}
-
-/* Liquid Glass reflection sweep */
-.app::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 25%,
-    var(--accent-glow-soft) 42%,
-    var(--cyan-glow-soft) 50%,
-    transparent 65%
-  );
-  pointer-events: none;
-  z-index: 0;
+  background: var(--bg-app);
 }
 
 .main {
