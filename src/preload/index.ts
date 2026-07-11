@@ -104,10 +104,6 @@ const terminalAPI = {
   // Perf
   perfEnabled: process.env.PATTY_PERF === '1',
   perfDump: () => ipcRenderer.invoke('perf:dump') as Promise<{ success: boolean }>,
-  perfMetrics: () => ipcRenderer.invoke('perf:metrics') as Promise<Array<{
-    pid: number; type: string; cpuPercent: number;
-    memoryKB: number; peakMemoryKB: number; idleWakeups: number
-  }>>,
 
   // Metrics dashboard
   metricsHistory: () => ipcRenderer.invoke('metrics:history') as Promise<MetricsSnapshot>,

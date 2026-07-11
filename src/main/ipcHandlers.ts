@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog, app } from 'electron'
+import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { spawn } from 'child_process'
 import { readFileSync, writeFileSync } from 'fs'
 import { MetricsCollector } from './metricsCollector'
@@ -318,19 +318,6 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metri
   ipcMain.handle('perf:dump', () => {
     perfDump()
     return { success: true }
-  })
-
-  // Perf metrics (CPU/memory per process)
-  ipcMain.handle('perf:metrics', () => {
-    const metrics = app.getAppMetrics()
-    return metrics.map((m) => ({
-      pid: m.pid,
-      type: m.type,
-      cpuPercent: m.cpu?.percentCPUUsage ?? 0,
-      memoryKB: m.memory?.workingSetSize ?? 0,
-      peakMemoryKB: m.memory?.peakWorkingSetSize ?? 0,
-      idleWakeups: m.cpu?.idleWakeupsPerSecond ?? 0
-    }))
   })
 
   // Metrics dashboard

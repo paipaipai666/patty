@@ -16,6 +16,7 @@ Thumbs.db
 .vscode/
 .idea/
 .omc/
+.codegraph/
 *.swp
 *.swo
 CLAUDE**.md
