@@ -19,6 +19,7 @@
 
 .searchInput {
   flex: 1;
+  min-width: 0;
   height: 28px;
   padding: 0 8px;
   background: var(--bg-input);
@@ -377,6 +378,7 @@
 
 .menuContainer {
   position: relative;
+  flex-shrink: 0;
 }
 
 .dropdownMenu {
