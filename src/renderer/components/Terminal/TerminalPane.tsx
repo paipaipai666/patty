@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { Terminal, type ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -404,6 +404,35 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
   }, [visible, fitTerminal])
 
+  // ── Hide during sidebar slide, fit while hidden, reveal after ──────────
+  // The WebGL canvas clears+repaints on resize. Doing that while the pane is
+  // fully hidden (opacity 0) keeps the flash invisible, then we fade the
+  // already-correct terminal back in. Only acts on sidebar-transition edges
+  // (rising/falling), never on mount or workspace switches.
+
+  const sidebarTransitioning = useSessionStore((s) => s.sidebarTransitioning)
+  const [paneVisible, setPaneVisible] = useState(true)
+  const prevTransitioningRef = useRef(false)
+
+  useEffect(() => {
+    if (sidebarTransitioning && !prevTransitioningRef.current) {
+      setPaneVisible(false)
+    } else if (!sidebarTransitioning && prevTransitioningRef.current) {
+      const el = containerRef.current
+      const canFit = visible && ptyCreatedRef.current && !(el && (el.clientWidth === 0 || el.clientHeight === 0))
+      if (!canFit) {
+        setPaneVisible(true)
+      } else {
+        // Fit while hidden, then reveal on the frame after xterm repaints.
+        setTimeout(() => {
+          fitTerminal()
+          requestAnimationFrame(() => requestAnimationFrame(() => setPaneVisible(true)))
+        }, 10)
+      }
+    }
+    prevTransitioningRef.current = sidebarTransitioning
+  }, [sidebarTransitioning, visible, fitTerminal])
+
   // ── Resize observer ─────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -413,6 +442,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       // Only react when the pane has a real size and a live PTY. A hidden or
       // zero-sized pane (mid-split transition) would otherwise fit to 0×0.
       if (!visible || !ptyCreatedRef.current) return
+      // Skip fits while the sidebar is sliding (see effect above) — fitting on
+      // every intermediate frame clears/repaints the WebGL canvas and flickers.
+      if (useSessionStore.getState().sidebarTransitioning) return
       const el = containerRef.current
       if (el && (el.clientWidth === 0 || el.clientHeight === 0)) return
       if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current)
@@ -445,7 +477,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     <div
       ref={containerRef}
       className={styles.pane}
-      style={{ opacity: settings.opacity < 1 ? settings.opacity : undefined }}
+      style={{ opacity: paneVisible ? (settings.opacity < 1 ? settings.opacity : 1) : 0 }}
     />
   )
 }

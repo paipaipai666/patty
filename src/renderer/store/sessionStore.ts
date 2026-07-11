@@ -38,6 +38,10 @@ interface SessionStore {
   activeSessionId: string | null
   sidebarVisible: boolean
   sidebarWidth: number
+  /** True while the sidebar width is mid-transition (CSS animated). Terminal
+   *  panes read this to skip resize-fitting during the slide so the WebGL
+   *  canvas isn't cleared/repainted on every animation frame. */
+  sidebarTransitioning: boolean
   loaded: boolean
   attentionMap: Record<string, string | null>
 
@@ -57,6 +61,7 @@ interface SessionStore {
   moveCollection: (collectionId: string, newParentId: string | null) => void
 
   toggleSidebar: () => void
+  setSidebarTransitioning: (value: boolean) => void
   setSidebarWidth: (width: number) => void
   navigateNext: () => void
   navigatePrev: () => void
@@ -72,6 +77,10 @@ interface SessionStore {
 
 const attentionTimers: Record<string, ReturnType<typeof setTimeout>> = {}
 let ipcCleanup: (() => void) | null = null
+// Safety timer that clears sidebarTransitioning after the CSS width transition
+// has had time to finish. Covers reduced-motion (no transitionend fires) and the
+// keyboard shortcut path. The last toggle wins.
+let sidebarTransitionTimer: ReturnType<typeof setTimeout> | null = null
 
 export function teardownSessionIPC() {
   if (ipcCleanup) ipcCleanup()
@@ -83,6 +92,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeSessionId: null,
   sidebarVisible: true,
   sidebarWidth: 220,
+  sidebarTransitioning: false,
   loaded: false,
   attentionMap: {},
 
@@ -307,8 +317,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   toggleSidebar: () => {
-    set((state) => ({ sidebarVisible: !state.sidebarVisible }))
+    set((state) => ({ sidebarVisible: !state.sidebarVisible, sidebarTransitioning: true }))
+    if (sidebarTransitionTimer) clearTimeout(sidebarTransitionTimer)
+    sidebarTransitionTimer = setTimeout(() => {
+      set({ sidebarTransitioning: false })
+    }, 260)
     markDirty()
+  },
+
+  setSidebarTransitioning: (value: boolean) => {
+    set({ sidebarTransitioning: value })
   },
 
   setSidebarWidth: (width: number) => {
