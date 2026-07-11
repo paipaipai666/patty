@@ -97,10 +97,10 @@ export function toPersistedTree(node: PaneTree | null): PersistedPaneTree | null
 }
 
 /** Find a leaf node by pane id, if present. */
-export function findLeafById(node: PaneTree | null, paneId: string): PaneLeaf | null {
+export function findLeaf(node: PaneTree | null, paneId: string): PaneLeaf | null {
   if (!node) return null
   if (node.type === 'leaf') return node.id === paneId ? node : null
-  return findLeafById(node.first, paneId) ?? findLeafById(node.second, paneId)
+  return findLeaf(node.first, paneId) ?? findLeaf(node.second, paneId)
 }
 
 /** True if `sessionId` is currently a leaf in the tree. */

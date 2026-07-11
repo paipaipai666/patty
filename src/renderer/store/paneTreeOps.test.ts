@@ -6,12 +6,11 @@ import {
   replaceLeafSession,
   setRatio,
   insertNeighbor,
-  findLeaf,
   collectLeafIds,
   nextLeafId,
   prevLeafId
 } from './paneTreeOps'
-import { singleLeafTree, firstLeafId, collectTreeSessionIds } from '../../shared/paneTreeNormalize'
+import { singleLeafTree, firstLeafId, collectTreeSessionIds, findLeaf } from '../../shared/paneTreeNormalize'
 
 const collectSessionIds = (tree: any): string[] => [...collectTreeSessionIds(tree)]
 import type { PaneTree } from '../../shared/paneTypes'

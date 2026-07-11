@@ -7,7 +7,7 @@
  */
 import type { PaneTree, PaneLeaf, PaneSplit, SplitDirection } from '../../shared/paneTypes'
 import { clampRatio } from '../../shared/paneTypes'
-import { newPaneId, firstLeafId as normalizeFirstLeafId } from '../../shared/paneTreeNormalize'
+import { newPaneId, firstLeafId as normalizeFirstLeafId, findLeaf } from '../../shared/paneTreeNormalize'
 
 /** A update applied to the node whose id == targetId. Returns the new subtree. */
 type NodeUpdate = (node: PaneTree) => PaneTree
@@ -182,12 +182,6 @@ export function insertNeighbor(
     }
     return split
   })
-}
-
-/** Find a leaf node by id. */
-export function findLeaf(tree: PaneTree, leafId: string): PaneLeaf | null {
-  if (tree.type === 'leaf') return tree.id === leafId ? tree : null
-  return findLeaf(tree.first, leafId) ?? findLeaf(tree.second, leafId)
 }
 
 /** All leaf pane ids in document order. */

@@ -1,64 +1,28 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync, copyFileSync } from 'fs'
 import { join } from 'path'
 import type { AppSettings } from '../shared/settingsTypes'
 import { DEFAULT_SETTINGS } from '../shared/defaultSettings'
+import { loadJsonSync, saveAtomicSync, migrateOldDataSync } from './jsonStore'
 
 export { DEFAULT_SETTINGS }
 
-const SETTINGS_FILE = join(app.getPath('userData'), 'settings.json')
-const OLD_APP_NAME = 'terminal-sidebar'
+const FILE = join(app.getPath('userData'), 'settings.json')
 
-function migrateFromOldApp(): void {
-  if (existsSync(SETTINGS_FILE)) return
-
-  const oldUserData = app.getPath('userData').replace(/[/\\]patty$/, `/${OLD_APP_NAME}`)
-  const oldSettingsFile = join(oldUserData, 'settings.json')
-
-  if (existsSync(oldSettingsFile)) {
-    try {
-      const dir = join(SETTINGS_FILE, '..')
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-      copyFileSync(oldSettingsFile, SETTINGS_FILE)
-      console.log('Migrated settings from', oldSettingsFile, 'to', SETTINGS_FILE)
-    } catch (err) {
-      console.error('Failed to migrate settings:', err)
-    }
-  }
+function mergeSettings(parsed: Record<string, unknown>, defaults: AppSettings): AppSettings {
+  return {
+    ...defaults,
+    ...parsed,
+    shortcuts: { ...defaults.shortcuts, ...(parsed.shortcuts as Record<string, unknown> || {}) },
+    notifications: { ...defaults.notifications, ...(parsed.notifications as Record<string, unknown> || {}) }
+  } as AppSettings
 }
 
-migrateFromOldApp()
+migrateOldDataSync(app.getPath('userData'), 'settings.json', 'terminal-sidebar')
 
 export function loadSettings(): AppSettings {
-  if (!existsSync(SETTINGS_FILE)) {
-    return {
-      ...DEFAULT_SETTINGS,
-      shortcuts: { ...DEFAULT_SETTINGS.shortcuts },
-      notifications: { ...DEFAULT_SETTINGS.notifications }
-    }
-  }
-  try {
-    const raw = readFileSync(SETTINGS_FILE, 'utf-8')
-    const parsed = JSON.parse(raw)
-    return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      shortcuts: { ...DEFAULT_SETTINGS.shortcuts, ...parsed.shortcuts },
-      notifications: { ...DEFAULT_SETTINGS.notifications, ...parsed.notifications }
-    }
-  } catch {
-    return {
-      ...DEFAULT_SETTINGS,
-      shortcuts: { ...DEFAULT_SETTINGS.shortcuts },
-      notifications: { ...DEFAULT_SETTINGS.notifications }
-    }
-  }
+  return loadJsonSync(FILE, DEFAULT_SETTINGS, mergeSettings)
 }
 
 export function saveSettings(settings: AppSettings): void {
-  const dir = join(SETTINGS_FILE, '..')
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  const tmp = SETTINGS_FILE + '.tmp'
-  writeFileSync(tmp, JSON.stringify(settings, null, 2), 'utf-8')
-  renameSync(tmp, SETTINGS_FILE)
+  saveAtomicSync(FILE, settings)
 }

@@ -2,7 +2,7 @@ import type { PersistedWorkspace, Workspace } from './workspaceTypes'
 import {
   normalizePersistedTree,
   firstLeafId,
-  findLeafById
+  findLeaf
 } from './paneTreeNormalize'
 
 export function newWorkspaceId(): string {
@@ -25,7 +25,7 @@ export function normalizeWorkspaces(
     if (!tree) continue
 
     let focused = pw.focusedPaneId
-    if (!focused || !findLeafById(tree, focused)) {
+    if (!focused || !findLeaf(tree, focused)) {
       focused = firstLeafId(tree)
     }
 

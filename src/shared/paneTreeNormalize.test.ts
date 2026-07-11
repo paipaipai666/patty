@@ -4,7 +4,7 @@ import {
   normalizePersistedTree,
   singleLeafTree,
   toPersistedTree,
-  findLeafById,
+  findLeaf,
   treeHasSession,
   firstLeafId,
   collectTreeSessionIds
@@ -142,7 +142,7 @@ describe('toPersistedTree', () => {
   })
 })
 
-describe('findLeafById', () => {
+describe('findLeaf', () => {
   const tree: PaneTree = {
     id: 'sp',
     type: 'split',
@@ -153,16 +153,16 @@ describe('findLeafById', () => {
   }
 
   it('finds a leaf by id', () => {
-    expect(findLeafById(tree, 'a')?.sessionId).toBe('s1')
-    expect(findLeafById(tree, 'b')?.sessionId).toBe('s2')
+    expect(findLeaf(tree, 'a')?.sessionId).toBe('s1')
+    expect(findLeaf(tree, 'b')?.sessionId).toBe('s2')
   })
 
   it('returns null when the id is not found', () => {
-    expect(findLeafById(tree, 'nope')).toBeNull()
+    expect(findLeaf(tree, 'nope')).toBeNull()
   })
 
   it('returns null for null tree', () => {
-    expect(findLeafById(null, 'a')).toBeNull()
+    expect(findLeaf(null, 'a')).toBeNull()
   })
 })
 

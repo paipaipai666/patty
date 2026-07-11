@@ -6,7 +6,8 @@ import {
   singleLeafTree,
   toPersistedTree,
   firstLeafId,
-  treeHasSession
+  treeHasSession,
+  findLeaf
 } from '../../shared/paneTreeNormalize'
 import {
   splitLeaf,
@@ -15,7 +16,6 @@ import {
   replaceLeafSession,
   setRatio,
   insertNeighbor,
-  findLeaf,
   nextLeafId,
   prevLeafId
 } from './paneTreeOps'
@@ -75,6 +75,21 @@ function findLeafIdBySession(tree: PaneTree | null, sessionId: string): string |
   if (!tree) return null
   if (tree.type === 'leaf') return tree.sessionId === sessionId ? tree.id : null
   return findLeafIdBySession(tree.first, sessionId) ?? findLeafIdBySession(tree.second, sessionId)
+}
+
+/** Ensure the active workspace exists, creating one if necessary. Returns null if one was created (caller should stop). */
+function getActiveWsOrCreate(sessionId: string): { ws: Workspace; workspaces: Workspace[]; activeWorkspaceId: string } | null {
+  const state = useWorkspaceStore.getState()
+  if (!state.activeWorkspaceId) {
+    state.createWorkspace(sessionId)
+    return null
+  }
+  const ws = state.workspaces.find((w) => w.id === state.activeWorkspaceId)
+  if (!ws) {
+    state.createWorkspace(sessionId)
+    return null
+  }
+  return { ws, workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId }
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
@@ -158,61 +173,26 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
 
   replaceFocusedLeaf: (sessionId) => {
-    const { workspaces, activeWorkspaceId } = get()
-    if (!activeWorkspaceId) {
-      get().createWorkspace(sessionId)
-      return
-    }
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!ws || !ws.focusedPaneId) {
-      get().createWorkspace(sessionId)
-      return
-    }
-    set({
-      workspaces: patchWorkspace(workspaces, activeWorkspaceId, {
-        paneTree: replaceLeafSession(ws.paneTree, ws.focusedPaneId, sessionId)
-      })
-    })
-    markDirty()
+    const r = getActiveWsOrCreate(sessionId)
+    if (!r) return
+    if (!r.ws.focusedPaneId) { get().createWorkspace(sessionId); return }
+    get().replaceLeafAt(r.ws.focusedPaneId, sessionId)
   },
 
   insertNeighborFocused: (sessionId, direction, side) => {
-    const { workspaces, activeWorkspaceId } = get()
-    if (!activeWorkspaceId) {
-      get().createWorkspace(sessionId)
-      return
-    }
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!ws || !ws.focusedPaneId) {
-      get().createWorkspace(sessionId)
-      return
-    }
-    const next = insertNeighbor(ws.paneTree, ws.focusedPaneId, sessionId, direction, side)
-    const newLeafId = findLeafIdBySession(next, sessionId)
-    set({
-      workspaces: patchWorkspace(workspaces, activeWorkspaceId, {
-        paneTree: next,
-        focusedPaneId: newLeafId ?? ws.focusedPaneId
-      })
-    })
-    markDirty()
+    const r = getActiveWsOrCreate(sessionId)
+    if (!r) return
+    if (!r.ws.focusedPaneId) { get().createWorkspace(sessionId); return }
+    get().insertNeighborAt(r.ws.focusedPaneId, sessionId, direction, side)
   },
 
   insertNeighborAt: (paneId, sessionId, direction, side) => {
-    const { workspaces, activeWorkspaceId } = get()
-    if (!activeWorkspaceId) {
-      get().createWorkspace(sessionId)
-      return
-    }
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!ws) {
-      get().createWorkspace(sessionId)
-      return
-    }
-    const next = insertNeighbor(ws.paneTree, paneId, sessionId, direction, side)
+    const r = getActiveWsOrCreate(sessionId)
+    if (!r) return
+    const next = insertNeighbor(r.ws.paneTree, paneId, sessionId, direction, side)
     const newLeafId = findLeafIdBySession(next, sessionId)
     set({
-      workspaces: patchWorkspace(workspaces, activeWorkspaceId, {
+      workspaces: patchWorkspace(r.workspaces, r.activeWorkspaceId, {
         paneTree: next,
         focusedPaneId: newLeafId ?? paneId
       })
@@ -221,19 +201,11 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   },
 
   replaceLeafAt: (paneId, sessionId) => {
-    const { workspaces, activeWorkspaceId } = get()
-    if (!activeWorkspaceId) {
-      get().createWorkspace(sessionId)
-      return
-    }
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!ws) {
-      get().createWorkspace(sessionId)
-      return
-    }
+    const r = getActiveWsOrCreate(sessionId)
+    if (!r) return
     set({
-      workspaces: patchWorkspace(workspaces, activeWorkspaceId, {
-        paneTree: replaceLeafSession(ws.paneTree, paneId, sessionId),
+      workspaces: patchWorkspace(r.workspaces, r.activeWorkspaceId, {
+        paneTree: replaceLeafSession(r.ws.paneTree, paneId, sessionId),
         focusedPaneId: paneId
       })
     })
