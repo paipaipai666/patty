@@ -37,13 +37,18 @@ function CloseIcon() {
 
 function SettingsIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 12 12">
-      <rect x="1" y="2" width="7" height="1.2" rx="0.6" fill="currentColor" />
-      <rect x="1" y="5.4" width="7" height="1.2" rx="0.6" fill="currentColor" />
-      <rect x="1" y="8.8" width="7" height="1.2" rx="0.6" fill="currentColor" />
-      <circle cx="9.5" cy="2.6" r="1.4" fill="currentColor" />
-      <circle cx="9.5" cy="6" r="1.4" fill="currentColor" />
-      <circle cx="9.5" cy="9.4" r="1.4" fill="currentColor" />
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path
+        d="M7 9.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M7 1.5c.25 0 .45.18.5.42l.34 1.78c.5.18 1.02.46 1.5.82l1.7-.67c.23-.09.48 0 .6.22l.92 1.6c.13.22.08.5-.12.66l-1.4 1.07c.04.28.04.56 0 .84l1.4 1.07c.2.16.25.44.12.66l-.92 1.6c-.12.22-.37.31-.6.22l-1.7-.67c-.48.36-1 .64-1.5.82l-.34 1.78c-.05.24-.25.42-.5.42s-.45-.18-.5-.42l-.34-1.78c-.5-.18-1.02-.46-1.5-.82l-1.7.67c-.23.09-.48 0-.6-.22l-.92-1.6c-.13-.22-.08-.5.12-.66l1.4-1.07c-.04-.28-.04-.56 0-.84l-1.4-1.07c-.2-.16-.25-.44-.12-.66l.92-1.6c.12-.22.37-.31.6-.22l1.7.67c.48-.36 1-.64 1.5-.82l.34-1.78c.05-.24.25-.42.5-.42Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
