@@ -8,6 +8,7 @@ import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TerminalArea } from './components/Terminal/TerminalArea'
 import { StatusBar } from './components/StatusBar/StatusBar'
+import { MetricsDashboard } from './components/MetricsDashboard/MetricsDashboard'
 import { ContextMenu, type MenuItem } from './components/common/ContextMenu'
 import { PromptDialog, type PromptOptions } from './components/common/PromptDialog'
 import { SettingsModal } from './components/Settings/SettingsModal'
@@ -51,6 +52,7 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [collectionContextMenu, setCollectionContextMenu] = useState<CollectionContextMenuState | null>(null)
   const [promptOptions, setPromptOptions] = useState<PromptOptions | null>(null)
+  const [metricsOpen, setMetricsOpen] = useState(false)
 
   const showPrompt = useCallback((title: string, defaultValue: string = ''): Promise<{ canceled: boolean; value: string }> => {
     return new Promise((resolve) => {
@@ -357,7 +359,8 @@ export default function App() {
           if (activeId) handleContextMenu(e, activeId)
         }}>
           <TerminalArea />
-          <StatusBar />
+          <StatusBar metricsOpen={metricsOpen} onToggleMetrics={() => setMetricsOpen((o) => !o)} />
+          <MetricsDashboard open={metricsOpen} onClose={() => setMetricsOpen(false)} />
         </div>
       </div>
       <ContextMenu

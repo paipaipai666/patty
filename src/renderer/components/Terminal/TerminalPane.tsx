@@ -12,6 +12,7 @@ import { getThemeColors } from '../../styles/themes'
 import styles from './Terminal.module.css'
 import { createIIPStreamPatcher } from './iipStreamPatcher'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
+import { markTerminalOpen } from '../../utils/shellReadiness'
 
 interface TerminalPaneProps {
   session: TerminalSession
@@ -89,6 +90,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     // resize guard / fit logic misbehave; stale onData/onExit callbacks from
     // the previous session could also fire against the new terminal.
     ptyCreatedRef.current = false
+    markTerminalOpen(session.id, session.shell)
     cleanupDataRef.current?.()
     cleanupExitRef.current?.()
     cleanupDataRef.current = null

@@ -1,6 +1,8 @@
 import { ipcMain, BrowserWindow, dialog, app } from 'electron'
 import { spawn } from 'child_process'
 import { readFileSync, writeFileSync } from 'fs'
+import { MetricsCollector } from './metricsCollector'
+import type { FirstTerminalEntry } from '../shared/metricsTypes'
 import {
   createPty,
   writeToPty,
@@ -144,7 +146,7 @@ async function getInstalledFonts(): Promise<string[]> {
   return fontsPromise
 }
 
-export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
+export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metricsCollector: MetricsCollector): void {
   // Settings handlers
   ipcMain.handle('settings:getAll', () => {
     return loadSettings()
@@ -329,5 +331,15 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void
       peakMemoryKB: m.memory?.peakWorkingSetSize ?? 0,
       idleWakeups: m.cpu?.idleWakeupsPerSecond ?? 0
     }))
+  })
+
+  // Metrics dashboard
+  ipcMain.handle('metrics:history', () => {
+    return metricsCollector.getSnapshot()
+  })
+
+  ipcMain.handle('metrics:recordFirstTerminal', (_event, entry: FirstTerminalEntry) => {
+    metricsCollector.recordFirstTerminal(entry)
+    return { success: true }
   })
 }

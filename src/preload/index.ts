@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { AppSettings, CustomTheme } from '../shared/settingsTypes'
+import type { MetricSample, FirstTerminalEntry, MetricsSnapshot } from '../shared/metricsTypes'
 import type { PersistedState } from '../shared/stateTypes'
 
 const terminalAPI = {
@@ -106,7 +107,19 @@ const terminalAPI = {
   perfMetrics: () => ipcRenderer.invoke('perf:metrics') as Promise<Array<{
     pid: number; type: string; cpuPercent: number;
     memoryKB: number; peakMemoryKB: number; idleWakeups: number
-  }>>
+  }>>,
+
+  // Metrics dashboard
+  metricsHistory: () => ipcRenderer.invoke('metrics:history') as Promise<MetricsSnapshot>,
+  onMetricsTick: (callback: (sample: MetricSample) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, sample: MetricSample) => callback(sample)
+    ipcRenderer.on('metrics:tick', handler)
+    return () => {
+      ipcRenderer.removeListener('metrics:tick', handler)
+    }
+  },
+  metricsRecordFirstTerminal: (entry: FirstTerminalEntry) =>
+    ipcRenderer.invoke('metrics:recordFirstTerminal', entry) as Promise<{ success: boolean }>
 }
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI)

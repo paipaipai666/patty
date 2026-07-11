@@ -50,3 +50,26 @@
   font-size: 10px;
   font-weight: 400;
 }
+
+.spacer {
+  flex: 1;
+}
+
+.toggleBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.toggleBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.active {
+  color: var(--accent);
+  background: var(--accent-alpha);
+}
