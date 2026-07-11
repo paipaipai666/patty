@@ -112,7 +112,16 @@ export const UI_COLOR_LABELS: Record<keyof UITheme, string> = {
   '--green': 'Green',
   '--red': 'Red',
   '--cyan': 'Cyan',
-  '--amber': 'Amber'
+  '--amber': 'Amber',
+
+  '--bg-hover': 'Background Hover',
+  '--bg-tertiary': 'Tertiary Background',
+  '--text-tertiary': 'Tertiary Text',
+  '--border-light': 'Light Border',
+  '--border-strong': 'Strong Border',
+  '--color-amber': 'Amber (Semantic)',
+  '--color-gray': 'Gray (Semantic)',
+  '--indigo': 'Indigo (Semantic)'
 }
 
 export const XTERM_COLOR_LABELS: Record<keyof XtermTheme, string> = {
