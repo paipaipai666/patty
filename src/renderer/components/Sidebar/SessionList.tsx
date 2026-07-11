@@ -1,6 +1,4 @@
-import { useMemo, useRef } from 'react'
-import gsap from 'gsap'
-import { useGSAP } from '@gsap/react'
+import { useMemo } from 'react'
 import { useSessionStore, type Collection, type TerminalSession } from '../../store/sessionStore'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { collectTreeSessionIds } from '../../../shared/paneTreeNormalize'
@@ -58,28 +56,6 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const loaded = useSessionStore((s) => s.loaded)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const listRef = useRef<HTMLDivElement>(null)
-  const prevCount = useRef(0)
-
-  // Stagger entrance animation for new items
-  useGSAP(() => {
-    if (!listRef.current) return
-    const items = listRef.current.children
-    if (items.length > prevCount.current && prevCount.current > 0) {
-      // New items added — animate only the new ones
-      const newItems = Array.from(items).slice(prevCount.current)
-      gsap.from(newItems, {
-        x: -40,
-        opacity: 0,
-        scale: 0.92,
-        duration: 0.4,
-        stagger: 0.06,
-        ease: 'back.out(1.3)',
-        clearProps: 'transform,opacity'
-      })
-    }
-    prevCount.current = items.length
-  }, { scope: listRef, dependencies: [sessions.map((s) => s.id).join(','), collections.map((c) => c.id).join(',')] })
 
   const filteredSessions = useMemo(() => {
     if (!searchQuery?.trim()) return sessions
@@ -150,7 +126,7 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
   }
 
   return (
-    <div className={styles.list} ref={listRef} role="tablist" aria-label="Terminal sessions">
+    <div className={styles.list} role="tablist" aria-label="Terminal sessions">
       {topLevelCollections.map((collection) =>
         renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onSelect, onCollectionContextMenu, 0)
       )}

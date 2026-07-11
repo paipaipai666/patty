@@ -102,10 +102,7 @@ export default function App() {
       const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
         persisted.workspaces,
         persisted.activeWorkspaceId,
-        persisted.paneTree,
-        persisted.focusedPaneId,
-        knownIds,
-        persisted.activeSessionId
+        knownIds
       )
       useWorkspaceStore.getState().loadFromPersisted(workspaces, activeWorkspaceId)
     })

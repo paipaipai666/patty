@@ -32,12 +32,6 @@ export interface PersistedState {
   workspaces: PersistedWorkspace[]
   /** Currently active workspace id, or null if no workspaces exist. */
   activeWorkspaceId: string | null
-  /**
-   * Legacy pre-workspace pane tree. Present in state files saved before the
-   * workspace feature. Read by the normalization step on load; no longer
-   * written by the save path once workspaceStore is wired.
-   */
   paneTree?: PersistedPaneTree | null
-  /** Legacy focused pane id (paired with `paneTree`). */
   focusedPaneId?: string | null
 }

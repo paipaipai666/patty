@@ -1,12 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import gsap from 'gsap'
-import { useGSAP } from '@gsap/react'
 import App from './App'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import './styles/global.css'
-
-gsap.registerPlugin(useGSAP)
 
 // Apply cached theme synchronously before React renders to prevent dark flash.
 // sessionStorage is set by settingsStore.init after the first successful load.

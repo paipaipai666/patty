@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, memo } from 'react'
-import gsap from 'gsap'
 import { useSessionStore, SESSION_COLOR_VARS, type TerminalSession } from '../../store/sessionStore'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
@@ -20,12 +19,10 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
   const inputRef = useRef<HTMLInputElement>(null)
   const itemRef = useRef<HTMLDivElement>(null)
   const prevAttention = useRef<string | null>(null)
-  const attentionTimelineRef = useRef<gsap.core.Timeline | null>(null)
 
   // Attention state entrance animation
   useEffect(() => {
     if (attentionType && attentionType !== prevAttention.current && itemRef.current) {
-      attentionTimelineRef.current?.kill()
       const style = getComputedStyle(document.documentElement)
       const colorMap: Record<string, string> = {
         permission: style.getPropertyValue('--attention-permission-glow').trim() || 'rgba(99,102,241,0.4)',
@@ -38,24 +35,12 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
         border-radius:50%; pointer-events:none;
         background:radial-gradient(circle, ${colorMap[attentionType] || colorMap.complete}, transparent);
         transform:translateY(-50%) scale(0); opacity:0;
+        animation: attentionGlow 1.05s ease-out forwards;
       `
+      glow.onanimationend = () => glow.remove()
       itemRef.current.appendChild(glow)
-
-      const tl = gsap.timeline({
-        onComplete: () => {
-          if (glow.parentNode) glow.parentNode.removeChild(glow)
-          attentionTimelineRef.current = null
-        }
-      })
-      attentionTimelineRef.current = tl
-      tl.to(glow, { scale: 1.5, opacity: 0.6, duration: 0.35, ease: 'power2.out' })
-        .to(glow, { scale: 2.5, opacity: 0, duration: 0.7, ease: 'power2.out' })
     }
     prevAttention.current = attentionType
-    return () => {
-      attentionTimelineRef.current?.kill()
-      attentionTimelineRef.current = null
-    }
   }, [attentionType])
 
   // Map attention type to CSS class name
