@@ -328,13 +328,26 @@ function FontPicker({ value, onChange }: { value: string; onChange: (font: strin
   const [fonts, setFonts] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const requestedRef = useRef(false)
 
+  // Fetch lazily when the dropdown first opens. requestedRef guards against
+  // repeat fetches (incl. React StrictMode's double-invoked effects) and is
+  // reset on failure so a failed fetch can be retried by reopening.
   useEffect(() => {
+    if (!open || requestedRef.current) return
+    requestedRef.current = true
+    setLoading(true)
     window.terminalAPI.getFonts().then((systemFonts) => {
       setFonts(systemFonts.length > 0 ? systemFonts : FALLBACK_FONTS)
+      setLoading(false)
+    }).catch(() => {
+      setFonts(FALLBACK_FONTS)
+      setLoading(false)
+      requestedRef.current = false
     })
-  }, [])
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -358,7 +371,9 @@ function FontPicker({ value, onChange }: { value: string; onChange: (font: strin
       />
       {open && (
         <div className={styles.fontPickerList}>
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className={styles.fontPickerEmpty}>Loading fonts…</div>
+          ) : filtered.length === 0 ? (
             <div className={styles.fontPickerEmpty}>No fonts found</div>
           ) : (
             filtered.map((font) => (

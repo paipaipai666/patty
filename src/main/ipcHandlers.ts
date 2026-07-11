@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, dialog, app } from 'electron'
-import { execSync } from 'child_process'
+import { spawn } from 'child_process'
 import { readFileSync, writeFileSync } from 'fs'
 import {
   createPty,
@@ -15,31 +15,133 @@ import type { PersistedState } from '../shared/stateTypes'
 import type { CustomTheme } from '../shared/settingsTypes'
 import { perfTimerStart, perfTimerEnd, perfCounter, perfDump } from '../shared/perf'
 
-function getInstalledFonts(): string[] {
-  perfTimerStart('fonts:enumerate')
-  const fonts = new Set<string>()
-  const keys = [
-    'HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts',
-    'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts'
-  ]
-  for (const key of keys) {
+// Map Windows code page numbers to TextDecoder encoding labels.
+// NOTE: CP437/CP850 are approximated as 'latin1'. Their extended ranges
+// (0x80–0xFF) differ from ISO-8859-1, so accented glyphs may be slightly off.
+// This is a known approximation, not exact decoding — do not copy this mapping
+// elsewhere expecting fidelity.
+function codepageToEncoding(cp: number): string {
+  switch (cp) {
+    case 437:
+    case 850:
+      return 'latin1'
+    case 1252:
+      return 'windows-1252'
+    case 936:
+      return 'gbk'
+    case 932:
+      return 'shift_jis'
+    case 949:
+      return 'euc-kr'
+    case 65001:
+      return 'utf-8'
+    default:
+      return 'utf-8'
+  }
+}
+
+// Decode a Buffer using the given encoding, falling back to utf-8 if the
+// runtime lacks ICU data for that encoding (rare) — a scan must never reject
+// solely over a decoding detail.
+function decodeBuffer(buf: Buffer, encoding: string): string {
+  try {
+    return new TextDecoder(encoding).decode(buf)
+  } catch {
+    return new TextDecoder('utf-8').decode(buf)
+  }
+}
+
+let codepageCache: string | null = null
+let fontsCache: string[] | null = null
+let fontsPromise: Promise<string[]> | null = null
+
+// Detect the active OEM code page once. `chcp` output carries the digits in
+// ASCII (codepage-invariant), so a loose numeric match is language-safe.
+function detectCodepage(): Promise<string> {
+  if (codepageCache) return Promise.resolve(codepageCache)
+  return new Promise<string>((resolve) => {
     try {
-      const result = execSync(`reg query "${key}" /s`, { encoding: 'utf-8', timeout: 10000 })
-      for (const line of result.split(/\r?\n/)) {
-        const match = line.match(/^\s+(.+?)\s+REG_(SZ|EXPAND_SZ)\s+(.+)$/)
-        if (match) {
-          const name = match[1].trim()
-          const clean = name.replace(/\s*\((?:TrueType|OpenType|All res)\)\s*$/i, '').trim()
-          if (clean) fonts.add(clean)
-        }
-      }
+      const child = spawn('chcp', [], { windowsHide: true })
+      let out = ''
+      child.stdout?.on('data', (d: Buffer) => {
+        out += d.toString('utf-8')
+      })
+      child.on('error', () => resolve('utf-8'))
+      child.on('close', () => {
+        const m = out.match(/(\d{3,5})/)
+        const cp = m ? parseInt(m[1], 10) : 65001
+        codepageCache = codepageToEncoding(cp)
+        resolve(codepageCache)
+      })
     } catch {
-      // registry key not found or access denied — skip
+      resolve('utf-8')
+    }
+  })
+}
+
+// Scan one registry font key, resolving with the raw stdout Buffer. A missing
+// key or non-zero reg exit yields an (empty) buffer — a "normal empty result",
+// not an error. Only a spawn failure (e.g. reg.exe missing) rejects.
+function scanFontKey(key: string): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const child = spawn('reg', ['query', key, '/s'], { windowsHide: true })
+    const chunks: Buffer[] = []
+    child.stdout?.on('data', (d: Buffer) => chunks.push(d))
+    child.on('error', (err) => reject(err))
+    child.on('close', () => resolve(Buffer.concat(chunks)))
+  })
+}
+
+function parseFonts(text: string): string[] {
+  const fonts = new Set<string>()
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s+(.+?)\s+REG_(SZ|EXPAND_SZ)\s+(.+)$/)
+    if (match) {
+      const name = match[1].trim()
+      const clean = name.replace(/\s*\((?:TrueType|OpenType|All res)\)\s*$/i, '').trim()
+      if (clean) fonts.add(clean)
     }
   }
-  const result = [...fonts].sort()
-  perfTimerEnd('fonts:enumerate')
-  return result
+  return [...fonts]
+}
+
+async function getInstalledFonts(): Promise<string[]> {
+  if (fontsCache) return fontsCache
+  if (fontsPromise) return fontsPromise
+
+  perfTimerStart('fonts:enumerate')
+  // Launch codepage detection concurrently with both registry scans so the
+  // first call isn't serialized behind the probe.
+  fontsPromise = (async () => {
+    const [codepageRes, hklmRes, hkcuRes] = await Promise.allSettled([
+      detectCodepage(),
+      scanFontKey('HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts'),
+      scanFontKey('HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts')
+    ])
+    const encoding = codepageRes.status === 'fulfilled' ? codepageRes.value : 'utf-8'
+
+    const scans: PromiseSettledResult<Buffer>[] = [hklmRes, hkcuRes]
+    // Partial success: any fulfilled scan contributes. Only if BOTH reject
+    // (reg.exe can't run) do we fail — keeping the cache empty so it's retryable.
+    if (!scans.some((r) => r.status === 'fulfilled')) {
+      throw new Error('Font registry scan failed')
+    }
+
+    const fonts = new Set<string>()
+    for (const r of scans) {
+      if (r.status === 'fulfilled') {
+        for (const f of parseFonts(decodeBuffer(r.value, encoding))) fonts.add(f)
+      }
+    }
+    const result = [...fonts].sort()
+    fontsCache = result
+    return result
+  })().finally(() => {
+    fontsPromise = null
+    perfTimerEnd('fonts:enumerate')
+  })
+
+  return fontsPromise
 }
 
 export function registerIpcHandlers(getWindow: () => BrowserWindow | null): void {
