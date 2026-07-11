@@ -48,11 +48,30 @@ function SettingsIcon() {
   )
 }
 
-interface TitleBarProps {
-  onOpenSettings?: () => void
+function SidebarIcon({ open }: { open: boolean }) {
+  if (open) {
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14">
+        <rect x="1" y="1.5" width="12" height="11" rx="1.5" stroke="currentColor" fill="none" strokeWidth="1.2" />
+        <line x1="5" y1="1.5" x2="5" y2="12.5" stroke="currentColor" strokeWidth="1.2" />
+      </svg>
+    )
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14">
+      <rect x="1" y="1.5" width="12" height="11" rx="1.5" stroke="currentColor" fill="none" strokeWidth="1.2" />
+      <line x1="9" y1="1.5" x2="9" y2="12.5" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  )
 }
 
-export function TitleBar({ onOpenSettings }: TitleBarProps) {
+interface TitleBarProps {
+  onOpenSettings?: () => void
+  sidebarVisible: boolean
+  onToggleSidebar: () => void
+}
+
+export function TitleBar({ onOpenSettings, sidebarVisible, onToggleSidebar }: TitleBarProps) {
   const [maximized, setMaximized] = useState(false)
 
   useEffect(() => {
@@ -63,6 +82,16 @@ export function TitleBar({ onOpenSettings }: TitleBarProps) {
   return (
     <div className={styles.titlebar}>
       <div className={styles.dragRegion}>
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className={styles.btnToggle}
+          aria-label={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}
+          aria-pressed={sidebarVisible}
+          title="Toggle sidebar"
+        >
+          <SidebarIcon open={sidebarVisible} />
+        </button>
         <span className={styles.title}>Patty</span>
       </div>
       <div className={styles.controls}>

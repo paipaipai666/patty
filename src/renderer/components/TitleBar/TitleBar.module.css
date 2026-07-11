@@ -59,6 +59,28 @@
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
+.btnToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 24px;
+  margin-right: 2px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.btnToggle:hover {
+  background: var(--neutral-8);
+  color: var(--text-primary);
+}
+
 .btnControl:hover {
   background: var(--neutral-8);
   color: var(--text-primary);

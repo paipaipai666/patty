@@ -343,7 +343,7 @@ export default function App() {
 
   return (
     <div className={styles.app}>
-      <TitleBar onOpenSettings={openSettings} />
+      <TitleBar onOpenSettings={openSettings} sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         <div className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
           <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
