@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-vi.mock('./statePersistence', () => ({
-  requestStateSave: vi.fn(),
-  markDirty: vi.fn(),
-  saveStateNow: vi.fn()
+vi.mock('./dirtyScheduler', () => ({
+  markDirty: vi.fn()
 }))
 
 const mockStateLoad = vi.fn()
@@ -406,10 +404,6 @@ describe('loadState / saveState', () => {
     const result = await useSessionStore.getState().loadState()
     expect(result).toBeNull()
     expect(useSessionStore.getState().loaded).toBe(true)
-  })
-
-  it('saveState does not throw', async () => {
-    await expect(useSessionStore.getState().saveState()).resolves.toBeUndefined()
   })
 
   it('loadState registers IPC listeners only once (guards duplicate)', async () => {

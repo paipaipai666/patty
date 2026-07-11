@@ -2,24 +2,16 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipcHandlers'
-import { startHookServer, stopHookServer } from './ptyManager'
+import { startHookServer, stopHookServer, isIgnorableNetworkError } from './ptyManager'
 import { ensureClaudeCodeHook, ensureOpenCodePlugin, ensureCodexHook } from './hookInstaller'
 import { loadSettings } from './settingsHandler'
 import { perfMark, perfMeasure, perfMemoryMain, perfReport, perfDump, perfEnabled } from '../shared/perf'
-import { noteEvent, startHeartbeatWatchdog, flushStats, setStatsPath } from './heartbeat'
+import { noteEvent, startHeartbeatWatchdog } from './heartbeat'
 
 let mainWindow: BrowserWindow | null = null
 
-function isIgnorableMainError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  const code = (error as { code?: string }).code
-  // Network/pipe aborts from hook clients (e.g. OpenCode exiting) should not
-  // crash the app with a system error dialog.
-  return code === 'EPIPE' || code === 'ECONNRESET' || code === 'ECONNABORTED'
-}
-
 process.on('uncaughtException', (error) => {
-  if (isIgnorableMainError(error)) {
+  if (isIgnorableNetworkError(error)) {
     console.error('[main] ignored uncaught network abort:', error.message)
     return
   }
@@ -28,7 +20,7 @@ process.on('uncaughtException', (error) => {
 })
 
 process.on('unhandledRejection', (reason) => {
-  if (reason instanceof Error && isIgnorableMainError(reason)) {
+  if (reason instanceof Error && isIgnorableNetworkError(reason)) {
     console.error('[main] ignored unhandled network abort:', reason.message)
     return
   }
@@ -186,7 +178,6 @@ app.whenReady().then(async () => {
   perfMeasure('app:hooks-install', 'app:hooks-install-start')
 
   // Heartbeat watchdog: clears flame when a source stops sending keepalives.
-  setStatsPath(join(app.getPath('appData'), 'Patty', 'heartbeat-stats.json'))
   startHeartbeatWatchdog(sendClear)
 
   perfMark('app:create-window-start')
@@ -207,7 +198,6 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
-  flushStats()
   perfDump()
   stopHookServer()
 })

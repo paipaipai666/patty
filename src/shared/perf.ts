@@ -68,10 +68,6 @@ export function perfCounter(name: string): void {
   }
 }
 
-export function perfGetCount(name: string): number {
-  return counters.get(name) ?? 0
-}
-
 // ── Timers ────────────────────────────────────────────────────────────────
 
 const timers = new Map<string, number>()
@@ -117,16 +113,6 @@ export function perfMemoryMain(label: string): void {
   const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
   log(
     `[perf] memory[${label}] rss=${mb(mem.rss)}MB heap=${mb(mem.heapUsed)}/${mb(mem.heapTotal)}MB external=${mb(mem.external)}MB`
-  )
-}
-
-export function perfMemoryRenderer(label: string): void {
-  if (!enabled) return
-  const mem = (performance as any).memory
-  if (!mem) return
-  const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1)
-  log(
-    `[perf] memory[${label}] jsHeap=${mb(mem.usedJSHeapSize)}/${mb(mem.totalJSHeapSize)}MB`
   )
 }
 

@@ -7,13 +7,13 @@ import {
   setRatio,
   insertNeighbor,
   findLeaf,
-  firstLeafId,
   collectLeafIds,
-  collectSessionIds,
   nextLeafId,
   prevLeafId
 } from './paneTreeOps'
-import { singleLeafTree } from '../../shared/paneTreeNormalize'
+import { singleLeafTree, firstLeafId, collectTreeSessionIds } from '../../shared/paneTreeNormalize'
+
+const collectSessionIds = (tree: any): string[] => [...collectTreeSessionIds(tree)]
 import type { PaneTree } from '../../shared/paneTypes'
 
 describe('splitLeaf', () => {
@@ -270,7 +270,7 @@ describe('navigation helpers', () => {
 
   it('firstLeafId returns the top-left-most leaf', () => {
     const t = buildTree()
-    expect(findLeaf(t, firstLeafId(t))?.sessionId).toBe('s1')
+    expect(findLeaf(t, firstLeafId(t)!)?.sessionId).toBe('s1')
   })
 
   it('nextLeafId wraps around the document order', () => {

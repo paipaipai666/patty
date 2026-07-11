@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-vi.mock('./statePersistence', () => ({
-  requestStateSave: vi.fn(),
-  markDirty: vi.fn(),
-  saveStateNow: vi.fn()
+vi.mock('./dirtyScheduler', () => ({
+  markDirty: vi.fn()
 }))
 
 import { useWorkspaceStore, getFocusedSessionId } from './workspaceStore'
@@ -22,19 +20,17 @@ function makeWorkspace(overrides: Partial<Workspace> & { id: string }): Workspac
 beforeEach(() => {
   useWorkspaceStore.setState({
     workspaces: [],
-    activeWorkspaceId: null,
-    loaded: false
+    activeWorkspaceId: null
   })
 })
 
 describe('loadFromPersisted', () => {
-  it('restores workspaces and sets loaded flag', () => {
+  it('restores workspaces and active id', () => {
     const ws = [makeWorkspace({ id: 'w1' })]
     useWorkspaceStore.getState().loadFromPersisted(ws, 'w1')
     const state = useWorkspaceStore.getState()
     expect(state.workspaces).toHaveLength(1)
     expect(state.activeWorkspaceId).toBe('w1')
-    expect(state.loaded).toBe(true)
   })
 })
 

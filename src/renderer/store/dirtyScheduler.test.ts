@@ -6,7 +6,7 @@ vi.stubGlobal('window', {
   addEventListener: vi.fn()
 })
 
-import { configureStatePersistence, requestStateSave, saveStateNow } from './statePersistence'
+import { configureDirtyScheduler, markDirty, flushNow } from './dirtyScheduler'
 import type { PersistedState } from '../../shared/stateTypes'
 
 vi.useFakeTimers()
@@ -19,17 +19,17 @@ afterAll(() => {
   vi.useRealTimers()
 })
 
-describe('configureStatePersistence', () => {
+describe('configureDirtyScheduler', () => {
   it('registers the builder function', () => {
     const builder = vi.fn((): PersistedState | null => null)
-    configureStatePersistence(builder)
-    requestStateSave()
+    configureDirtyScheduler(builder)
+    markDirty()
     vi.advanceTimersByTime(1000)
     expect(builder).toHaveBeenCalled()
   })
 })
 
-describe('requestStateSave', () => {
+describe('markDirty', () => {
   it('debounces multiple calls into one save', () => {
     const builder = vi.fn((): PersistedState | null => ({
       sessions: [],
@@ -40,11 +40,11 @@ describe('requestStateSave', () => {
       workspaces: [],
       activeWorkspaceId: null
     }))
-    configureStatePersistence(builder)
+    configureDirtyScheduler(builder)
 
-    requestStateSave()
-    requestStateSave()
-    requestStateSave()
+    markDirty()
+    markDirty()
+    markDirty()
     expect(builder).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1000)
@@ -53,20 +53,20 @@ describe('requestStateSave', () => {
   })
 
   it('does not call stateSave when builder returns null', () => {
-    configureStatePersistence(() => null)
-    requestStateSave()
+    configureDirtyScheduler(() => null)
+    markDirty()
     vi.advanceTimersByTime(1000)
     expect(mockStateSave).not.toHaveBeenCalled()
   })
 
   it('does nothing when no builder is configured', () => {
-    requestStateSave()
+    markDirty()
     vi.advanceTimersByTime(1000)
     expect(mockStateSave).not.toHaveBeenCalled()
   })
 })
 
-describe('saveStateNow', () => {
+describe('flushNow', () => {
   it('flushes state immediately via the builder', () => {
     const builder = vi.fn((): PersistedState | null => ({
       sessions: [],
@@ -77,8 +77,8 @@ describe('saveStateNow', () => {
       workspaces: [],
       activeWorkspaceId: null
     }))
-    configureStatePersistence(builder)
-    saveStateNow()
+    configureDirtyScheduler(builder)
+    flushNow()
     expect(builder).toHaveBeenCalledTimes(1)
     expect(mockStateSave).toHaveBeenCalled()
   })

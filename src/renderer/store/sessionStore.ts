@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { PersistedState, SessionColor, Collection } from '../../shared/stateTypes'
 import type { ShellType } from '../../shared/settingsTypes'
-import { markDirty, saveStateNow } from './statePersistence'
+import { markDirty } from './dirtyScheduler'
 
 export type { Collection }
 
@@ -61,7 +61,6 @@ interface SessionStore {
   moveCollection: (collectionId: string, newParentId: string | null) => void
 
   toggleSidebar: () => void
-  setSidebarTransitioning: (value: boolean) => void
   setSidebarWidth: (width: number) => void
   navigateNext: () => void
   navigatePrev: () => void
@@ -72,7 +71,6 @@ interface SessionStore {
   setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | null) => void
 
   loadState: () => Promise<PersistedState | null>
-  saveState: () => Promise<void>
 }
 
 const attentionTimers: Record<string, ReturnType<typeof setTimeout>> = {}
@@ -141,10 +139,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({ loaded: true })
       return null
     }
-  },
-
-  saveState: async () => {
-    saveStateNow()
   },
 
   addSession: (opts = {}) => {
@@ -325,10 +319,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     markDirty()
   },
 
-  setSidebarTransitioning: (value: boolean) => {
-    set({ sidebarTransitioning: value })
-  },
-
   setSidebarWidth: (width: number) => {
     // Keep in sync with --sidebar-min-width / --sidebar-max-width in variables.css
     const clamped = Math.min(320, Math.max(160, width))
@@ -397,7 +387,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 }))
 
 /** Build the session-owned part of persisted state. Workspace fields are
- *  filled by the statePersistence coordinator via workspaceStore. */
+ *  filled by the dirtyScheduler coordinator via workspaceStore. */
 export function buildSessionPersistedState(): Pick<PersistedState, 'sessions' | 'collections' | 'activeSessionId' | 'sidebarVisible' | 'sidebarWidth'> {
   const state = useSessionStore.getState()
   return {

@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS, buildSessionPersistedState } from './store/sessionStore'
 import { useWorkspaceStore, getFocusedSessionId } from './store/workspaceStore'
-import { configureStatePersistence, markDirty } from './store/statePersistence'
+import { configureDirtyScheduler, markDirty } from './store/dirtyScheduler'
 import { normalizeWorkspaces } from '../shared/workspaceNormalize'
 import { useSettingsStore } from './store/settingsStore'
 import { TitleBar } from './components/TitleBar/TitleBar'
@@ -77,7 +77,7 @@ export default function App() {
   // Wire combined persistence: sessionStore owns sessions/sidebar/collections,
   // workspaceStore owns workspaces[] + activeWorkspaceId.
   useEffect(() => {
-    configureStatePersistence(() => {
+    configureDirtyScheduler(() => {
       const sessionState = buildSessionPersistedState()
       if (!useSessionStore.getState().loaded) return null
       const wsState = useWorkspaceStore.getState().toPersisted()

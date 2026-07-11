@@ -19,7 +19,7 @@ let hookPort = 0
 let onHookRequest: ((paneId: string, event: string, source: string) => void) | null = null
 const activeSockets = new Set<Socket>()
 
-function isIgnorableNetworkError(error: unknown): boolean {
+export function isIgnorableNetworkError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   const code = (error as { code?: string }).code
   return code === 'EPIPE' || code === 'ECONNRESET' || code === 'ECONNABORTED'
@@ -59,7 +59,7 @@ function findPwsh(): string | null {
   return null
 }
 
-export function detectDefaultShell(): string {
+function detectDefaultShell(): string {
   return findPwsh() ?? SHELL_PATHS.powershell
 }
 
@@ -180,10 +180,6 @@ export function killPty(id: string): void {
     removePane(id)
     sessions.delete(id)
   }
-}
-
-export function getPtySession(id: string): PtySession | undefined {
-  return sessions.get(id)
 }
 
 export function startHookServer(handler: (paneId: string, event: string, source: string) => void): Promise<number> {

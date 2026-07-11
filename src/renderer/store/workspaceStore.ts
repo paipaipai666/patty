@@ -6,8 +6,7 @@ import {
   singleLeafTree,
   toPersistedTree,
   firstLeafId,
-  treeHasSession,
-  newPaneId
+  treeHasSession
 } from '../../shared/paneTreeNormalize'
 import {
   splitLeaf,
@@ -18,15 +17,13 @@ import {
   insertNeighbor,
   findLeaf,
   nextLeafId,
-  prevLeafId,
-  collectSessionIds
+  prevLeafId
 } from './paneTreeOps'
-import { markDirty } from './statePersistence'
+import { markDirty } from './dirtyScheduler'
 
 interface WorkspaceStore {
   workspaces: Workspace[]
   activeWorkspaceId: string | null
-  loaded: boolean
 
   /** Restore workspaces from normalized data (called by App after loadState). */
   loadFromPersisted: (workspaces: Workspace[], activeId: string | null) => void
@@ -83,10 +80,9 @@ function findLeafIdBySession(tree: PaneTree | null, sessionId: string): string |
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   workspaces: [],
   activeWorkspaceId: null,
-  loaded: false,
 
   loadFromPersisted: (workspaces, activeId) => {
-    set({ workspaces, activeWorkspaceId: activeId, loaded: true })
+    set({ workspaces, activeWorkspaceId: activeId })
   },
 
   // ── Workspace management ────────────────────────────────────────────
@@ -391,9 +387,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
   }
 }))
-
-// Re-export for callers that need session visibility without importing ops directly.
-export { collectSessionIds, newPaneId }
 
 /**
  * Read the sessionId of the currently focused leaf in the active workspace,

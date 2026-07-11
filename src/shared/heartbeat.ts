@@ -13,7 +13,3 @@ export function getHeartbeatConfig(source: string | null | undefined): Heartbeat
   if (!source) return undefined
   return SOURCE_HEARTBEAT[source]
 }
-
-export function heartbeatTimeoutMs(source: string | null | undefined): number | undefined {
-  return getHeartbeatConfig(source)?.timeoutMs
-}

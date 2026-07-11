@@ -7,7 +7,7 @@
  */
 import type { PaneTree, PaneLeaf, PaneSplit, SplitDirection } from '../../shared/paneTypes'
 import { clampRatio } from '../../shared/paneTypes'
-import { newPaneId, firstLeafId as normalizeFirstLeafId, collectTreeSessionIds } from '../../shared/paneTreeNormalize'
+import { newPaneId, firstLeafId as normalizeFirstLeafId } from '../../shared/paneTreeNormalize'
 
 /** A update applied to the node whose id == targetId. Returns the new subtree. */
 type NodeUpdate = (node: PaneTree) => PaneTree
@@ -86,7 +86,7 @@ export function removeLeaf(tree: PaneTree, leafId: string): RemoveResult {
   // Choose focus: the first leaf of the collapsed result. This is a stable,
   // predictable choice (top-left-most pane) and avoids tracking the sibling
   // explicitly through the recursion.
-  const next = firstLeafId(after)
+  const next = normalizeFirstLeafId(after)!
   return { tree: after, nextFocusId: next }
 }
 
@@ -190,21 +190,11 @@ export function findLeaf(tree: PaneTree, leafId: string): PaneLeaf | null {
   return findLeaf(tree.first, leafId) ?? findLeaf(tree.second, leafId)
 }
 
-/** First leaf id in document order (top-left-most). */
-export function firstLeafId(tree: PaneTree): string {
-  return normalizeFirstLeafId(tree)!
-}
-
 /** All leaf pane ids in document order. */
 export function collectLeafIds(tree: PaneTree | null): string[] {
   if (!tree) return []
   if (tree.type === 'leaf') return [tree.id]
   return [...collectLeafIds(tree.first), ...collectLeafIds(tree.second)]
-}
-
-/** All session ids currently visible in the tree, in document order. */
-export function collectSessionIds(tree: PaneTree | null): string[] {
-  return [...collectTreeSessionIds(tree)]
 }
 
 /** Nearest leaf id following `currentId` in document order, wrapping around. */

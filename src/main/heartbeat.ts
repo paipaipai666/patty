@@ -1,5 +1,3 @@
-import * as fs from 'fs'
-import * as path from 'path'
 import { getHeartbeatConfig } from '../shared/heartbeat'
 
 // 已知限制：claude-code / codex 在纯文本、无工具调用的超长回复期间不触发任何
@@ -12,12 +10,9 @@ export interface ActiveEntry {
 }
 
 export const HEARTBEAT_TICK_MS = 5000
-export const MIN_STATS_FLUSH_MS = 5 * 60 * 1000
 
 const active = new Map<string, ActiveEntry>()
-const maxNaturalGap: Record<string, number> = {}
 
-let statsPath: string | null = null
 let stopWatchdog: (() => void) | null = null
 
 export function collectExpired(activeMap: Map<string, ActiveEntry>, now: number): string[] {
@@ -52,10 +47,6 @@ export function noteEvent(
   }
   const prev = active.get(paneId)
   if (!prev) return
-  const gap = now - prev.lastSeen
-  if (gap >= 0 && gap < cfg.timeoutMs) {
-    maxNaturalGap[source] = Math.max(maxNaturalGap[source] ?? 0, gap)
-  }
   active.set(paneId, { source, lastSeen: now })
 }
 
@@ -67,71 +58,24 @@ export function snapshot(): Array<{ paneId: string } & ActiveEntry> {
   return Array.from(active.entries()).map(([paneId, e]) => ({ paneId, ...e }))
 }
 
-export function setStatsPath(p: string): void {
-  statsPath = p
-}
-
-export function loadStats(): void {
-  if (!statsPath) return
-  try {
-    if (fs.existsSync(statsPath)) {
-      const data = JSON.parse(fs.readFileSync(statsPath, 'utf-8')) as {
-        maxNaturalGap?: Record<string, number>
-      }
-      if (data.maxNaturalGap) {
-        for (const [k, v] of Object.entries(data.maxNaturalGap)) {
-          if (typeof v === 'number') {
-            maxNaturalGap[k] = Math.max(maxNaturalGap[k] ?? 0, v)
-          }
-        }
-      }
-    }
-  } catch {
-    // corrupt or unreadable stats are non-fatal
-  }
-}
-
-export function flushStats(): void {
-  if (!statsPath) return
-  try {
-    fs.mkdirSync(path.dirname(statsPath), { recursive: true })
-    fs.writeFileSync(statsPath, JSON.stringify({ maxNaturalGap, updatedAt: Date.now() }), 'utf-8')
-  } catch {
-    // write errors are non-fatal
-  }
-}
-
 export function startHeartbeatWatchdog(
-  sendClear: (paneId: string) => void,
-  opts?: { statsIntervalMs?: number }
+  sendClear: (paneId: string) => void
 ): () => void {
   if (stopWatchdog) stopWatchdog()
-  loadStats()
 
   const tick = () => {
     const now = Date.now()
     const expired = collectExpired(active, now)
     for (const id of expired) {
-      const entry = active.get(id)
-      // defensive re-check: single-threaded model has no real race, but async
-      // hook handlers can arrive out of order and must converge here.
-      if (entry && now - entry.lastSeen > getHeartbeatConfig(entry.source)!.timeoutMs) {
-        sendClear(id)
-        active.delete(id)
-      }
+      sendClear(id)
+      active.delete(id)
     }
   }
 
   const timer = setInterval(tick, HEARTBEAT_TICK_MS)
-  const statsIntervalMs =
-    opts?.statsIntervalMs && opts.statsIntervalMs >= MIN_STATS_FLUSH_MS
-      ? opts.statsIntervalMs
-      : MIN_STATS_FLUSH_MS
-  const statsTimer = setInterval(() => flushStats(), statsIntervalMs)
 
   stopWatchdog = () => {
     clearInterval(timer)
-    clearInterval(statsTimer)
     stopWatchdog = null
   }
   return stopWatchdog

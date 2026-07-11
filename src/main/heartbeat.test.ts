@@ -1,17 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import * as os from 'os'
-import * as path from 'path'
-import * as fs from 'fs'
 import {
   collectExpired,
   noteEvent,
   removePane,
   snapshot,
-  flushStats,
-  loadStats,
-  setStatsPath,
   HEARTBEAT_TICK_MS,
-  MIN_STATS_FLUSH_MS,
   type ActiveEntry
 } from './heartbeat'
 
@@ -111,57 +104,8 @@ describe('noteEvent', () => {
   })
 })
 
-describe('maxNaturalGap sampling', () => {
-  beforeEach(() => {
-    for (const e of snapshot()) removePane(e.paneId)
-  })
-
-  it('records gap when below timeout', () => {
-    noteEvent('p1', 'session_created', 'opencode', T0)
-    noteEvent('p1', 'alive', 'opencode', T0 + 3000)
-    // exposed via flushStats roundtrip
-    const tmp = path.join(os.tmpdir(), `hb-${Math.random().toString(36)}.json`)
-    setStatsPath(tmp)
-    flushStats()
-    const data = JSON.parse(fs.readFileSync(tmp, 'utf-8'))
-    expect(data.maxNaturalGap.opencode).toBeGreaterThanOrEqual(3000)
-    fs.rmSync(tmp)
-  })
-
-  it('does not record gap >= timeout (covers a full silence window)', () => {
-    noteEvent('p1', 'session_created', 'opencode', T0)
-    noteEvent('p1', 'alive', 'opencode', T0 + OPENTIMEOUT + 100)
-    const tmp = path.join(os.tmpdir(), `hb-${Math.random().toString(36)}.json`)
-    setStatsPath(tmp)
-    flushStats()
-    const data = JSON.parse(fs.readFileSync(tmp, 'utf-8'))
-    expect(data.maxNaturalGap.opencode ?? 0).toBeLessThan(OPENTIMEOUT)
-    fs.rmSync(tmp)
-  })
-})
-
-describe('stats persistence', () => {
-  it('flushes and reloads maxNaturalGap, taking the max', () => {
-    const tmp = path.join(os.tmpdir(), `hb-${Math.random().toString(36)}.json`)
-    setStatsPath(tmp)
-    noteEvent('p1', 'session_created', 'opencode', T0)
-    noteEvent('p1', 'alive', 'opencode', T0 + 4000)
-    flushStats()
-    // simulate a restart: reset in-memory by reloading into a fresh run is not possible here,
-    // but loadStats must merge with existing >=, so call loadStats after a higher write.
-    fs.writeFileSync(tmp, JSON.stringify({ maxNaturalGap: { opencode: 9999 } }))
-    loadStats()
-    // flush again and confirm merged max is 9999
-    flushStats()
-    const data = JSON.parse(fs.readFileSync(tmp, 'utf-8'))
-    expect(data.maxNaturalGap.opencode).toBe(9999)
-    fs.rmSync(tmp)
-  })
-})
-
 describe('constants', () => {
-  it('uses the planned tick and flush intervals, and 10min claude/codex timeout', () => {
-    expect(MIN_STATS_FLUSH_MS).toBe(5 * 60 * 1000)
+  it('uses the planned tick interval, and 10min claude/codex timeout', () => {
     expect(HEARTBEAT_TICK_MS).toBe(5000)
     expect(CLAUDETIMEOUT).toBe(600000)
   })

@@ -66,6 +66,20 @@ interface ClaudeSettings {
   [key: string]: unknown
 }
 
+// Replace an existing Patty-matching hook entry or append a new one.
+function upsertHook(
+  hooks: Record<string, unknown>,
+  key: string,
+  entry: NotificationHook,
+  predicate: (n: NotificationHook) => boolean
+): void {
+  const list = (hooks[key] as NotificationHook[] | undefined) ?? []
+  const idx = list.findIndex(predicate)
+  if (idx >= 0) list[idx] = entry
+  else list.push(entry)
+  hooks[key] = list
+}
+
 export async function ensureClaudeCodeHook(hookPort: number): Promise<void> {
   try {
     const settingsPath = getClaudeSettingsPath()
@@ -92,209 +106,33 @@ export async function ensureClaudeCodeHook(hookPort: number): Promise<void> {
       settings.hooks = {}
     }
 
-    // Find existing Patty hook entry
-    const notifications = settings.hooks.Notification || []
-    const existingPattyIndex = notifications.findIndex(
-      (n) => n.hooks?.some((h) => h.command && h.command.includes('patty-hook.ps1'))
-    )
+    const hooks = settings.hooks
+    const isPattyCmdHook = (n: NotificationHook) =>
+      n.hooks?.some((h) => h.command && h.command.includes('patty-hook.ps1'))
+    const isPattyArgsHook = (n: NotificationHook) =>
+      n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
 
-    const newHookEntry: NotificationHook = {
-      matcher: HOOK_MATCHER,
-      hooks: [
-        {
-          type: 'command',
-          command: hookCommand
-        }
-      ]
-    }
+    const cmdHook = (matcher: string): NotificationHook => ({
+      matcher,
+      hooks: [{ type: 'command', command: hookCommand }]
+    })
+    const argsHook = (matcher: string, eventType: string): NotificationHook => ({
+      matcher,
+      hooks: [{
+        type: 'command',
+        command: 'powershell',
+        args: ['-ExecutionPolicy', 'Bypass', '-File', hookScriptPath, '-EventType', eventType]
+      }]
+    })
 
-    if (existingPattyIndex >= 0) {
-      // Replace existing Patty hook
-      notifications[existingPattyIndex] = newHookEntry
-    } else {
-      // Add new Patty hook
-      notifications.push(newHookEntry)
-    }
-
-    settings.hooks.Notification = notifications
-
-    // Also add Stop hook for when agent finishes answering
-    const stopHooks = settings.hooks.Stop || []
-    const existingStopPattyIndex = stopHooks.findIndex(
-      (n) => n.hooks?.some((h) => h.command && h.command.includes('patty-hook.ps1'))
-    )
-
-    const newStopHookEntry: NotificationHook = {
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: hookCommand
-        }
-      ]
-    }
-
-    if (existingStopPattyIndex >= 0) {
-      stopHooks[existingStopPattyIndex] = newStopHookEntry
-    } else {
-      stopHooks.push(newStopHookEntry)
-    }
-
-    settings.hooks.Stop = stopHooks
-
-    // Also add StopFailure hook for API errors
-    const stopFailureHooks = settings.hooks.StopFailure || []
-    const existingStopFailurePattyIndex = stopFailureHooks.findIndex(
-      (n) => n.hooks?.some((h) => h.command && h.command.includes('patty-hook.ps1'))
-    )
-
-    const newStopFailureHookEntry: NotificationHook = {
-      matcher: STOP_FAILURE_MATCHER,
-      hooks: [
-        {
-          type: 'command',
-          command: hookCommand
-        }
-      ]
-    }
-
-    if (existingStopFailurePattyIndex >= 0) {
-      stopFailureHooks[existingStopFailurePattyIndex] = newStopFailureHookEntry
-    } else {
-      stopFailureHooks.push(newStopFailureHookEntry)
-    }
-
-    settings.hooks.StopFailure = stopFailureHooks
-
-    // SessionStart hook — detect when Claude Code session begins
-    const sessionStartHooks = settings.hooks.SessionStart || []
-    const existingStartPattyIndex = sessionStartHooks.findIndex(
-      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
-    )
-    const newSessionStartHookEntry: NotificationHook = {
-      matcher: 'startup|resume',
-      hooks: [
-        {
-          type: 'command',
-          command: 'powershell',
-          args: [
-            '-ExecutionPolicy', 'Bypass',
-            '-File', hookScriptPath,
-            '-EventType', 'session_start'
-          ]
-        }
-      ]
-    }
-    if (existingStartPattyIndex >= 0) {
-      sessionStartHooks[existingStartPattyIndex] = newSessionStartHookEntry
-    } else {
-      sessionStartHooks.push(newSessionStartHookEntry)
-    }
-    settings.hooks.SessionStart = sessionStartHooks
-
-    // SessionEnd hook — detect when Claude Code session ends
-    const sessionEndHooks = settings.hooks.SessionEnd || []
-    const existingEndPattyIndex = sessionEndHooks.findIndex(
-      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
-    )
-    const newSessionEndHookEntry: NotificationHook = {
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: 'powershell',
-          args: [
-            '-ExecutionPolicy', 'Bypass',
-            '-File', hookScriptPath,
-            '-EventType', 'session_end'
-          ]
-        }
-      ]
-    }
-    if (existingEndPattyIndex >= 0) {
-      sessionEndHooks[existingEndPattyIndex] = newSessionEndHookEntry
-    } else {
-      sessionEndHooks.push(newSessionEndHookEntry)
-    }
-    settings.hooks.SessionEnd = sessionEndHooks
-
-    // PreToolUse keepalive hook — fires before each tool use
-    const preToolUseHooks = settings.hooks.PreToolUse || []
-    const existingPreToolUseIndex = preToolUseHooks.findIndex(
-      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
-    )
-    const newPreToolUseEntry: NotificationHook = {
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: 'powershell',
-          args: [
-            '-ExecutionPolicy', 'Bypass',
-            '-File', hookScriptPath,
-            '-EventType', 'pre_tool_use'
-          ]
-        }
-      ]
-    }
-    if (existingPreToolUseIndex >= 0) {
-      preToolUseHooks[existingPreToolUseIndex] = newPreToolUseEntry
-    } else {
-      preToolUseHooks.push(newPreToolUseEntry)
-    }
-    settings.hooks.PreToolUse = preToolUseHooks
-
-    // PostToolUse keepalive hook — fires after each tool use
-    const postToolUseHooks = settings.hooks.PostToolUse || []
-    const existingPostToolUseIndex = postToolUseHooks.findIndex(
-      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
-    )
-    const newPostToolUseEntry: NotificationHook = {
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: 'powershell',
-          args: [
-            '-ExecutionPolicy', 'Bypass',
-            '-File', hookScriptPath,
-            '-EventType', 'post_tool_use'
-          ]
-        }
-      ]
-    }
-    if (existingPostToolUseIndex >= 0) {
-      postToolUseHooks[existingPostToolUseIndex] = newPostToolUseEntry
-    } else {
-      postToolUseHooks.push(newPostToolUseEntry)
-    }
-    settings.hooks.PostToolUse = postToolUseHooks
-
-    // UserPromptSubmit keepalive hook — fires when user submits a prompt
-    const userPromptSubmitHooks = settings.hooks.UserPromptSubmit || []
-    const existingUserPromptSubmitIndex = userPromptSubmitHooks.findIndex(
-      (n) => n.hooks?.some((h) => h.command && h.command.includes('powershell') && h.args?.includes('-EventType'))
-    )
-    const newUserPromptSubmitEntry: NotificationHook = {
-      matcher: '',
-      hooks: [
-        {
-          type: 'command',
-          command: 'powershell',
-          args: [
-            '-ExecutionPolicy', 'Bypass',
-            '-File', hookScriptPath,
-            '-EventType', 'user_prompt_submit'
-          ]
-        }
-      ]
-    }
-    if (existingUserPromptSubmitIndex >= 0) {
-      userPromptSubmitHooks[existingUserPromptSubmitIndex] = newUserPromptSubmitEntry
-    } else {
-      userPromptSubmitHooks.push(newUserPromptSubmitEntry)
-    }
-    settings.hooks.UserPromptSubmit = userPromptSubmitHooks
+    upsertHook(hooks, 'Notification', cmdHook(HOOK_MATCHER), isPattyCmdHook)
+    upsertHook(hooks, 'Stop', cmdHook(''), isPattyCmdHook)
+    upsertHook(hooks, 'StopFailure', cmdHook(STOP_FAILURE_MATCHER), isPattyCmdHook)
+    upsertHook(hooks, 'SessionStart', argsHook('startup|resume', 'session_start'), isPattyArgsHook)
+    upsertHook(hooks, 'SessionEnd', argsHook('', 'session_end'), isPattyArgsHook)
+    upsertHook(hooks, 'PreToolUse', argsHook('', 'pre_tool_use'), isPattyArgsHook)
+    upsertHook(hooks, 'PostToolUse', argsHook('', 'post_tool_use'), isPattyArgsHook)
+    upsertHook(hooks, 'UserPromptSubmit', argsHook('', 'user_prompt_submit'), isPattyArgsHook)
 
     // Ensure settings directory exists
     const settingsDir = path.dirname(settingsPath)
@@ -380,67 +218,21 @@ export async function ensureCodexHook(): Promise<void> {
       settings.hooks = {}
     }
 
-    const findPattyIndex = (hooks: NotificationHook[] = []) =>
-      hooks.findIndex(
-        (n) => n.hooks?.some((h) => h.command && h.command.includes('patty-hook.ps1') && h.command.includes('-Source "codex"'))
-      )
+    const hooks = settings.hooks
+    const isPattyCodexHook = (n: NotificationHook) =>
+      n.hooks?.some((h) => h.command && h.command.includes('patty-hook.ps1') && h.command.includes('-Source "codex"'))
 
-    const sessionStartEntry: NotificationHook = {
-      matcher: 'startup|resume',
+    const codexEntry = (matcher: string): NotificationHook => ({
+      matcher,
       hooks: [{ type: 'command', command: hookCommand }]
-    }
-    const sessionStartHooks = settings.hooks.SessionStart || []
-    const existingStartIndex = findPattyIndex(sessionStartHooks)
-    if (existingStartIndex >= 0) {
-      sessionStartHooks[existingStartIndex] = sessionStartEntry
-    } else {
-      sessionStartHooks.push(sessionStartEntry)
-    }
-    settings.hooks.SessionStart = sessionStartHooks
+    })
 
-    const permissionEntry: NotificationHook = {
-      matcher: '',
-      hooks: [{ type: 'command', command: hookCommand }]
-    }
-    const permissionHooks = settings.hooks.PermissionRequest || []
-    const existingPermissionIndex = findPattyIndex(permissionHooks)
-    if (existingPermissionIndex >= 0) {
-      permissionHooks[existingPermissionIndex] = permissionEntry
-    } else {
-      permissionHooks.push(permissionEntry)
-    }
-    settings.hooks.PermissionRequest = permissionHooks
-
-    const stopEntry: NotificationHook = {
-      matcher: '',
-      hooks: [{ type: 'command', command: hookCommand }]
-    }
-    const stopHooks = settings.hooks.Stop || []
-    const existingStopIndex = findPattyIndex(stopHooks)
-    if (existingStopIndex >= 0) {
-      stopHooks[existingStopIndex] = stopEntry
-    } else {
-      stopHooks.push(stopEntry)
-    }
-    settings.hooks.Stop = stopHooks
-
-    const keepaliveEntry: NotificationHook = {
-      matcher: '',
-      hooks: [{ type: 'command', command: hookCommand }]
-    }
-    const addKeepaliveHook = (key: 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit') => {
-      const hooks = settings.hooks[key] || []
-      const existingIndex = findPattyIndex(hooks)
-      if (existingIndex >= 0) {
-        hooks[existingIndex] = keepaliveEntry
-      } else {
-        hooks.push(keepaliveEntry)
-      }
-      settings.hooks[key] = hooks
-    }
-    addKeepaliveHook('PreToolUse')
-    addKeepaliveHook('PostToolUse')
-    addKeepaliveHook('UserPromptSubmit')
+    upsertHook(hooks, 'SessionStart', codexEntry('startup|resume'), isPattyCodexHook)
+    upsertHook(hooks, 'PermissionRequest', codexEntry(''), isPattyCodexHook)
+    upsertHook(hooks, 'Stop', codexEntry(''), isPattyCodexHook)
+    upsertHook(hooks, 'PreToolUse', codexEntry(''), isPattyCodexHook)
+    upsertHook(hooks, 'PostToolUse', codexEntry(''), isPattyCodexHook)
+    upsertHook(hooks, 'UserPromptSubmit', codexEntry(''), isPattyCodexHook)
 
     const settingsDir = path.dirname(settingsPath)
     if (!fs.existsSync(settingsDir)) {
