@@ -18,15 +18,32 @@ function formatCwd(cwd: string): string {
   return cwd
 }
 
-export function StatusBar() {
+interface StatusBarProps {
+  metricsOpen?: boolean
+  onToggleMetrics?: () => void
+}
+
+export function StatusBar({ metricsOpen = false, onToggleMetrics }: StatusBarProps) {
   const activeSession = useSessionStore((s) =>
     s.sessions.find((x) => x.id === s.activeSessionId) ?? null
+  )
+
+  const metricsButton = (
+    <button
+      className={`${styles.item} ${styles.toggleBtn} ${metricsOpen ? styles.active : ''}`}
+      onClick={onToggleMetrics}
+      aria-pressed={metricsOpen}
+    >
+      Metrics
+    </button>
   )
 
   if (!activeSession) {
     return (
       <div className={styles.statusbar}>
         <span className={styles.item}>No active session</span>
+        <span className={styles.spacer} />
+        {metricsButton}
       </div>
     )
   }
@@ -53,6 +70,8 @@ export function StatusBar() {
           <span className={styles.item}>PID {activeSession.pid}</span>
         </>
       )}
+      <span className={styles.spacer} />
+      {metricsButton}
     </div>
   )
 }

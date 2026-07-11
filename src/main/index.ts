@@ -6,9 +6,11 @@ import { startHookServer, stopHookServer, isIgnorableNetworkError } from './ptyM
 import { ensureClaudeCodeHook, ensureOpenCodePlugin, ensureCodexHook } from './hookInstaller'
 import { loadSettings } from './settingsHandler'
 import { perfMark, perfMeasure, perfMemoryMain, perfReport, perfDump, perfEnabled } from '../shared/perf'
+import { MetricsCollector } from './metricsCollector'
 import { noteEvent, startHeartbeatWatchdog } from './heartbeat'
 
 let mainWindow: BrowserWindow | null = null
+let metricsCollector: MetricsCollector | null = null
 
 process.on('uncaughtException', (error) => {
   if (isIgnorableNetworkError(error)) {
@@ -123,7 +125,8 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  registerIpcHandlers(() => mainWindow)
+  metricsCollector = new MetricsCollector(() => mainWindow)
+  registerIpcHandlers(() => mainWindow, metricsCollector)
 
   // Start hook server for notifications
   perfMark('app:hook-server-start')
@@ -182,6 +185,7 @@ app.whenReady().then(async () => {
 
   perfMark('app:create-window-start')
   createWindow()
+  metricsCollector?.start()
 
   // Periodic memory snapshot in perf mode
   if (perfEnabled) {
@@ -199,6 +203,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   perfDump()
+  metricsCollector?.stop()
   stopHookServer()
 })
 

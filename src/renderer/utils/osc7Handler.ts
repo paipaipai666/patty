@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { markShellReady } from './shellReadiness'
 
 export interface Osc7HandlerDisposable {
   dispose(): void
@@ -14,6 +15,7 @@ export function registerOsc7Handler(
     if (cwd) {
       onCwd(sessionId, cwd)
     }
+    markShellReady(sessionId)
     return true
   })
 
