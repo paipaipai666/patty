@@ -123,6 +123,15 @@ export interface UITheme {
   '--red': string
   '--cyan': string
   '--amber': string
+
+  '--bg-hover': string
+  '--bg-tertiary': string
+  '--text-tertiary': string
+  '--border-light': string
+  '--border-strong': string
+  '--color-amber': string
+  '--color-gray': string
+  '--indigo': string
 }
 
 export interface CustomTheme {

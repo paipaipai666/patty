@@ -86,7 +86,16 @@
     "--green": "#059669",
     "--red": "#dc2626",
     "--cyan": "#0d9488",
-    "--amber": "#d97706"
+    "--amber": "#d97706",
+
+    "--bg-hover": "rgba(0,0,0,0.04)",
+    "--bg-tertiary": "rgba(0,0,0,0.08)",
+    "--text-tertiary": "#9292a8",
+    "--border-light": "rgba(0,0,0,0.04)",
+    "--border-strong": "rgba(0,0,0,0.18)",
+    "--color-amber": "#d97706",
+    "--color-gray": "#6b7280",
+    "--indigo": "#5e5ce6"
   },
   "terminal": {
     "background": "#ffffff",

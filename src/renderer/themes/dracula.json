@@ -86,7 +86,16 @@
     "--green": "#50fa7b",
     "--red": "#ff5555",
     "--cyan": "#8be9fd",
-    "--amber": "#f1fa8c"
+    "--amber": "#f1fa8c",
+
+    "--bg-hover": "rgba(98,114,164,0.10)",
+    "--bg-tertiary": "rgba(98,114,164,0.20)",
+    "--text-tertiary": "#6272a4",
+    "--border-light": "rgba(98,114,164,0.15)",
+    "--border-strong": "rgba(98,114,164,0.30)",
+    "--color-amber": "#ff9f0a",
+    "--color-gray": "#8e8e93",
+    "--indigo": "#5e5ce6"
   },
   "terminal": {
     "background": "#282a36",
