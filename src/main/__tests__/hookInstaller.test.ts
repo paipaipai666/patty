@@ -13,7 +13,7 @@ vi.mock('fs', () => ({
   copyFileSync: vi.fn()
 }))
 
-import { ensureClaudeCodeHook, ensureCodexHook } from './hookInstaller'
+import { ensureClaudeCodeHook, ensureCodexHook } from '../hookInstaller'
 
 beforeEach(() => {
   vi.clearAllMocks()

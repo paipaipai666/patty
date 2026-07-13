@@ -6,7 +6,7 @@ import {
   snapshot,
   HEARTBEAT_TICK_MS,
   type ActiveEntry
-} from './heartbeat'
+} from '../heartbeat'
 
 const T0 = 1_000_000
 const OPENTIMEOUT = 15000

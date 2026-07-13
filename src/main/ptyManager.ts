@@ -2,10 +2,11 @@ import * as pty from 'node-pty'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as http from 'http'
+import * as crypto from 'crypto'
 import type { Socket } from 'net'
 import { execSync } from 'child_process'
 import { BrowserWindow, app } from 'electron'
-import { perfTimerStart, perfTimerEnd, perfCounter } from '../shared/perf'
+import { perfTimerStart, perfTimerEnd } from '../shared/perf'
 import { removePane } from './heartbeat'
 
 export interface PtySession {
@@ -16,6 +17,11 @@ export interface PtySession {
 const sessions = new Map<string, PtySession>()
 let hookServer: http.Server | null = null
 let hookPort = 0
+// Random per-process secret. Injected into every PTY's environment so the shell
+// integration (patty-hook.ps1) can prove it is the legitimate local caller. A
+// remote/external process can't reach the loopback-only server, and a spoofing
+// local process can't guess the secret, so it gets 401.
+let hookSecret = ''
 let onHookRequest: ((paneId: string, event: string, source: string) => void) | null = null
 const activeSockets = new Set<Socket>()
 
@@ -128,8 +134,12 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
       TERM_PROGRAM: 'vscode',
       PATTY_PANE_ID: id,
       PATTY_PORT: hookPort.toString(),
-      // OpenCode 插件目录
-      XDG_CONFIG_HOME: process.env.USERPROFILE + '\\.config'
+      // Shared secret for the loopback hook server (see startHookServer). Empty
+      // until the hook server is up; the shell integration sends it back on POST.
+      PATTY_HOOK_SECRET: hookSecret,
+      // OpenCode 插件目录 — only set if the user hasn't already configured one,
+      // so we never clobber a real XDG_CONFIG_HOME.
+      XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME || process.env.USERPROFILE + '\\.config'
     },
     useConpty: true,
     conptyInheritCursor: false
@@ -144,7 +154,9 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
     sessions.delete(id)
     const mainWindow = BrowserWindow.getAllWindows()[0]
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('pty:exit', id, exitCode)
+      // Single exit source: notify the renderer on the per-pane channel its
+      // TerminalPane subscribes to (pty:exit:<id>).
+      mainWindow.webContents.send(`pty:exit:${id}`, exitCode)
     }
   })
 
@@ -205,6 +217,11 @@ export function startHookServer(handler: (paneId: string, event: string, source:
 
     onHookRequest = handler
 
+    // Generate the shared secret once, before the server starts accepting
+    // connections. It is exposed to PTYs via PATTY_HOOK_SECRET so the shell
+    // integration can present it on POST.
+    hookSecret = crypto.randomBytes(32).toString('hex')
+
     hookServer = http.createServer((req, res) => {
       // Catch EPIPE / ECONNRESET on broken connections so they don't bubble up
       // as uncaught exceptions in the main process.
@@ -237,7 +254,15 @@ export function startHookServer(handler: (paneId: string, event: string, source:
       req.on('end', () => {
         try {
           const data = JSON.parse(body)
-          const { paneId, event, source } = data
+          const { paneId, event, source, secret } = data
+
+          // Authenticate: reject any caller that can't present the per-process
+          // secret (a local spoofing process, or anything without PATTY_HOOK_SECRET).
+          if (secret !== hookSecret) {
+            res.writeHead(401, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ ok: false, error: 'unauthorized' }))
+            return
+          }
 
           // Validate session exists
           if (!sessions.has(paneId)) {

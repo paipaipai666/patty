@@ -9,11 +9,11 @@ import {
   collectLeafIds,
   nextLeafId,
   prevLeafId
-} from './paneTreeOps'
-import { singleLeafTree, firstLeafId, collectTreeSessionIds, findLeaf } from '../../shared/paneTreeNormalize'
+} from '../paneTreeOps'
+import { singleLeafTree, firstLeafId, collectTreeSessionIds, findLeaf } from '../../../shared/paneTreeNormalize'
 
 const collectSessionIds = (tree: any): string[] => [...collectTreeSessionIds(tree)]
-import type { PaneTree } from '../../shared/paneTypes'
+import type { PaneTree } from '../../../shared/paneTypes'
 
 describe('splitLeaf', () => {
   it('turns a leaf into a split holding the original and new session', () => {

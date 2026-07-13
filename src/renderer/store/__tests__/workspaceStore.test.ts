@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-vi.mock('./dirtyScheduler', () => ({
+vi.mock('../dirtyScheduler', () => ({
   markDirty: vi.fn()
 }))
 
-import { useWorkspaceStore, getFocusedSessionId } from './workspaceStore'
-import type { Workspace } from '../../shared/workspaceTypes'
+import { useWorkspaceStore, getFocusedSessionId } from '../workspaceStore'
+import type { Workspace } from '../../../shared/workspaceTypes'
 
 function makeWorkspace(overrides: Partial<Workspace> & { id: string }): Workspace {
   return {

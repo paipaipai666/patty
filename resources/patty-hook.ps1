@@ -19,15 +19,22 @@ param(
     [string]$Source = "claude-code"
 )
 
-# Debug logging
+# Debug logging is opt-in via $env:PATTY_DEBUG (off by default) so the hook
+# doesn't append to the temp log unboundedly on every AI notification.
 $logFile = "$env:TEMP\patty-hook-debug.log"
-"$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Hook triggered (EventType=$EventType)" | Out-File -FilePath $logFile -Append
-"PATTY_PANE_ID: $env:PATTY_PANE_ID" | Out-File -FilePath $logFile -Append
-"PATTY_PORT: $env:PATTY_PORT" | Out-File -FilePath $logFile -Append
+function Write-DebugLog($Message) {
+    if ($env:PATTY_DEBUG) {
+        "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - $Message" | Out-File -FilePath $logFile -Append
+    }
+}
+
+Write-DebugLog "Hook triggered (EventType=$EventType)"
+Write-DebugLog "PATTY_PANE_ID: $env:PATTY_PANE_ID"
+Write-DebugLog "PATTY_PORT: $env:PATTY_PORT"
 
 # Early exit if not running in Patty environment
 if (-not $env:PATTY_PANE_ID -or -not $env:PATTY_PORT) {
-    "Early exit: missing env vars" | Out-File -FilePath $logFile -Append
+    Write-DebugLog "Early exit: missing env vars"
     exit 0
 }
 
@@ -38,7 +45,7 @@ try {
     if (-not $eventType) {
         # Read JSON input from stdin (Claude Code sends notification data)
         $stdinInput = [Console]::In.ReadToEnd()
-        "Stdin input: $stdinInput" | Out-File -FilePath $logFile -Append
+        Write-DebugLog "Stdin input: $stdinInput"
 
         $eventType = "unknown"
         if ($stdinInput) {
@@ -76,16 +83,17 @@ try {
         }
     }
 
-    "Event type: $eventType" | Out-File -FilePath $logFile -Append
+    Write-DebugLog "Event type: $eventType"
 
     # Build request body
     $body = @{
         paneId = $env:PATTY_PANE_ID
         event  = $eventType
         source = $Source
+        secret = $env:PATTY_HOOK_SECRET
     } | ConvertTo-Json -Compress
 
-    "Source: $Source" | Out-File -FilePath $logFile -Append
+    Write-DebugLog "Source: $Source"
 
     # Send notification to Patty main process
     $response = Invoke-RestMethod `
@@ -95,10 +103,10 @@ try {
         -ContentType 'application/json' `
         -TimeoutSec 2
 
-    "Response: $($response | ConvertTo-Json -Compress)" | Out-File -FilePath $logFile -Append
+    Write-DebugLog "Response: $($response | ConvertTo-Json -Compress)"
 } catch {
-    "Error: $_" | Out-File -FilePath $logFile -Append
-    "Stack trace: $($_.ScriptStackTrace)" | Out-File -FilePath $logFile -Append
+    Write-DebugLog "Error: $_"
+    Write-DebugLog "Stack trace: $($_.ScriptStackTrace)"
 }
 
 exit 0

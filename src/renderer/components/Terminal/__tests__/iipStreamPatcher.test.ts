@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createIIPStreamPatcher } from './iipStreamPatcher'
+import { createIIPStreamPatcher } from '../iipStreamPatcher'
 
 const ESC = '\x1b'
 

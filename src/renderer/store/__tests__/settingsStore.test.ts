@@ -57,7 +57,7 @@ const DEFAULT_SETTINGS = {
   }
 }
 
-import { useSettingsStore } from './settingsStore'
+import { useSettingsStore } from '../settingsStore'
 
 beforeEach(() => {
   vi.clearAllMocks()

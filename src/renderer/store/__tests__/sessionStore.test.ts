@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-vi.mock('./dirtyScheduler', () => ({
+vi.mock('../dirtyScheduler', () => ({
   markDirty: vi.fn()
 }))
 
@@ -27,7 +27,7 @@ vi.stubGlobal('window', {
   addEventListener: vi.fn()
 })
 
-import { useSessionStore, buildSessionPersistedState, teardownSessionIPC, SESSION_COLORS } from './sessionStore'
+import { useSessionStore, buildSessionPersistedState, teardownSessionIPC, SESSION_COLORS } from '../sessionStore'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -333,11 +333,13 @@ describe('attention', () => {
     expect(useSessionStore.getState().attentionMap['s1']).toBeNull()
   })
 
-  it('setAttention coalesces rapid successive calls within 1s', () => {
+  it('setAttention latest call wins within the coalesce window', () => {
     useSessionStore.getState().setAttention('s1', 'start')
     useSessionStore.getState().setAttention('s1', 'permission')
-    // Second call should be coalesced (timer already set)
-    expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
+    // The most recent event type wins: the user may jump to a different pane
+    // before the 1s coalesce timer fires, and that latest attention is what
+    // should be flushed, not the first.
+    expect(useSessionStore.getState().attentionMap['s1']).toBe('permission')
   })
 
   it('resetAttention calls setAttention with null and IPC', () => {

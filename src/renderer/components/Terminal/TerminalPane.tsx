@@ -293,6 +293,36 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     fitAddonRef.current = fitAddon
     webglAddonRef.current = webglAddon
 
+    // WebGL context-loss recovery. A lost GPU context (driver reset, too many
+    // live contexts, backgrounded tab) silently blanks the terminal unless we
+    // preventDefault to allow the browser to restore it — then re-create the
+    // addon against the restored context.
+    const onContextLost = (e: Event) => {
+      e.preventDefault()
+    }
+    const onContextRestored = () => {
+      try {
+        if (webglAddonRef.current) {
+          try { webglAddonRef.current.dispose() } catch { /* already disposed */ }
+        }
+        const wgl = new WebglAddon()
+        term.loadAddon(wgl)
+        webglAddonRef.current = wgl
+        if (atlasClearTimerRef.current) clearInterval(atlasClearTimerRef.current)
+        atlasClearTimerRef.current = setInterval(() => {
+          const atlas = (webglAddonRef.current as any)?._renderer?._charAtlas
+          const pageCount = atlas?._pages?.length ?? 0
+          if (pageCount >= 12) {
+            try { webglAddonRef.current?.clearTextureAtlas() } catch { /* disposed in race */ }
+          }
+        }, 2000)
+      } catch {
+        // WebGL unavailable — canvas fallback works fine
+      }
+    }
+    container.addEventListener('webglcontextlost', onContextLost, true)
+    container.addEventListener('webglcontextrestored', onContextRestored, true)
+
     // OSC 7 — shell cwd reporting injected by pwsh.ps1 / cmd-prompt.cmd
     const osc7Disposable = registerOsc7Handler(term, session.id, (id, cwd) => {
       updateCwd(id, cwd)
@@ -345,6 +375,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }, 50)
 
     return () => {
+      container.removeEventListener('webglcontextlost', onContextLost, true)
+      container.removeEventListener('webglcontextrestored', onContextRestored, true)
       osc7Disposable.dispose()
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current)
@@ -459,6 +491,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
   // ── Settings changes ────────────────────────────────────────────────────
 
+  // Visual-only options (colors, cursor, theme) apply immediately and never
+  // change the terminal's geometry, so updating them must NOT trigger a re-fit.
   useEffect(() => {
     const term = termRef.current
     if (!term) return
@@ -468,9 +502,15 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     term.options.cursorBlink = settings.cursorBlink
     term.options.cursorStyle = settings.cursorStyle
     term.options.theme = getThemeColors(settings.theme, settings.customThemes).terminal
+  }, [settings.fontFamily, settings.fontSize, settings.cursorBlink, settings.cursorStyle, settings.theme, settings.customThemes])
 
+  // Only a geometry-affecting change (font family / size alters cell
+  // dimensions → column/row count) needs a re-fit. Splitting this out keeps
+  // visual tweaks like theme or cursor style from forcing a costly WebGL refit.
+  useEffect(() => {
+    if (!termRef.current) return
     setTimeout(() => fitTerminal(), 20)
-  }, [settings.fontFamily, settings.fontSize, settings.cursorBlink, settings.cursorStyle, settings.theme, fitTerminal])
+  }, [settings.fontFamily, settings.fontSize, fitTerminal])
 
   return (
     <div

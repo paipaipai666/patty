@@ -39,7 +39,7 @@ vi.mock('@xterm/addon-image', () => ({ ImageAddon: class { dispose() {} } }))
 vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class { dispose() {} } }))
 
 // ── store / util mocks (isolate TerminalPane logic + window.terminalAPI) ──
-vi.mock('../../store/sessionStore', () => {
+vi.mock('../../../store/sessionStore', () => {
   const state = {
     sidebarTransitioning: false,
     resetAttention: vi.fn(),
@@ -51,7 +51,7 @@ vi.mock('../../store/sessionStore', () => {
   return { useSessionStore }
 })
 
-vi.mock('../../store/settingsStore', () => {
+vi.mock('../../../store/settingsStore', () => {
   const settings = {
     fontFamily: 'Consolas',
     fontSize: 14,
@@ -66,23 +66,19 @@ vi.mock('../../store/settingsStore', () => {
   return { useSettingsStore }
 })
 
-vi.mock('../../styles/themes', () => ({ getThemeColors: () => ({ terminal: {} }) }))
-vi.mock('../../utils/osc7Handler', () => ({ registerOsc7Handler: () => ({ dispose() {} }) }))
-vi.mock('../../utils/shellReadiness', () => ({ markTerminalOpen: () => {} }))
+vi.mock('../../../styles/themes', () => ({ getThemeColors: () => ({ terminal: {} }) }))
+vi.mock('../../../utils/osc7Handler', () => ({ registerOsc7Handler: () => ({ dispose() {} }) }))
+vi.mock('../../../utils/shellReadiness', () => ({ markTerminalOpen: () => {} }))
 
-import { TerminalPane } from './TerminalPane'
+import { TerminalPane } from '../TerminalPane'
 
 // Captures the callbacks TerminalPane registers with the main process.
-let lastOnData: ((data: string) => void) | undefined
 let lastOnExit: (() => void) | undefined
 
 const terminalAPI = {
   write: vi.fn(),
   createSession: vi.fn().mockResolvedValue({ success: true, pid: 1234 }),
-  onData: vi.fn((_id: string, cb: (data: string) => void) => {
-    lastOnData = cb
-    return () => {}
-  }),
+  onData: vi.fn(() => () => {}),
   onExit: vi.fn((_id: string, cb: () => void) => {
     lastOnExit = cb
     return () => {}
@@ -101,7 +97,6 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   }
-  lastOnData = undefined
   lastOnExit = undefined
   for (const fn of [terminalAPI.write, terminalAPI.createSession, terminalAPI.onData, terminalAPI.onExit, terminalAPI.kill, terminalAPI.resize]) {
     fn.mockClear()
@@ -157,5 +152,26 @@ describe('TerminalPane PTY lifecycle (C5)', () => {
     // to the now-disposed xterm instance.
     expect(terminalAPI.createSession).toHaveBeenCalledTimes(1) // <-- fails on current code (gets 2)
     expect(terminalAPI.onData).toHaveBeenCalledTimes(1) // <-- fails on current code (gets 2)
+  })
+})
+
+describe('TerminalPane WebGL context loss (M1)', () => {
+  it('registers a context-loss handler so the WebGL addon can be re-created', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    // Listeners attach to the inner xterm container, not the test root, so spy
+    // on the prototype to capture every addEventListener call during mount.
+    const addSpy = vi.spyOn(Element.prototype, 'addEventListener')
+    const root = createRoot(container)
+    act(() => {
+      root.render(<TerminalPane session={session} visible={true} />)
+    })
+    const events = addSpy.mock.calls.map((c) => String(c[0]))
+    addSpy.mockRestore()
+    // DESIRED: a context-loss listener exists so a lost WebGL context is
+    // recovered. Currently only 'paste' / composition listeners are added,
+    // so this fails.
+    expect(events.some((e) => /contextlost/i.test(e))).toBe(true)
+    act(() => root.unmount())
   })
 })

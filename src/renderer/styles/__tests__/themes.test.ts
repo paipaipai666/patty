@@ -9,8 +9,8 @@ import {
   applyTheme,
   applyFontSettings,
   createDefaultCustomTheme
-} from './themes'
-import type { CustomTheme } from '../../shared/settingsTypes'
+} from '../themes'
+import type { CustomTheme } from '../../../shared/settingsTypes'
 
 beforeAll(() => {
   const styleMap = new Map<string, string>()

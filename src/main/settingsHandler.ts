@@ -19,10 +19,17 @@ function mergeSettings(parsed: Record<string, unknown>, defaults: AppSettings): 
 
 migrateOldDataSync(app.getPath('userData'), 'settings.json', 'terminal-sidebar')
 
+// In-memory cache so repeated reads (every settings:get / settings:set) don't
+// re-read and re-merge the JSON file. Invalidated whenever we persist.
+let settingsCache: AppSettings | null = null
+
 export function loadSettings(): AppSettings {
-  return loadJsonSync(FILE, DEFAULT_SETTINGS, mergeSettings)
+  if (settingsCache) return settingsCache
+  settingsCache = loadJsonSync(FILE, DEFAULT_SETTINGS, mergeSettings)
+  return settingsCache
 }
 
 export function saveSettings(settings: AppSettings): void {
   saveAtomicSync(FILE, settings)
+  settingsCache = settings
 }

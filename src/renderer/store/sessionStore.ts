@@ -168,6 +168,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       clearTimeout(attentionTimers[id])
       delete attentionTimers[id]
     }
+    // Tear down the live PTY for this session, not just the store entry —
+    // otherwise the shell process and its GPU/PTY resources leak until the app
+    // exits. Guarded so it's a no-op outside the renderer (e.g. node tests).
+    const api = (window as any)?.terminalAPI
+    if (api && typeof api.kill === 'function') {
+      api.kill(id)
+    }
     set((state) => {
       const filtered = state.sessions.filter((s) => s.id !== id)
       let newActiveId = state.activeSessionId
@@ -360,8 +367,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         delete attentionTimers[id]
       }
     } else {
-      // Coalesce attention-on events within 1s window
-      if (attentionTimers[id]) return
+      // Latest-wins: (re)start the coalesce window from the most recent event
+      // so a newer attention event always overwrites the previous one, instead
+      // of the first event in the window winning and later ones being dropped.
+      if (attentionTimers[id]) clearTimeout(attentionTimers[id])
       attentionTimers[id] = setTimeout(() => {
         delete attentionTimers[id]
       }, 1000)

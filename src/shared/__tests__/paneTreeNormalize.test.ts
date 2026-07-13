@@ -8,8 +8,8 @@ import {
   treeHasSession,
   firstLeafId,
   collectTreeSessionIds
-} from './paneTreeNormalize'
-import type { PersistedPaneTree, PaneTree } from './paneTypes'
+} from '../paneTreeNormalize'
+import type { PersistedPaneTree, PaneTree } from '../paneTypes'
 
 function known(...ids: string[]): Set<string> {
   return new Set(ids)

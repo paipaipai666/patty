@@ -35,3 +35,17 @@ export function loadState(): PersistedState {
 export function saveState(state: PersistedState): void {
   saveAtomicSync(FILE, state)
 }
+
+// Guard against a malformed/partial state payload (e.g. from a buggy renderer
+// build or a corrupted IPC message) being written over good persisted state.
+// Throws on anything that isn't a structurally valid PersistedState.
+export function validatePersistedState(state: unknown): asserts state is PersistedState {
+  if (!state || typeof state !== 'object') {
+    throw new Error('Invalid state payload: not an object')
+  }
+  const s = state as Record<string, unknown>
+  if (!Array.isArray(s.sessions)) throw new Error('Invalid state: sessions must be an array')
+  if (!Array.isArray(s.collections)) throw new Error('Invalid state: collections must be an array')
+  if (typeof s.sidebarWidth !== 'number') throw new Error('Invalid state: sidebarWidth must be a number')
+  if (typeof s.sidebarVisible !== 'boolean') throw new Error('Invalid state: sidebarVisible must be a boolean')
+}

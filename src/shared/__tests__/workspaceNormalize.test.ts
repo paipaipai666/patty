@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeWorkspaces } from './workspaceNormalize'
-import type { PersistedWorkspace } from './workspaceTypes'
-import type { PersistedPaneTree } from './paneTypes'
+import { normalizeWorkspaces } from '../workspaceNormalize'
+import type { PersistedWorkspace } from '../workspaceTypes'
+import type { PersistedPaneTree } from '../paneTypes'
 
 function known(...ids: string[]): Set<string> {
   return new Set(ids)

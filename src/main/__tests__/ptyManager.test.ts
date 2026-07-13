@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const exitHandlers: Record<string, Record<string, Function[]>> = {}
 const spawnedPtys: Array<{ kill: Function; write: Function; resize: Function }> = []
+const spawnedOpts: Array<Record<string, unknown>> = []
 
 vi.mock('node-pty', () => ({
   spawn: vi.fn((_: string, __: string[], opts: Record<string, unknown>) => {
+    spawnedOpts.push(opts)
     const id = (opts?.env as Record<string, string>)?.['PATTY_PANE_ID'] ?? 'unknown'
     const handlers: Record<string, Function[]> = {}
     exitHandlers[id] = handlers
@@ -40,12 +42,12 @@ vi.mock('child_process', () => ({
   execSync: vi.fn(() => '')
 }))
 
-vi.mock('./heartbeat', () => ({
+vi.mock('../heartbeat', () => ({
   removePane: vi.fn()
 }))
 
-import { createPty, killPty } from './ptyManager'
-import { removePane } from './heartbeat'
+import { createPty, killPty } from '../ptyManager'
+import { removePane } from '../heartbeat'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -77,5 +79,17 @@ describe('ptyManager heartbeat integration', () => {
     expect(spawnedPtys).toHaveLength(2)
     // The first session must be killed before the id is overwritten.
     expect(spawnedPtys[0].kill).toHaveBeenCalled()
+  })
+
+  it('preserves the user XDG_CONFIG_HOME instead of clobbering it (low)', () => {
+    spawnedOpts.length = 0
+    process.env.XDG_CONFIG_HOME = '/my/custom/xdg'
+    createPty('xdg-pane', undefined, undefined, 80, 24)
+    const env = spawnedOpts[0].env as Record<string, string>
+    // DESIRED: a user-defined XDG_CONFIG_HOME must survive into the shell env.
+    // Currently the spawn env hardcodes XDG_CONFIG_HOME to USERPROFILE\.config,
+    // clobbering the user's value — this fails.
+    expect(env.XDG_CONFIG_HOME).toBe('/my/custom/xdg')
+    delete process.env.XDG_CONFIG_HOME
   })
 })

@@ -11,8 +11,8 @@ import {
   detectAvailableShells,
   getHookPort
 } from './ptyManager'
-import { loadSettings, saveSettings } from './settingsHandler'
-import { loadState, saveState } from './stateHandler'
+import { loadSettings, saveSettings, DEFAULT_SETTINGS } from './settingsHandler'
+import { loadState, saveState, validatePersistedState } from './stateHandler'
 import type { PersistedState } from '../shared/stateTypes'
 import type { CustomTheme } from '../shared/settingsTypes'
 import { perfTimerStart, perfTimerEnd, perfCounter, perfDump } from '../shared/perf'
@@ -153,6 +153,11 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metri
   })
 
   ipcMain.handle('settings:set', (_event, key: string, value: unknown) => {
+    // Reject keys that aren't part of AppSettings so a buggy renderer or a
+    // spoofed IPC call can't silently write arbitrary fields into settings.json.
+    if (!(key in DEFAULT_SETTINGS)) {
+      throw new Error(`Unknown settings key: ${String(key)}`)
+    }
     const settings = loadSettings()
     ;(settings as unknown as Record<string, unknown>)[key] = value
     saveSettings(settings)
@@ -165,6 +170,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metri
   })
 
   ipcMain.on('state:save', (_event, state: PersistedState) => {
+    validatePersistedState(state)
     saveState(state)
   })
 
@@ -185,7 +191,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metri
   })
 
   // PTY handlers
-  ipcMain.handle('pty:create', (event, id: string, cwd?: string, shell?: string, cols?: number, rows?: number) => {
+  ipcMain.handle('pty:create', (_event, id: string, cwd?: string, shell?: string, cols?: number, rows?: number) => {
     try {
       const term = createPty(id, cwd, shell, cols, rows)
 
@@ -198,13 +204,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metri
         }
       })
 
-      // Forward PTY exit to renderer
-      term.onExit(({ exitCode }) => {
-        const win = getWindow()
-        if (win && !win.isDestroyed()) {
-          win.webContents.send(`pty:exit:${id}`, exitCode)
-        }
-      })
+      // PTY exit is surfaced by ptyManager (which also owns session cleanup) on
+      // the `pty:exit:<id>` channel — no second exit listener here, so a single
+      // physical exit produces exactly one renderer notification.
 
       return { pid: term.pid, success: true }
     } catch (error) {

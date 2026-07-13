@@ -6,8 +6,8 @@ vi.stubGlobal('window', {
   addEventListener: vi.fn()
 })
 
-import { configureDirtyScheduler, markDirty, flushNow } from './dirtyScheduler'
-import type { PersistedState } from '../../shared/stateTypes'
+import { configureDirtyScheduler, markDirty, flushNow } from '../dirtyScheduler'
+import type { PersistedState } from '../../../shared/stateTypes'
 
 vi.useFakeTimers()
 
@@ -90,7 +90,7 @@ describe('flushNow', () => {
     // no-op and state is never persisted again. We need a fresh module instance
     // to reach the unconfigured (buildPersistedState === null) state.
     vi.resetModules()
-    const mod = await import('./dirtyScheduler')
+    const mod = await import('../dirtyScheduler')
 
     mod.markDirty()
     vi.advanceTimersByTime(1000) // flushNow with null builder -> early return, dirty stays true

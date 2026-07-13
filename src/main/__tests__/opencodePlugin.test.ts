@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 
 describe('opencode-patty-plugin', () => {
-  let PattyNotifier: typeof import('../../resources/opencode-patty-plugin').PattyNotifier
+  let PattyNotifier: typeof import('../../../resources/opencode-patty-plugin').PattyNotifier
 
   beforeAll(async () => {
     process.env.PATTY_PORT = '12345'
     process.env.PATTY_PANE_ID = 'test-pane'
-    const mod = await import('../../resources/opencode-patty-plugin')
+    const mod = await import('../../../resources/opencode-patty-plugin')
     PattyNotifier = mod.PattyNotifier
   })
 
@@ -58,7 +58,7 @@ describe('opencode-patty-plugin', () => {
 
   it('returns empty object when env vars are missing', async () => {
     delete process.env.PATTY_PORT
-    const mod = await import('../../resources/opencode-patty-plugin')
+    const mod = await import('../../../resources/opencode-patty-plugin')
     const plugin = await mod.PattyNotifier({ project: '', directory: '', $: {} })
     expect(plugin).toEqual({})
     process.env.PATTY_PORT = '12345'

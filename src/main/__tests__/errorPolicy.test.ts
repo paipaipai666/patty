@@ -6,9 +6,9 @@ vi.mock('electron', () => ({
   app: { isPackaged: false, getAppPath: vi.fn(() => '/test') }
 }))
 vi.mock('child_process', () => ({ execSync: vi.fn(() => '') }))
-vi.mock('./heartbeat', () => ({ removePane: vi.fn() }))
+vi.mock('../heartbeat', () => ({ removePane: vi.fn() }))
 
-import { onUncaughtException, onUnhandledRejection } from './errorPolicy'
+import { onUncaughtException, onUnhandledRejection } from '../errorPolicy'
 
 function netError(code: string): Error {
   return Object.assign(new Error('network'), { code })

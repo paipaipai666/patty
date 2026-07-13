@@ -10,9 +10,16 @@ import type {
   MetricsSnapshot
 } from '../shared/metricsTypes'
 
-const SAMPLE_INTERVAL_MS = 1000
+// captureSample cost is dominated by two `Get-Counter` powershell.exe spawns.
+// Measured on Windows: system-CPU counter ~535ms, GPU counter ~440ms, run in
+// parallel via Promise.all → ~535ms wall. Keep the interval comfortably above
+// that so samples never overlap (the `running` guard in sample() is a backstop
+// for slower machines / counter contention). 2x measured cost.
+export const METRICS_SAMPLE_COST_MS = 535
+const SAMPLE_SAFETY_FACTOR = 2
+export const SAMPLE_INTERVAL_MS = METRICS_SAMPLE_COST_MS * SAMPLE_SAFETY_FACTOR // 1070
 const PERSIST_INTERVAL_MS = 10000
-const MAX_SAMPLES = 120 // 120s at 1 sample/s
+const MAX_SAMPLES = 120 // ~128s of history at the sample interval
 const MAX_FIRST_TERMINALS = 30
 
 const GPU_SCRIPT =
