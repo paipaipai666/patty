@@ -21,7 +21,13 @@ export function markDirty(): void {
 }
 
 export function flushNow(): void {
-  if (!buildPersistedState) return
+  if (!buildPersistedState) {
+    // No builder yet (e.g. a flush fired before configureDirtyScheduler).
+    // Still clear the dirty flag, or the next markDirty becomes a no-op and
+    // state is never persisted again until beforeunload.
+    dirty = false
+    return
+  }
   dirty = false
   const state = buildPersistedState()
   if (state) {

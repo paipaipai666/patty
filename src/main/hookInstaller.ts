@@ -96,8 +96,11 @@ export async function ensureClaudeCodeHook(hookPort: number): Promise<void> {
         const content = fs.readFileSync(settingsPath, 'utf-8')
         settings = JSON.parse(content)
       } catch {
-        // If parsing fails, start with empty settings
-        settings = {}
+        // If parsing fails, leave the file untouched rather than overwriting it
+        // with `{}` — otherwise the user's theme/model/permissions/other hooks
+        // would be wiped on the next install.
+        console.error('Failed to parse settings, leaving file untouched:', settingsPath)
+        return
       }
     }
 

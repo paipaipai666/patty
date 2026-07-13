@@ -97,4 +97,23 @@ describe('ensureCodexHook', () => {
     expect(settings.hooks.UserPromptSubmit).toBeDefined()
     expect(settings.hooks.UserPromptSubmit).toHaveLength(1)
   })
+
+  it('does NOT overwrite the settings file when it cannot be read/parsed', async () => {
+    // Simulate a corrupt settings file: it exists but contains invalid JSON,
+    // so JSON.parse throws. The install must leave the file untouched rather
+    // than overwriting it with `{}` and wiping the user's config.
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    // Reset any queued/leaked implementations (a prior test's unconsumed
+    // mockReturnValueOnce can leak across tests), then force an invalid read.
+    vi.mocked(fs.readFileSync).mockReset()
+    vi.mocked(fs.readFileSync).mockReturnValue('{ this is not valid json ')
+    vi.mocked(fs.writeFileSync).mockClear()
+
+    await ensureClaudeCodeHook(12345)
+
+    // A parse failure must NOT result in a destructive write that wipes the
+    // user's existing config. Currently this fails: the code writes `{}`-based
+    // settings, discarding theme/model/permissions/other hooks.
+    expect(fs.writeFileSync).not.toHaveBeenCalled()
+  })
 })

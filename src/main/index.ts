@@ -2,33 +2,19 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipcHandlers'
-import { startHookServer, stopHookServer, isIgnorableNetworkError } from './ptyManager'
+import { startHookServer, stopHookServer } from './ptyManager'
 import { ensureClaudeCodeHook, ensureOpenCodePlugin, ensureCodexHook } from './hookInstaller'
 import { loadSettings } from './settingsHandler'
 import { perfMark, perfMeasure, perfMemoryMain, perfReport, perfDump, perfEnabled } from '../shared/perf'
 import { MetricsCollector } from './metricsCollector'
 import { noteEvent, startHeartbeatWatchdog } from './heartbeat'
+import { onUncaughtException, onUnhandledRejection } from './errorPolicy'
 
 let mainWindow: BrowserWindow | null = null
 let metricsCollector: MetricsCollector | null = null
 
-process.on('uncaughtException', (error) => {
-  if (isIgnorableNetworkError(error)) {
-    console.error('[main] ignored uncaught network abort:', error.message)
-    return
-  }
-  console.error('[main] fatal uncaught exception:', error)
-  process.exit(1)
-})
-
-process.on('unhandledRejection', (reason) => {
-  if (reason instanceof Error && isIgnorableNetworkError(reason)) {
-    console.error('[main] ignored unhandled network abort:', reason.message)
-    return
-  }
-  console.error('[main] fatal unhandled rejection:', reason)
-  process.exit(1)
-})
+process.on('uncaughtException', onUncaughtException)
+process.on('unhandledRejection', onUnhandledRejection)
 
   // 映射原始事件到注意力类型
   function mapEventToAttentionType(event: string): string | null {

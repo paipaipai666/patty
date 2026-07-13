@@ -135,8 +135,11 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
     conptyInheritCursor: false
   })
 
-  // Handle PTY exit - cleanup session and notify renderer
+  // Handle PTY exit - cleanup session and notify renderer. Guard on the
+  // active session so a replaced pty (same id, recreated) can't delete its
+  // successor when the old process finally exits.
   term.onExit(({ exitCode }) => {
+    if (sessions.get(id)?.pty !== term) return
     removePane(id)
     sessions.delete(id)
     const mainWindow = BrowserWindow.getAllWindows()[0]
@@ -144,6 +147,18 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
       mainWindow.webContents.send('pty:exit', id, exitCode)
     }
   })
+
+  // A reused id must not leak the previous shell process or deliver duplicate
+  // output. Kill and evict any prior session before registering the new one.
+  const prior = sessions.get(id)
+  if (prior) {
+    try {
+      prior.pty.kill()
+    } catch {
+      // Already exited; nothing to kill.
+    }
+    sessions.delete(id)
+  }
 
   sessions.set(id, { pty: term, id })
   perfTimerEnd('pty:create')

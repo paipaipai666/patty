@@ -47,6 +47,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   }
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Handle for the post-exit auto-restart timer. Tracked so unmount can cancel a
+  // retry that is still pending — otherwise an exit that lands just before
+  // unmount respawns an orphaned PTY and writes to a disposed terminal.
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
   const renderCountRef = useRef(0)
@@ -304,6 +308,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     // PTY lifecycle
     ptyRetryCountRef.current = 0
     const startPty = () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
       window.terminalAPI
@@ -321,7 +329,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
               term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
               ptyRetryCountRef.current++
               if (ptyRetryCountRef.current < PTY_MAX_RETRIES) {
-                setTimeout(() => startPty(), 500)
+                retryTimerRef.current = setTimeout(() => startPty(), 500)
               } else {
                 term.write('\x1b[90m[Auto-restart limit reached]\x1b[0m\r\n')
               }
@@ -338,6 +346,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
     return () => {
       osc7Disposable.dispose()
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
       if (initTimerRef.current) clearTimeout(initTimerRef.current)
       if (atlasClearTimerRef.current) {
         clearInterval(atlasClearTimerRef.current)

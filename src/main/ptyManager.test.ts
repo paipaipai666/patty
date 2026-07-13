@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const exitHandlers: Record<string, Record<string, Function[]>> = {}
+const spawnedPtys: Array<{ kill: Function; write: Function; resize: Function }> = []
 
 vi.mock('node-pty', () => ({
   spawn: vi.fn((_: string, __: string[], opts: Record<string, unknown>) => {
     const id = (opts?.env as Record<string, string>)?.['PATTY_PANE_ID'] ?? 'unknown'
     const handlers: Record<string, Function[]> = {}
     exitHandlers[id] = handlers
-    return {
+    const term = {
       on: vi.fn((event: string, cb: Function) => {
         handlers[event] = handlers[event] || []
         handlers[event].push(cb)
@@ -20,6 +21,8 @@ vi.mock('node-pty', () => ({
       write: vi.fn(),
       resize: vi.fn()
     }
+    spawnedPtys.push(term)
+    return term
   })
 }))
 
@@ -65,5 +68,14 @@ describe('ptyManager heartbeat integration', () => {
     createPty('test-pane-2', undefined, undefined, 80, 24)
     killPty('test-pane-2')
     expect(removePane).toHaveBeenCalledWith('test-pane-2')
+  })
+
+  it('kills the previous pty session when reusing an id (no leak)', () => {
+    spawnedPtys.length = 0
+    createPty('dup-pane', undefined, undefined, 80, 24)
+    createPty('dup-pane', undefined, undefined, 80, 24)
+    expect(spawnedPtys).toHaveLength(2)
+    // The first session must be killed before the id is overwritten.
+    expect(spawnedPtys[0].kill).toHaveBeenCalled()
   })
 })
