@@ -116,10 +116,22 @@ function createWindow(): void {
 
 perfMark('app:ready-start')
 
-app.whenReady().then(async () => {
-  perfMeasure('app:whenReady', 'app:ready-start')
-  perfMark('app:init-start')
-  electronApp.setAppUserModelId('com.patty.app')
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+
+  app.whenReady().then(async () => {
+    perfMeasure('app:whenReady', 'app:ready-start')
+    perfMark('app:init-start')
+    electronApp.setAppUserModelId('com.patty.app')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -199,7 +211,8 @@ app.whenReady().then(async () => {
       createWindow()
     }
   })
-})
+  })
+}
 
 app.on('before-quit', () => {
   perfDump()
