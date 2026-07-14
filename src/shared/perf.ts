@@ -3,7 +3,9 @@
  * Zero overhead in production — all functions are no-ops when the env var is unset.
  */
 
-const enabled = typeof process !== 'undefined' && process.env?.PATTY_PERF === '1'
+const enabled =
+  (typeof window !== 'undefined' && (window as any).terminalAPI?.perfEnabled === true) ||
+  (typeof process !== 'undefined' && process.env?.PATTY_PERF === '1')
 
 // ── Log Collection (for benchmark script) ─────────────────────────────────
 

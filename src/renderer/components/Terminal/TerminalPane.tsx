@@ -9,6 +9,7 @@ import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getThemeColors } from '../../styles/themes'
+import { perfMark, perfMeasure } from '../../../shared/perf'
 import styles from './Terminal.module.css'
 import { createIIPStreamPatcher } from './iipStreamPatcher'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
@@ -53,6 +54,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
+  const firstDataReceivedRef = useRef(false)
   const renderCountRef = useRef(0)
   const updatePid = useSessionStore((s) => s.updatePid)
   const updateCwd = useSessionStore((s) => s.updateCwd)
@@ -94,7 +96,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     // resize guard / fit logic misbehave; stale onData/onExit callbacks from
     // the previous session could also fire against the new terminal.
     ptyCreatedRef.current = false
+    firstDataReceivedRef.current = false
     markTerminalOpen(session.id, session.shell)
+    if (perfEnabled) perfMark('terminal:mount')
     cleanupDataRef.current?.()
     cleanupExitRef.current?.()
     cleanupDataRef.current = null
@@ -115,7 +119,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       convertEol: false,
       rescaleOverlappingGlyphs: true
     }
+    if (perfEnabled) perfMark('terminal:xterm-construct')
     const term = new Terminal(termOptions as ITerminalOptions)
+    if (perfEnabled) perfMeasure('terminal:xterm-construct', 'terminal:xterm-construct')
 
     // Copy/paste
     term.attachCustomKeyEventHandler((e) => {
@@ -168,9 +174,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     const webLinksAddon = new WebLinksAddon()
     const unicode11Addon = new Unicode11Addon()
 
+    if (perfEnabled) perfMark('terminal:load-addons')
     term.loadAddon(fitAddon)
     term.loadAddon(webLinksAddon)
+    if (perfEnabled) perfMeasure('terminal:load-addons', 'terminal:load-addons')
+
+    if (perfEnabled) perfMark('terminal:term-open')
     term.open(container)
+    if (perfEnabled) perfMeasure('terminal:term-open', 'terminal:term-open')
 
     // Paste guard
     container.addEventListener('paste', (e) => { e.preventDefault(); e.stopPropagation() }, true)
@@ -228,12 +239,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
     // WebGL
     let webglAddon: WebglAddon | null = null
+    if (perfEnabled) perfMark('terminal:webgl-init')
     try {
       webglAddon = new WebglAddon()
       term.loadAddon(webglAddon)
     } catch {
       console.warn('WebGL addon failed to load, falling back to Canvas renderer')
     }
+    if (perfEnabled) perfMeasure('terminal:webgl-init', 'terminal:webgl-init')
 
     // ── 规避 @xterm/addon-webgl@0.18.0 atlas 合并 Bug ─────────────────────
     // addon-webgl 的 TextureAtlas 在页数 >= max(4, maxAtlasPages)（NVIDIA 通常
@@ -280,11 +293,13 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       } as typeof HTMLCanvasElement.prototype.getContext
       ;(window as any).__imageAddonPatchApplied = true
     }
+    if (perfEnabled) perfMark('terminal:image-addon-init')
     try {
       term.loadAddon(new ImageAddon())
     } catch {
       console.warn('Image addon failed to load')
     }
+    if (perfEnabled) perfMeasure('terminal:image-addon-init', 'terminal:image-addon-init')
 
     term.loadAddon(unicode11Addon)
     term.unicode.activeVersion = '11'
@@ -344,14 +359,20 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       }
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
+      if (perfEnabled) perfMark('terminal:create-session-ipc-start')
       window.terminalAPI
         .createSession(session.id, session.cwd, session.shell, term.cols, term.rows)
         .then((result) => {
+          if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
           if (result.success && result.pid) {
             updatePid(session.id, result.pid)
             ptyCreatedRef.current = true
             ptyRetryCountRef.current = 0
             cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
+              if (!firstDataReceivedRef.current) {
+                firstDataReceivedRef.current = true
+                if (perfEnabled) perfMeasure('terminal:first-data', 'terminal:create-session-ipc-start')
+              }
               term.write(iipPatcherRef.current!(data))
             })
             cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
@@ -370,6 +391,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
     // Delay PTY creation to allow initial fit
     initTimerRef.current = setTimeout(() => {
+      if (perfEnabled) perfMeasure('terminal:mount-to-init-timer', 'terminal:mount')
       fitAddon.fit()
       startPty()
     }, 50)

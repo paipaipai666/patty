@@ -4,6 +4,7 @@ import { useWorkspaceStore, getFocusedSessionId } from './store/workspaceStore'
 import { configureDirtyScheduler, markDirty } from './store/dirtyScheduler'
 import { normalizeWorkspaces } from '../shared/workspaceNormalize'
 import { useSettingsStore } from './store/settingsStore'
+import { perfMark, perfMeasure } from '../shared/perf'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TerminalArea } from './components/Terminal/TerminalArea'
@@ -54,6 +55,8 @@ export default function App() {
   const [promptOptions, setPromptOptions] = useState<PromptOptions | null>(null)
   const [metricsOpen, setMetricsOpen] = useState(false)
 
+  const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
+
   const showPrompt = useCallback((title: string, defaultValue: string = ''): Promise<{ canceled: boolean; value: string }> => {
     return new Promise((resolve) => {
       setPromptOptions({
@@ -73,7 +76,10 @@ export default function App() {
 
   // Initialize settings on mount
   useEffect(() => {
-    settingsInit()
+    if (perfEnabled) perfMark('renderer:settings-init-start')
+    settingsInit().then(() => {
+      if (perfEnabled) perfMeasure('renderer:settings-init', 'renderer:settings-init-start')
+    })
   }, [settingsInit])
 
   // Wire combined persistence: sessionStore owns sessions/sidebar/collections,
@@ -95,16 +101,23 @@ export default function App() {
   // normalizeWorkspaces so old state files upgrade seamlessly.
   useEffect(() => {
     let cancelled = false
+    if (perfEnabled) perfMark('renderer:state-load-start')
     loadState().then((persisted) => {
+      if (perfEnabled) perfMark('renderer:state-loaded')
       if (cancelled || !persisted) return
       const sessions = useSessionStore.getState().sessions
       const knownIds = new Set(sessions.map((s) => s.id))
+      if (perfEnabled) perfMark('renderer:normalize-workspaces-start')
       const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
         persisted.workspaces,
         persisted.activeWorkspaceId,
         knownIds
       )
+      if (perfEnabled) perfMeasure('renderer:normalize-workspaces', 'renderer:normalize-workspaces-start')
+      if (perfEnabled) perfMark('renderer:load-workspace-start')
       useWorkspaceStore.getState().loadFromPersisted(workspaces, activeWorkspaceId)
+      if (perfEnabled) perfMeasure('renderer:load-workspace', 'renderer:load-workspace-start')
+      if (perfEnabled) perfMeasure('renderer:state-load', 'renderer:state-load-start')
     })
     return () => {
       cancelled = true

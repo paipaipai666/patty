@@ -73,6 +73,7 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     perfMeasure('app:create-window-to-show', 'app:create-window-start')
+    perfMeasure('app:init-to-show', 'app:init-start')
     perfMeasure('app:total-startup', 'app:ready-start')
     perfMark('app:shown')
     mainWindow?.show()
@@ -91,6 +92,13 @@ function createWindow(): void {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+
+  // Forward renderer console logs to main process when perf instrumentation is active
+  if (perfEnabled) {
+    mainWindow.webContents.on('console-message', (_event, _level, message) => {
+      console.log(message)
+    })
+  }
 
   // Load renderer
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -168,13 +176,19 @@ if (!gotTheLock) {
   perfMark('app:hooks-install-start')
   const settings = loadSettings()
   if (settings.notifications.claudeCode) {
+    perfMark('app:hook-claude-code-start')
     await ensureClaudeCodeHook(hookPort)
+    perfMeasure('app:hook-claude-code', 'app:hook-claude-code-start')
   }
   if (settings.notifications.openCode) {
+    perfMark('app:hook-opencode-start')
     await ensureOpenCodePlugin()
+    perfMeasure('app:hook-opencode', 'app:hook-opencode-start')
   }
   if (settings.notifications.codex) {
+    perfMark('app:hook-codex-start')
     await ensureCodexHook()
+    perfMeasure('app:hook-codex', 'app:hook-codex-start')
   }
   perfMeasure('app:hooks-install', 'app:hooks-install-start')
 

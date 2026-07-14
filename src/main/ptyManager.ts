@@ -118,10 +118,17 @@ function getShellSpawnArgs(shellPath: string): string[] {
 
 export function createPty(id: string, cwd?: string, shell?: string, cols?: number, rows?: number): pty.IPty {
   perfTimerStart('pty:create')
+  perfTimerStart('pty:getShellPath')
   const shellPath = getShellPath(shell)
-  const workingDir = cwd || process.env.USERPROFILE || 'C:\\Users'
-  const shellArgs = getShellSpawnArgs(shellPath)
+  perfTimerEnd('pty:getShellPath')
 
+  const workingDir = cwd || process.env.USERPROFILE || 'C:\\Users'
+
+  perfTimerStart('pty:getShellArgs')
+  const shellArgs = getShellSpawnArgs(shellPath)
+  perfTimerEnd('pty:getShellArgs')
+
+  perfTimerStart('pty:spawn')
   const term = pty.spawn(shellPath, shellArgs, {
     name: 'xterm-256color',
     cols: cols || 80,
@@ -144,6 +151,7 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
     useConpty: true,
     conptyInheritCursor: false
   })
+  perfTimerEnd('pty:spawn')
 
   // Handle PTY exit - cleanup session and notify renderer. Guard on the
   // active session so a replaced pty (same id, recreated) can't delete its
