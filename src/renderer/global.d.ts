@@ -1,4 +1,4 @@
-import type { TerminalAPI } from '../preload/index'
+import type { TerminalAPI } from './api'
 
 declare global {
   interface Window {

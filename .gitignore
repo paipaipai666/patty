@@ -40,6 +40,10 @@ npm-debug.log*
 *.exe
 *.msi
 
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
 # Temporary
 tmp/
 temp/

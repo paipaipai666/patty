@@ -4,9 +4,9 @@
   "description": "Patty",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
+    "dev": "tauri dev",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
@@ -17,6 +17,7 @@
     "version:major": "npm version major --no-git-tag-version"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-image": "^0.7.0",
     "@xterm/addon-unicode11": "^0.8.0",
@@ -32,6 +33,7 @@
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "@electron/rebuild": "^3.7.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
