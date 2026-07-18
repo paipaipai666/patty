@@ -20,7 +20,8 @@ function makeWorkspace(overrides: Partial<Workspace> & { id: string }): Workspac
 beforeEach(() => {
   useWorkspaceStore.setState({
     workspaces: [],
-    activeWorkspaceId: null
+    activeWorkspaceId: null,
+    activeWorkspaceReady: false
   })
 })
 
@@ -31,6 +32,91 @@ describe('loadFromPersisted', () => {
     const state = useWorkspaceStore.getState()
     expect(state.workspaces).toHaveLength(1)
     expect(state.activeWorkspaceId).toBe('w1')
+  })
+
+  it('sets activeWorkspaceReady=true when there is only one workspace', () => {
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
+  })
+
+  it('sets activeWorkspaceReady=false when there are multiple workspaces', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' }),
+      makeWorkspace({ id: 'w2', paneTree: { id: 'l2', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'l2' })
+    ], 'w1')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(false)
+  })
+
+  it('sets activeWorkspaceReady=true when activeWorkspaceId is null', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' }),
+      makeWorkspace({ id: 'w2', paneTree: { id: 'l2', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'l2' })
+    ], null)
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
+  })
+})
+
+describe('activeWorkspaceReady', () => {
+  it('tryMarkActiveWorkspaceReady sets ready when session is in active workspace', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' }),
+      makeWorkspace({ id: 'w2', paneTree: { id: 'l2', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'l2' })
+    ], 'w1')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(false)
+    useWorkspaceStore.getState().tryMarkActiveWorkspaceReady('s1')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
+  })
+
+  it('tryMarkActiveWorkspaceReady ignores session not in active workspace', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' }),
+      makeWorkspace({ id: 'w2', paneTree: { id: 'l2', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'l2' })
+    ], 'w1')
+    useWorkspaceStore.getState().tryMarkActiveWorkspaceReady('s2')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(false)
+  })
+
+  it('switchWorkspace sets ready=true', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' }),
+      makeWorkspace({ id: 'w2', paneTree: { id: 'l2', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'l2' })
+    ], 'w1')
+    useWorkspaceStore.getState().switchWorkspace('w2')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
+  })
+
+  it('createWorkspace sets ready=true', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' })
+    ], 'w1')
+    useWorkspaceStore.getState().createWorkspace('s2')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
+  })
+
+  it('deleteWorkspace sets ready=true when active workspace is deleted', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' }),
+      makeWorkspace({ id: 'w2', paneTree: { id: 'l2', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'l2' })
+    ], 'w1')
+    useWorkspaceStore.getState().deleteWorkspace('w1')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
+  })
+
+  it('removeSessionEverywhere sets ready=true when active workspace is removed', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1', paneTree: { id: 'a', type: 'leaf', sessionId: 's1' }, focusedPaneId: 'a' }),
+      makeWorkspace({ id: 'w2', paneTree: { id: 'b', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'b' })
+    ], 'w1')
+    useWorkspaceStore.getState().removeSessionEverywhere('s1')
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
+  })
+
+  it('setActiveWorkspaceReady sets ready=true', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' })
+    ], 'w1')
+    useWorkspaceStore.getState().setActiveWorkspaceReady()
+    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
   })
 })
 

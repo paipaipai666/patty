@@ -2,9 +2,11 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerIpcHandlers } from './ipcHandlers'
-import { startHookServer, stopHookServer } from './ptyManager'
+import { startHookServer, stopHookServer, ensurePwshCached, warmFirstPty } from './ptyManager'
 import { ensureClaudeCodeHook, ensureOpenCodePlugin, ensureCodexHook } from './hookInstaller'
 import { loadSettings } from './settingsHandler'
+import { loadState } from './stateHandler'
+import type { PersistedPaneTree } from '../shared/paneTypes'
 import { perfMark, perfMeasure, perfMemoryMain, perfReport, perfDump, perfEnabled } from '../shared/perf'
 import { MetricsCollector } from './metricsCollector'
 import { noteEvent, startHeartbeatWatchdog } from './heartbeat'
@@ -49,6 +51,11 @@ process.on('unhandledRejection', onUnhandledRejection)
       }
     }
   }
+
+function leafSessionIds(tree: PersistedPaneTree): string[] {
+  if (tree.type === 'leaf') return [tree.sessionId]
+  return [...leafSessionIds(tree.first), ...leafSessionIds(tree.second)]
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -136,7 +143,7 @@ if (!gotTheLock) {
 
   // Start hook server for notifications
   perfMark('app:hook-server-start')
-  const hookPort = await startHookServer((paneId, event, source) => {
+  const hookPortPromise = startHookServer((paneId, event, source) => {
     // 心跳租约：所有来源事件都刷新该 pane 的 keepalive
     noteEvent(paneId, event, source)
 
@@ -169,6 +176,9 @@ if (!gotTheLock) {
       mainWindow.webContents.send('pty:attn', paneId, attentionType, aiType)
     }
   })
+  // Warm the pwsh path cache while the hook server binds (~130ms overlap).
+  ensurePwshCached()
+  const hookPort = await hookPortPromise
   perfMeasure('app:hook-server', 'app:hook-server-start')
   console.log(`Hook server listening on port ${hookPort}`)
 
@@ -198,6 +208,24 @@ if (!gotTheLock) {
   perfMark('app:create-window-start')
   createWindow()
   metricsCollector?.start()
+
+  // Preheat the active workspace's PTYs so their shell boot overlaps renderer
+  // load instead of blocking first-terminal-ready. Runs after createWindow so
+  // the ~100ms spawn doesn't delay first paint.
+  perfMark('app:pty-warm-start')
+  try {
+    const persisted = loadState()
+    const activeWs = persisted.workspaces?.find((w) => w.id === persisted.activeWorkspaceId)
+    if (activeWs?.paneTree) {
+      for (const sessionId of leafSessionIds(activeWs.paneTree)) {
+        const s = persisted.sessions.find((sess) => sess.id === sessionId)
+        if (s) warmFirstPty(sessionId, s.cwd, s.shell)
+      }
+    }
+  } catch (err) {
+    console.error('Failed to warm first PTY:', err)
+  }
+  perfMeasure('app:pty-warm', 'app:pty-warm-start')
 
   // Periodic memory snapshot in perf mode
   if (perfEnabled) {

@@ -12,9 +12,19 @@ import { removePane } from './heartbeat'
 export interface PtySession {
   pty: pty.IPty
   id: string
+  /** False for preheated PTYs that have not been attached by a renderer yet. */
+  attached: boolean
+  cwd?: string
+  shell?: string
 }
 
 const sessions = new Map<string, PtySession>()
+
+interface PreheatBuffer {
+  chunks: string[]
+  disposable: { dispose(): void }
+}
+const preheatBuffers = new Map<string, PreheatBuffer>()
 let hookServer: http.Server | null = null
 let hookPort = 0
 // Random per-process secret. Injected into every PTY's environment so the shell
@@ -63,6 +73,12 @@ function findPwsh(): string | null {
   pwshCache = null
   perfTimerEnd('shell:findPwsh')
   return null
+}
+
+/** Populate the pwsh path cache at startup so the first createPty doesn't pay
+ *  the ~130ms `where.exe pwsh` probe on the critical path. */
+export function ensurePwshCached(): void {
+  findPwsh()
 }
 
 function detectDefaultShell(): string {
@@ -118,6 +134,24 @@ function getShellSpawnArgs(shellPath: string): string[] {
 
 export function createPty(id: string, cwd?: string, shell?: string, cols?: number, rows?: number): pty.IPty {
   perfTimerStart('pty:create')
+
+  // Reuse a preheated (not yet attached) PTY when the requested session matches.
+  const existing = sessions.get(id)
+  if (existing && !existing.attached) {
+    if (existing.cwd === cwd && existing.shell === shell) {
+      existing.attached = true
+      try {
+        existing.pty.resize(cols || 80, rows || 24)
+      } catch {
+        // PTY may have exited; ignore resize errors
+      }
+      perfTimerEnd('pty:create')
+      return existing.pty
+    }
+    // Preheated with different cwd/shell — kill it and create a fresh one.
+    killPty(id)
+  }
+
   perfTimerStart('pty:getShellPath')
   const shellPath = getShellPath(shell)
   perfTimerEnd('pty:getShellPath')
@@ -158,6 +192,11 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
   // successor when the old process finally exits.
   term.onExit(({ exitCode }) => {
     if (sessions.get(id)?.pty !== term) return
+    const buffered = preheatBuffers.get(id)
+    if (buffered) {
+      buffered.disposable.dispose()
+      preheatBuffers.delete(id)
+    }
     removePane(id)
     sessions.delete(id)
     const mainWindow = BrowserWindow.getAllWindows()[0]
@@ -180,9 +219,41 @@ export function createPty(id: string, cwd?: string, shell?: string, cols?: numbe
     sessions.delete(id)
   }
 
-  sessions.set(id, { pty: term, id })
+  sessions.set(id, { pty: term, id, cwd, shell, attached: true })
   perfTimerEnd('pty:create')
   return term
+}
+
+/**
+ * Pre-spawn a PTY for a session that is expected to mount soon (typically the
+ * active workspace's leaves at startup). The PTY boots while the renderer is
+ * still loading; its early output is buffered and replayed on attach.
+ */
+export function warmFirstPty(id: string, cwd?: string, shell?: string): void {
+  if (sessions.has(id)) return
+  try {
+    const term = createPty(id, cwd, shell)
+    const session = sessions.get(id)
+    if (!session) return
+    session.attached = false
+    const chunks: string[] = []
+    const disposable = term.onData((data) => chunks.push(data))
+    preheatBuffers.set(id, { chunks, disposable })
+  } catch (err) {
+    console.error('Failed to warm first PTY:', err)
+  }
+}
+
+/**
+ * Drain (and dispose of) the buffered output of a preheated PTY. Returns null
+ * when the session was not preheated or produced no output yet.
+ */
+export function takePreheatedBuffer(id: string): string | null {
+  const entry = preheatBuffers.get(id)
+  if (!entry) return null
+  preheatBuffers.delete(id)
+  entry.disposable.dispose()
+  return entry.chunks.length > 0 ? entry.chunks.join('') : null
 }
 
 export function writeToPty(id: string, data: string): void {
@@ -208,6 +279,11 @@ export function resizePty(id: string, cols: number, rows: number): void {
 }
 
 export function killPty(id: string): void {
+  const buffered = preheatBuffers.get(id)
+  if (buffered) {
+    buffered.disposable.dispose()
+    preheatBuffers.delete(id)
+  }
   const session = sessions.get(id)
   if (session) {
     session.pty.kill()

@@ -7,6 +7,7 @@ import { ImageAddon } from '@xterm/addon-image'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
+import { useWorkspaceStore } from '../../store/workspaceStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getThemeColors } from '../../styles/themes'
 import { perfMark, perfMeasure } from '../../../shared/perf'
@@ -47,7 +48,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     iipPatcherRef.current = createIIPStreamPatcher()
   }
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const initTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Handle for the post-exit auto-restart timer. Tracked so unmount can cancel a
   // retry that is still pending — otherwise an exit that lands just before
   // unmount respawns an orphaned PTY and writes to a disposed terminal.
@@ -368,10 +368,18 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
             updatePid(session.id, result.pid)
             ptyCreatedRef.current = true
             ptyRetryCountRef.current = 0
+            if (result.replay) {
+              // A preheated PTY already produced its initial output (banner,
+              // prompt) before we attached — write it before subscribing to
+              // live data so ordering is preserved.
+              term.write(iipPatcherRef.current!(result.replay))
+              useWorkspaceStore.getState().tryMarkActiveWorkspaceReady(session.id)
+            }
             cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
               if (!firstDataReceivedRef.current) {
                 firstDataReceivedRef.current = true
                 if (perfEnabled) perfMeasure('terminal:first-data', 'terminal:create-session-ipc-start')
+                useWorkspaceStore.getState().tryMarkActiveWorkspaceReady(session.id)
               }
               term.write(iipPatcherRef.current!(data))
             })
@@ -389,12 +397,11 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         })
     }
 
-    // Delay PTY creation to allow initial fit
-    initTimerRef.current = setTimeout(() => {
-      if (perfEnabled) perfMeasure('terminal:mount-to-init-timer', 'terminal:mount')
-      fitAddon.fit()
-      startPty()
-    }, 50)
+    // Start the PTY immediately. The container is already laid out by the time
+    // this effect runs, and preheated sessions are ready to attach.
+    if (perfEnabled) perfMeasure('terminal:mount-to-init-timer', 'terminal:mount')
+    fitAddon.fit()
+    startPty()
 
     return () => {
       container.removeEventListener('webglcontextlost', onContextLost, true)
@@ -404,7 +411,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         clearTimeout(retryTimerRef.current)
         retryTimerRef.current = null
       }
-      if (initTimerRef.current) clearTimeout(initTimerRef.current)
       if (atlasClearTimerRef.current) {
         clearInterval(atlasClearTimerRef.current)
         atlasClearTimerRef.current = null
