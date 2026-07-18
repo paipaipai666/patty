@@ -114,6 +114,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       cursorStyle: settings.cursorStyle,
       allowTransparency: settings.opacity < 1,
       allowProposedApi: true,
+      bracketedPasteMode: true,
       theme: getThemeColors(settings.theme, settings.customThemes).terminal,
       scrollback: settings.scrollback,
       convertEol: false,
@@ -142,7 +143,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         if (key === 'V' || key === 'v') {
           if (isDown) {
             navigator.clipboard.readText().then((text) => {
-              if (text) window.terminalAPI.write(session.id, text)
+              if (text) term.paste(text)
             })
           }
           return false
@@ -161,7 +162,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       if (key === 'V' || key === 'v') {
         if (isDown) {
           navigator.clipboard.readText().then((text) => {
-            if (text) window.terminalAPI.write(session.id, text)
+            if (text) term.paste(text)
           })
         }
         return false
@@ -183,7 +184,11 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     term.open(container)
     if (perfEnabled) perfMeasure('terminal:term-open', 'terminal:term-open')
 
-    // Paste guard
+    // Paste guard: intercept the browser's native paste (Ctrl+V / right-click)
+    // so xterm never auto-pastes on its own. All pastes are routed through
+    // term.paste() in the key handler below, which (with bracketedPasteMode on)
+    // wraps the text in \e[200~\e[201~. This keeps a single paste path and
+    // avoids double-pasting while still giving TUIs the bracketed-paste hint.
     container.addEventListener('paste', (e) => { e.preventDefault(); e.stopPropagation() }, true)
 
     // IME composition handling
