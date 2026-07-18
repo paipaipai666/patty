@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod hooks;
+mod installer;
 mod pty;
 mod store;
 
@@ -74,7 +76,7 @@ fn get_fonts() -> Vec<String> {
 
 #[tauri::command]
 fn get_hook_port() -> u16 {
-    0
+    hooks::hook_port()
 }
 
 #[tauri::command]
@@ -117,6 +119,23 @@ fn main() {
     tauri::Builder::default()
         .setup(|app| {
             pty::init_resource_dir(app.handle());
+            // Hook server first: PTYs spawned after this point get a real
+            // PATTY_PORT / PATTY_HOOK_SECRET in their environment.
+            if let Err(e) = hooks::start_hook_server(app.handle().clone()) {
+                eprintln!("[main] hook server failed to start: {e}");
+            }
+            // Install AI-tool hooks only when the user has them enabled.
+            let settings = store::load_settings();
+            if settings["notifications"]["claudeCode"].as_bool().unwrap_or(true) {
+                installer::ensure_claude_code_hook();
+            }
+            if settings["notifications"]["openCode"].as_bool().unwrap_or(true) {
+                installer::ensure_opencode_plugin();
+            }
+            if settings["notifications"]["codex"].as_bool().unwrap_or(true) {
+                installer::ensure_codex_hook();
+            }
+            hooks::start_heartbeat_watchdog(app.handle().clone());
             // Preheat the persisted workspace's shells so they boot while the
             // renderer is still loading (replay attaches on pty:create).
             pty::warm_startup(app.handle());

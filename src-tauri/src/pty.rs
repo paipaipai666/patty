@@ -10,14 +10,8 @@ use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
-// ponytail: PATTY_PORT / PATTY_HOOK_SECRET are placeholders until the hook
-// server module lands (next commit); PTYs spawned now can't report hooks.
-fn hook_port() -> u16 {
-    0
-}
-
-fn hook_secret() -> String {
-    String::new()
+pub fn resource_dir() -> PathBuf {
+    APP_RESOURCE_DIR.get().cloned().unwrap_or_default()
 }
 
 // ── Session registry ────────────────────────────────────────────────────────
@@ -300,7 +294,7 @@ fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
         let session = map.remove(&id).unwrap();
         session.shared.app.clone()
     };
-    // TODO(commit 4): heartbeat removePane(id)
+    crate::hooks::remove_pane(&id);
     emit(&app, &format!("pty:exit:{id}"), code);
 }
 
@@ -337,8 +331,8 @@ fn spawn_inner(
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "vscode");
     cmd.env("PATTY_PANE_ID", id);
-    cmd.env("PATTY_PORT", hook_port().to_string());
-    cmd.env("PATTY_HOOK_SECRET", hook_secret());
+    cmd.env("PATTY_PORT", crate::hooks::hook_port().to_string());
+    cmd.env("PATTY_HOOK_SECRET", crate::hooks::hook_secret());
     let xdg = std::env::var("XDG_CONFIG_HOME")
         .ok()
         .or_else(|| std::env::var("USERPROFILE").ok().map(|u| format!(r"{u}\.config")));
@@ -511,8 +505,12 @@ pub fn kill(id: &str) -> Value {
     if let Some(session) = victim {
         let _ = session.child.lock().unwrap().kill();
     }
-    // TODO(commit 4): heartbeat removePane(id)
+    crate::hooks::remove_pane(id);
     json!({ "success": true })
+}
+
+pub fn session_exists(id: &str) -> bool {
+    SESSIONS.lock().unwrap().contains_key(id)
 }
 
 #[cfg(test)]
