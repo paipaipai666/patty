@@ -1,13 +1,19 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 
 describe('opencode-patty-plugin', () => {
-  let PattyNotifier: typeof import('../../../resources/opencode-patty-plugin').PattyNotifier
+  type PattyNotifierFn = (ctx: {
+    project: string
+    directory: string
+    $?: unknown
+  }) => Promise<{ event: (e: { event: { type: string; properties?: Record<string, any> } }) => Promise<void> }>
+
+  let PattyNotifier: PattyNotifierFn
 
   beforeAll(async () => {
     process.env.PATTY_PORT = '12345'
     process.env.PATTY_PANE_ID = 'test-pane'
     const mod = await import('../../../resources/opencode-patty-plugin')
-    PattyNotifier = mod.PattyNotifier
+    PattyNotifier = mod.PattyNotifier as unknown as PattyNotifierFn
   })
 
   it('returns an object with an event handler', async () => {
@@ -59,7 +65,8 @@ describe('opencode-patty-plugin', () => {
   it('returns empty object when env vars are missing', async () => {
     delete process.env.PATTY_PORT
     const mod = await import('../../../resources/opencode-patty-plugin')
-    const plugin = await mod.PattyNotifier({ project: '', directory: '', $: {} })
+    const Notifier = mod.PattyNotifier as unknown as PattyNotifierFn
+    const plugin = await Notifier({ project: '', directory: '', $: {} })
     expect(plugin).toEqual({})
     process.env.PATTY_PORT = '12345'
   })

@@ -187,7 +187,7 @@ if (!gotTheLock) {
   const settings = loadSettings()
   if (settings.notifications.claudeCode) {
     perfMark('app:hook-claude-code-start')
-    await ensureClaudeCodeHook(hookPort)
+    await ensureClaudeCodeHook()
     perfMeasure('app:hook-claude-code', 'app:hook-claude-code-start')
   }
   if (settings.notifications.openCode) {

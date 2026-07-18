@@ -9,7 +9,26 @@
  * - session.error: 执行出错
  */
 
-export const PattyNotifier = async ({ project, directory, $ }) => {
+interface PattyContext {
+  project?: string
+  directory?: string
+  $?: unknown
+}
+
+interface PattyEvent {
+  type: string
+  properties?: Record<string, any>
+}
+
+interface PattyHook {
+  event: (payload: { event: PattyEvent }) => Promise<void>
+}
+
+export const PattyNotifier = async ({
+  project: _project,
+  directory: _directory,
+  $: _$
+}: PattyContext): Promise<PattyHook | Record<string, never>> => {
   const PATTY_PORT = process.env.PATTY_PORT
   const PANE_ID = process.env.PATTY_PANE_ID
 

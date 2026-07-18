@@ -80,7 +80,7 @@ function upsertHook(
   hooks[key] = list
 }
 
-export async function ensureClaudeCodeHook(hookPort: number): Promise<void> {
+export async function ensureClaudeCodeHook(): Promise<void> {
   try {
     const settingsPath = getClaudeSettingsPath()
     const hookScriptPath = ensureHookScriptExists()

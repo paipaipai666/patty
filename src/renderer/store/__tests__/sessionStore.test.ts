@@ -164,7 +164,7 @@ describe('setActive / renameSession / setColor / updatePid / moveSessionToCollec
 
 describe('collections', () => {
   it('addCollection creates a new collection', () => {
-    const id = useSessionStore.getState().addCollection('My Group')
+    useSessionStore.getState().addCollection('My Group')
     const state = useSessionStore.getState()
     expect(state.collections).toHaveLength(1)
     expect(state.collections[0].name).toBe('My Group')

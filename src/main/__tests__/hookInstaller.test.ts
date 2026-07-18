@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe('ensureClaudeCodeHook', () => {
   it('installs PreToolUse, PostToolUse, and UserPromptSubmit hooks', async () => {
-    await ensureClaudeCodeHook(12345)
+    await ensureClaudeCodeHook()
 
     const calls = vi.mocked(fs.writeFileSync).mock.calls
     expect(calls.length).toBeGreaterThan(0)
@@ -65,12 +65,12 @@ describe('ensureClaudeCodeHook', () => {
       })
     )
     // existsSync for settings path needs to return true so readFileSync is actually called
-    vi.mocked(fs.existsSync).mockImplementation((p: string) => {
+    vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
       if (typeof p === 'string' && p.includes('.claude/settings.json')) return true
       return false
     })
 
-    await ensureClaudeCodeHook(12345)
+    await ensureClaudeCodeHook()
 
     const calls = vi.mocked(fs.writeFileSync).mock.calls
     const lastCall = calls[calls.length - 1]
@@ -109,7 +109,7 @@ describe('ensureCodexHook', () => {
     vi.mocked(fs.readFileSync).mockReturnValue('{ this is not valid json ')
     vi.mocked(fs.writeFileSync).mockClear()
 
-    await ensureClaudeCodeHook(12345)
+    await ensureClaudeCodeHook()
 
     // A parse failure must NOT result in a destructive write that wipes the
     // user's existing config. Currently this fails: the code writes `{}`-based

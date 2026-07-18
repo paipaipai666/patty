@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import type { AppSettings } from '../../../shared/settingsTypes'
 
 const mockSettingsGetAll = vi.fn()
 const mockSettingsSet = vi.fn()
@@ -29,7 +30,7 @@ vi.stubGlobal('document', {
   }
 })
 
-const DEFAULT_SETTINGS = {
+const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   fontFamily: 'Cascadia Code',
   fontSize: 14,
