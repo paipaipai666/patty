@@ -202,16 +202,66 @@ fn decode(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
     out
 }
 
+// ── ConPTY startup DSR handshake ────────────────────────────────────────────
+// ConPTY opens every session with a cursor-position query (ESC[6n) and stalls
+// until the terminal answers. node-pty answers this itself
+// (conptyInheritCursor:false); portable-pty passes it through, where it can be
+// emitted before the renderer subscribes and get lost — leaving the shell
+// stuck forever. Answer it here instead and strip it from the stream,
+// reporting a fresh-terminal cursor at 1;1.
+
+enum DsrState {
+    /// Candidate prefix of the query seen so far.
+    Pending(String),
+    Done,
+}
+
+const DSR_QUERY: &str = "\x1b[6n";
+const DSR_REPLY: &[u8] = b"\x1b[1;1R";
+
+/// Returns the text to forward (None = hold for the next chunk) and whether to
+/// send the reply. Only inspects the stream start: a chunk that isn't a prefix
+/// of the query ends interception.
+fn dsr_filter(state: &mut DsrState, text: &str) -> (Option<String>, bool) {
+    let DsrState::Pending(holdback) = state else {
+        return (Some(text.to_string()), false);
+    };
+    let combined = std::mem::take(holdback) + text;
+    if let Some(rest) = combined.strip_prefix(DSR_QUERY) {
+        *state = DsrState::Done;
+        let rest = rest.to_string();
+        return ((!rest.is_empty()).then_some(rest), true);
+    }
+    if DSR_QUERY.starts_with(&combined) {
+        *state = DsrState::Pending(combined);
+        return (None, false);
+    }
+    *state = DsrState::Done;
+    (Some(combined), false)
+}
+
 // ── Reader / waiter threads ─────────────────────────────────────────────────
 
-fn reader_loop(id: String, mut reader: Box<dyn Read + Send>, shared: Arc<Shared>) {
+fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
+    let shared = session.shared.clone();
     let mut carry: Vec<u8> = Vec::new();
+    let mut dsr = DsrState::Pending(String::new());
     let mut buf = [0u8; 8192];
     loop {
         match reader.read(&mut buf) {
             Ok(0) => break,
             Ok(n) => {
                 let text = decode(&mut carry, &buf[..n]);
+                if text.is_empty() {
+                    continue;
+                }
+                let (forward, reply) = dsr_filter(&mut dsr, &text);
+                if reply {
+                    let mut writer = session.writer.lock().unwrap();
+                    let _ = writer.write_all(DSR_REPLY);
+                    let _ = writer.flush();
+                }
+                let Some(text) = forward else { continue };
                 if text.is_empty() {
                     continue;
                 }
@@ -317,11 +367,11 @@ fn spawn_inner(
         child: child.clone(),
         shared: shared.clone(),
     });
-    SESSIONS.lock().unwrap().insert(id.to_string(), session);
+    SESSIONS.lock().unwrap().insert(id.to_string(), session.clone());
 
     let reader_id = id.to_string();
-    let reader_shared = shared.clone();
-    thread::spawn(move || reader_loop(reader_id, reader, reader_shared));
+    let reader_session = session.clone();
+    thread::spawn(move || reader_loop(reader_id, reader_session, reader));
 
     let wait_id = id.to_string();
     thread::spawn(move || wait_loop(wait_id, child));
@@ -354,13 +404,13 @@ pub fn create(
         let matches = existing.cwd.as_deref() == cwd && existing.shell.as_deref() == shell;
         if !existing.shared.attached.load(Ordering::Relaxed) && matches {
             existing.shared.attached.store(true, Ordering::Relaxed);
+            let replay = take_buffer(&existing.shared);
             let _ = existing.master.lock().unwrap().resize(PtySize {
                 rows: rows.unwrap_or(24),
                 cols: cols.unwrap_or(80),
                 pixel_width: 0,
                 pixel_height: 0,
             });
-            let replay = take_buffer(&existing.shared);
             return json!({ "pid": existing.pid, "success": true, "replay": replay });
         }
         // Mismatched preheat or a reused id: kill the old process so it can't
@@ -523,6 +573,37 @@ mod tests {
     }
 
     #[test]
+    fn dsr_filter_answers_and_strips_query() {
+        let mut state = DsrState::Pending(String::new());
+        let (forward, reply) = dsr_filter(&mut state, "\x1b[6nrest");
+        assert!(reply);
+        assert_eq!(forward.as_deref(), Some("rest"));
+        // After answering, everything passes through untouched.
+        let (forward, reply) = dsr_filter(&mut state, "abc");
+        assert!(!reply);
+        assert_eq!(forward.as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn dsr_filter_handles_split_query() {
+        let mut state = DsrState::Pending(String::new());
+        let (forward, reply) = dsr_filter(&mut state, "\x1b[6");
+        assert!(!reply);
+        assert_eq!(forward, None);
+        let (forward, reply) = dsr_filter(&mut state, "nmore");
+        assert!(reply);
+        assert_eq!(forward.as_deref(), Some("more"));
+    }
+
+    #[test]
+    fn dsr_filter_passes_through_when_no_query() {
+        let mut state = DsrState::Pending(String::new());
+        let (forward, reply) = dsr_filter(&mut state, "hello");
+        assert!(!reply);
+        assert_eq!(forward.as_deref(), Some("hello"));
+    }
+
+    #[test]
     fn spawn_echo_and_exit_cleanup() {
         // Real ConPTY round-trip: unattached session buffers output; exit
         // removes the session from the registry.
@@ -537,12 +618,8 @@ mod tests {
             let buffered = session.shared.buffer.lock().unwrap().join("");
             assert!(!buffered.is_empty(), "expected some shell banner output");
         }
-        // ConPTY probes the terminal with a DSR query (ESC[6n) at startup and
-        // xterm.js answers it in production; emulate the reply here or the
-        // shell never sees our input.
-        write(&id, "\u{1b}[1;1R");
-        thread::sleep(Duration::from_millis(200));
-        // `exit` ends cmd; the wait loop must evict the session.
+        // ConPTY's startup DSR query is answered by dsr_filter internally;
+        // `exit` then ends cmd and the wait loop must evict the session.
         write(&id, "exit\r");
         let mut gone = false;
         for _ in 0..40 {

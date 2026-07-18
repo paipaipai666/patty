@@ -3,6 +3,7 @@ import { Terminal, type ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
+import { CanvasAddon } from '@xterm/addon-canvas'
 import { ImageAddon } from '@xterm/addon-image'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
@@ -28,11 +29,36 @@ interface TerminalPaneProps {
 
 const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
 
+// WebView2's GPU can be unusable even when the system Chromium is fine
+// (blocked GPU process, driver/policy issues): a context is created, lost
+// immediately, and the pane ends up with no renderer at all — every write
+// then throws on RenderService.dimensions. Detect support once, and give up
+// permanently if a live context loss never restores.
+let webglSupported: boolean | null = null
+let webglPermanentlyLost = false
+
+function webglUsable(): boolean {
+  if (webglPermanentlyLost) return false
+  if (webglSupported === null) {
+    try {
+      const gl = document.createElement('canvas').getContext('webgl2')
+      webglSupported = !!gl && !gl.isContextLost()
+    } catch {
+      webglSupported = false
+    }
+  }
+  return webglSupported
+}
+
 export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const webglAddonRef = useRef<WebglAddon | null>(null)
+  const canvasAddonRef = useRef<CanvasAddon | null>(null)
+  // Give-up timer for WebGL context loss: if no contextrestored follows, the
+  // GPU is gone for good and the pane swaps to the canvas renderer.
+  const contextLossTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ptyCreatedRef = useRef(false)
   // Interval handle for the atlas page-count guard (see webglAddon init block).
   // Cleared on unmount.
@@ -242,14 +268,20 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       textarea.addEventListener('compositionend', onCompositionEnd)
     }
 
-    // WebGL
+    // Renderer: WebGL when usable, canvas otherwise (see webglUsable).
     let webglAddon: WebglAddon | null = null
+    let canvasAddon: CanvasAddon | null = null
     if (perfEnabled) perfMark('terminal:webgl-init')
     try {
-      webglAddon = new WebglAddon()
-      term.loadAddon(webglAddon)
+      if (webglUsable()) {
+        webglAddon = new WebglAddon()
+        term.loadAddon(webglAddon)
+      } else {
+        canvasAddon = new CanvasAddon()
+        term.loadAddon(canvasAddon)
+      }
     } catch {
-      console.warn('WebGL addon failed to load, falling back to Canvas renderer')
+      console.warn('GPU renderer failed to load, using built-in DOM renderer')
     }
     if (perfEnabled) perfMeasure('terminal:webgl-init', 'terminal:webgl-init')
 
@@ -312,15 +344,36 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     termRef.current = term
     fitAddonRef.current = fitAddon
     webglAddonRef.current = webglAddon
+    canvasAddonRef.current = canvasAddon
 
     // WebGL context-loss recovery. A lost GPU context (driver reset, too many
     // live contexts, backgrounded tab) silently blanks the terminal unless we
     // preventDefault to allow the browser to restore it — then re-create the
-    // addon against the restored context.
+    // addon against the restored context. If no restore follows, the GPU is
+    // gone permanently: swap to the canvas renderer instead of leaving the
+    // pane with no renderer (every write would throw).
     const onContextLost = (e: Event) => {
       e.preventDefault()
+      if (contextLossTimerRef.current) clearTimeout(contextLossTimerRef.current)
+      contextLossTimerRef.current = setTimeout(() => {
+        contextLossTimerRef.current = null
+        webglPermanentlyLost = true
+        try { webglAddonRef.current?.dispose() } catch { /* already disposed */ }
+        webglAddonRef.current = null
+        try {
+          const fallback = new CanvasAddon()
+          term.loadAddon(fallback)
+          canvasAddonRef.current = fallback
+        } catch {
+          // Canvas unavailable too — the built-in DOM renderer keeps the pane alive.
+        }
+      }, 2000)
     }
     const onContextRestored = () => {
+      if (contextLossTimerRef.current) {
+        clearTimeout(contextLossTimerRef.current)
+        contextLossTimerRef.current = null
+      }
       try {
         if (webglAddonRef.current) {
           try { webglAddonRef.current.dispose() } catch { /* already disposed */ }
@@ -420,6 +473,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         clearInterval(atlasClearTimerRef.current)
         atlasClearTimerRef.current = null
       }
+      if (contextLossTimerRef.current) {
+        clearTimeout(contextLossTimerRef.current)
+        contextLossTimerRef.current = null
+      }
       if (isComposing) unblockTextareaStyles()
       textarea?.removeEventListener('compositionstart', onCompositionStart)
       textarea?.removeEventListener('compositionend', onCompositionEnd)
@@ -427,10 +484,12 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
       webglAddonRef.current?.dispose()
+      canvasAddonRef.current?.dispose()
       term.dispose()
       termRef.current = null
       fitAddonRef.current = null
       webglAddonRef.current = null
+      canvasAddonRef.current = null
     }
   }, [session.id]) // Only re-run if session ID changes (shouldn't happen)
 
@@ -445,23 +504,31 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     if (!term) return
 
     if (visible) {
-      if (!webglAddonRef.current) {
+      if (!webglAddonRef.current && !canvasAddonRef.current) {
         try {
-          const wgl = new WebglAddon()
-          term.loadAddon(wgl)
-          webglAddonRef.current = wgl
-          atlasClearTimerRef.current = setInterval(() => {
-            const atlas = (wgl as any)?._renderer?._charAtlas
-            const pageCount = atlas?._pages?.length ?? 0
-            if (pageCount >= 12) {
-              try { wgl.clearTextureAtlas() } catch { /* disposed in race */ }
-            }
-          }, 2000)
+          if (webglUsable()) {
+            const wgl = new WebglAddon()
+            term.loadAddon(wgl)
+            webglAddonRef.current = wgl
+            atlasClearTimerRef.current = setInterval(() => {
+              const atlas = (wgl as any)?._renderer?._charAtlas
+              const pageCount = atlas?._pages?.length ?? 0
+              if (pageCount >= 12) {
+                try { wgl.clearTextureAtlas() } catch { /* disposed in race */ }
+              }
+            }, 2000)
+          } else {
+            const fallback = new CanvasAddon()
+            term.loadAddon(fallback)
+            canvasAddonRef.current = fallback
+          }
         } catch {
-          // WebGL unavailable — canvas fallback works fine
+          // GPU renderer unavailable — canvas fallback works fine
         }
       }
     } else {
+      // Only WebGL is released when hidden: it holds a real GPU context,
+      // the canvas renderer has nothing scarce worth freeing.
       if (atlasClearTimerRef.current) {
         clearInterval(atlasClearTimerRef.current)
         atlasClearTimerRef.current = null
