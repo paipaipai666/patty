@@ -8,6 +8,7 @@ mod pty;
 mod store;
 
 use serde_json::{json, Value};
+use tauri::Manager;
 
 #[tauri::command]
 fn settings_get_all() -> Value {
@@ -171,6 +172,14 @@ fn metrics_record_first_terminal(entry: Value) -> Value {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // Second launch: restore and focus the existing window.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .setup(|app| {
             pty::init_resource_dir(app.handle());
             // Hook server first: PTYs spawned after this point get a real

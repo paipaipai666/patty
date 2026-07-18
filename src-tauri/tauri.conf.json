@@ -32,6 +32,18 @@
     ],
     "icon": [
       "../resources/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../resources/patty-hook.ps1": "resources/patty-hook.ps1",
+      "../resources/opencode-patty-plugin.ts": "resources/opencode-patty-plugin.ts",
+      "../scripts/shell-integration/pwsh.ps1": "scripts/shell-integration/pwsh.ps1",
+      "../scripts/shell-integration/cmd-prompt.cmd": "scripts/shell-integration/cmd-prompt.cmd"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    }
   }
 }

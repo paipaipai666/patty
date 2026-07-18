@@ -22,6 +22,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Use npm 11
         run: npm install -g npm@11
 
@@ -39,7 +42,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*.exe
+          files: src-tauri/target/release/bundle/nsis/*.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

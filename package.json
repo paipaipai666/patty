@@ -10,8 +10,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "package": "electron-builder --win --config",
-    "package:nsis": "electron-builder --win nsis --config",
+    "package": "tauri build",
+    "package:nsis": "tauri build --bundles nsis",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version"
