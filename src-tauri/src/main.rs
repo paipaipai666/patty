@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod pty;
 mod store;
 
 use serde_json::{json, Value};
@@ -35,24 +36,35 @@ fn state_save(state: Value) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn create_pty() -> Value {
-    json!({ "pid": 0, "success": false, "error": "pty: not implemented yet" })
+fn create_pty(
+    app: tauri::AppHandle,
+    id: &str,
+    cwd: Option<&str>,
+    shell: Option<&str>,
+    cols: Option<u16>,
+    rows: Option<u16>,
+) -> Value {
+    pty::create(&app, id, cwd, shell, cols, rows)
 }
 
 #[tauri::command]
-fn write_pty() {}
-
-#[tauri::command]
-fn resize_pty() {}
-
-#[tauri::command]
-fn kill_pty() -> Value {
-    json!({ "success": false, "error": "pty: not implemented yet" })
+fn write_pty(id: &str, data: &str) {
+    pty::write(id, data)
 }
 
 #[tauri::command]
-fn detect_shells() -> Vec<Value> {
-    Vec::new()
+fn resize_pty(id: &str, cols: u16, rows: u16) {
+    pty::resize(id, cols, rows)
+}
+
+#[tauri::command]
+fn kill_pty(id: &str) -> Value {
+    pty::kill(id)
+}
+
+#[tauri::command]
+fn detect_shells() -> Value {
+    pty::detect_shells()
 }
 
 #[tauri::command]
@@ -103,6 +115,13 @@ fn metrics_record_first_terminal() -> Value {
 
 fn main() {
     tauri::Builder::default()
+        .setup(|app| {
+            pty::init_resource_dir(app.handle());
+            // Preheat the persisted workspace's shells so they boot while the
+            // renderer is still loading (replay attaches on pty:create).
+            pty::warm_startup(app.handle());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             settings_get_all,
             settings_set,
