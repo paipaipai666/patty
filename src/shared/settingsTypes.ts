@@ -154,6 +154,7 @@ export interface AppSettings {
   cursorStyle: 'block' | 'underline' | 'bar'
   cursorBlink: boolean
   opacity: number
+  scrollback: number
   defaultShell: ShellType
   sidebarPosition: 'left' | 'right'
   shortcuts: ShortcutMap

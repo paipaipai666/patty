@@ -115,7 +115,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       allowTransparency: settings.opacity < 1,
       allowProposedApi: true,
       theme: getThemeColors(settings.theme, settings.customThemes).terminal,
-      scrollback: 10000,
+      scrollback: settings.scrollback,
       convertEol: false,
       rescaleOverlappingGlyphs: true
     }

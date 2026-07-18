@@ -115,7 +115,10 @@ const terminalAPI = {
     }
   },
   metricsRecordFirstTerminal: (entry: FirstTerminalEntry) =>
-    ipcRenderer.invoke('metrics:recordFirstTerminal', entry) as Promise<{ success: boolean }>
+    ipcRenderer.invoke('metrics:recordFirstTerminal', entry) as Promise<{ success: boolean }>,
+  metricsSetSampling: (enabled: boolean) => {
+    ipcRenderer.send('metrics:setSampling', enabled)
+  }
 }
 
 contextBridge.exposeInMainWorld('terminalAPI', terminalAPI)

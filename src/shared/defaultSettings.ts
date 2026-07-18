@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cursorStyle: 'bar',
   cursorBlink: true,
   opacity: 1.0,
+  scrollback: 5000,
   defaultShell: 'powershell',
   sidebarPosition: 'left',
   shortcuts: {

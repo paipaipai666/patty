@@ -331,6 +331,16 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metri
     return metricsCollector.getSnapshot()
   })
 
+  // Sampling spawns a powershell.exe per sample — only run it while the
+  // dashboard is actually open. The renderer toggles this with metricsOpen.
+  ipcMain.on('metrics:setSampling', (_event, enabled: boolean) => {
+    if (enabled) {
+      metricsCollector.start()
+    } else {
+      metricsCollector.stop()
+    }
+  })
+
   ipcMain.handle('metrics:recordFirstTerminal', (_event, entry: FirstTerminalEntry) => {
     metricsCollector.recordFirstTerminal(entry)
     return { success: true }

@@ -699,6 +699,24 @@ function TerminalSection({
           </span>
         </div>
       </div>
+      <div className={styles.settingRow}>
+        <div>
+          <span className={styles.settingLabel}>Scrollback</span>
+          <div className={styles.settingDesc}>Lines kept per terminal; lower uses less memory. Applies to new terminals</div>
+        </div>
+        <div className={styles.segmentGroup}>
+          {[1000, 2000, 5000, 10000].map((n) => (
+            <button
+              type="button"
+              key={n}
+              className={`${styles.segmentBtn} ${settings.scrollback === n ? styles.segmentBtnActive : ''}`}
+              onClick={() => updateSetting('scrollback', n)}
+            >
+              {n / 1000}k
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className={styles.sectionTitle}>Shell</div>
       <div className={styles.settingRow}>

@@ -58,6 +58,7 @@ vi.mock('../../../store/settingsStore', () => {
     cursorBlink: true,
     cursorStyle: 'block',
     opacity: 1,
+    scrollback: 5000,
     theme: 'dark',
     customThemes: {}
   }

@@ -82,6 +82,13 @@ export default function App() {
     })
   }, [settingsInit])
 
+  // Metrics sampling spawns a powershell.exe per sample in the main process —
+  // only run it while the dashboard is open.
+  useEffect(() => {
+    window.terminalAPI.metricsSetSampling(metricsOpen)
+    return () => window.terminalAPI.metricsSetSampling(false)
+  }, [metricsOpen])
+
   // Wire combined persistence: sessionStore owns sessions/sidebar/collections,
   // workspaceStore owns workspaces[] + activeWorkspaceId.
   useEffect(() => {

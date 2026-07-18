@@ -10,34 +10,40 @@ import type {
   MetricsSnapshot
 } from '../shared/metricsTypes'
 
-// captureSample cost is dominated by two `Get-Counter` powershell.exe spawns.
-// Measured on Windows: system-CPU counter ~535ms, GPU counter ~440ms, run in
-// parallel via Promise.all → ~535ms wall. Keep the interval comfortably above
-// that so samples never overlap (the `running` guard in sample() is a backstop
-// for slower machines / counter contention). 2x measured cost.
-export const METRICS_SAMPLE_COST_MS = 535
+// captureSample cost is one powershell.exe spawn running the combined CPU+GPU
+// counter script: two sequential Get-Counter calls in a single process.
+// Measured on Windows: ~800ms wall (previously two parallel spawns at ~535ms
+// wall but ~975ms of combined process lifetime — merging halves the powershell
+// process churn per sample). Keep the interval comfortably above that so
+// samples never overlap (the `running` guard in sample() is a backstop for
+// slower machines / counter contention — on a slow box samples simply skip
+// beats instead of piling up). 2x measured cost.
+export const METRICS_SAMPLE_COST_MS = 800
 const SAMPLE_SAFETY_FACTOR = 2
-export const SAMPLE_INTERVAL_MS = METRICS_SAMPLE_COST_MS * SAMPLE_SAFETY_FACTOR // 1070
+export const SAMPLE_INTERVAL_MS = METRICS_SAMPLE_COST_MS * SAMPLE_SAFETY_FACTOR // 1600
 const PERSIST_INTERVAL_MS = 10000
-const MAX_SAMPLES = 120 // ~128s of history at the sample interval
+const MAX_SAMPLES = 120 // ~192s of history at the sample interval
 const MAX_FIRST_TERMINALS = 30
 
-const GPU_SCRIPT =
-  `(Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage').CounterSamples | ` +
-  `Measure-Object -Property CookedValue -Sum | ` +
-  `Select-Object -ExpandProperty Sum`
+// One spawn per sample. The GPU counter is wrapped in try/catch because it is
+// missing on some machines/driver combos; a missing GPU counter must not take
+// the CPU reading down with it. CPU output doubles as the script's heartbeat:
+// if it is empty the whole counter query failed and we fall back to os.cpus().
+// Single-quoted strings only — embedded double quotes complicate argv escaping
+// when the script is passed via execFile -Command.
+const CPU_GPU_SCRIPT =
+  `$cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue; ` +
+  `$gpu = $null; ` +
+  `try { $gpu = ((Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Measure-Object -Property CookedValue -Sum).Sum } catch {}; ` +
+  `Write-Output ('CPU:' + $cpu); Write-Output ('GPU:' + $gpu)`
 
-const SYSTEM_CPU_SCRIPT =
-  `(Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue`
+// Used once the GPU counter has been disabled after repeated failures.
+const CPU_ONLY_SCRIPT =
+  `Write-Output ('CPU:' + (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue)`
 
 interface CpuTotals {
   totals: number[]
   idles: number[]
-}
-
-interface GpuRealState {
-  available: boolean
-  pending: boolean
 }
 
 export class MetricsCollector {
@@ -46,7 +52,7 @@ export class MetricsCollector {
   private samples: MetricSample[] = []
   private firstTerminal: FirstTerminalEntry[] = []
   private prevCpu: CpuTotals | null = null
-  private gpuReal: GpuRealState = { available: true, pending: false }
+  private gpuAvailable = true
   private gpuFailures = 0
   private sampleTimer: ReturnType<typeof setInterval> | null = null
   private persistTimer: ReturnType<typeof setInterval> | null = null
@@ -138,10 +144,7 @@ export class MetricsCollector {
     const systemMemTotalMB = totalmem() / 1024 / 1024
     const systemMemUsedMB = (totalmem() - freemem()) / 1024 / 1024
 
-    const [systemCpu, gpuUtil] = await Promise.all([
-      this.sampleSystemCpuAsync(),
-      this.sampleGpu()
-    ])
+    const [systemCpu, gpuUtil] = await this.sampleCounters()
     const gpuProxyMemKB = gpu?.memory?.workingSetSize ?? 0
     const gpuProxyMemMB = gpuProxyMemKB / 1024
 
@@ -167,24 +170,38 @@ export class MetricsCollector {
     this.broadcast(sample)
   }
 
-  private sampleSystemCpuAsync(): Promise<number> {
-    return new Promise<number>((resolve) => {
+  // Single powershell spawn per sample. GPU failure handling: the GPU counter
+  // is absent on some systems, so after repeated empty/failed reads we stop
+  // asking for it (CPU_ONLY_SCRIPT) rather than paying for an erroring
+  // Get-Counter on every sample forever.
+  private sampleCounters(): Promise<[number, number | null]> {
+    const script = this.gpuAvailable ? CPU_GPU_SCRIPT : CPU_ONLY_SCRIPT
+    return new Promise<[number, number | null]>((resolve) => {
       execFile(
         'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-Command', SYSTEM_CPU_SCRIPT],
-        { windowsHide: true, timeout: 5000 },
+        ['-NoProfile', '-NonInteractive', '-Command', script],
+        { windowsHide: true, timeout: 10000 },
         (err, stdout) => {
-          if (err) {
-            console.warn('[metrics] system CPU PDH failed, fallback to os.cpus():', err.message)
-            resolve(this.sampleSystemCpu())
-            return
+          const cpuMatch = stdout.match(/^CPU:(.*)$/m)
+          const cpuValue = cpuMatch ? parseFloat(cpuMatch[1].trim()) : NaN
+          const cpu = Number.isNaN(cpuValue) ? this.sampleSystemCpu() : cpuValue
+
+          let gpu: number | null = null
+          if (this.gpuAvailable) {
+            const gpuMatch = stdout.match(/^GPU:(.*)$/m)
+            const gpuValue = gpuMatch ? parseFloat(gpuMatch[1].trim()) : NaN
+            if (err || Number.isNaN(gpuValue)) {
+              this.gpuFailures++
+              if (this.gpuFailures >= 3) {
+                this.gpuAvailable = false
+                console.warn('[metrics] GPU counter disabled after repeated failures')
+              }
+            } else {
+              this.gpuFailures = 0
+              gpu = gpuValue
+            }
           }
-          const value = parseFloat(stdout.trim())
-          if (Number.isNaN(value)) {
-            resolve(this.sampleSystemCpu())
-            return
-          }
-          resolve(value)
+          resolve([cpu, gpu])
         }
       )
     })
@@ -214,43 +231,6 @@ export class MetricsCollector {
 
     this.prevCpu = { totals, idles }
     return coreCount > 0 ? totalUsage / coreCount : 0
-  }
-
-  private sampleGpu(): Promise<number | null> {
-    if (!this.gpuReal.available || this.gpuReal.pending) {
-      return Promise.resolve(null)
-    }
-    this.gpuReal.pending = true
-
-    return new Promise<number | null>((resolve) => {
-      execFile(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-Command', GPU_SCRIPT],
-        { windowsHide: true, timeout: 5000 },
-        (err, stdout, stderr) => {
-          this.gpuReal.pending = false
-          if (err) {
-            this.gpuFailures++
-            if (this.gpuFailures >= 3) {
-              this.gpuReal.available = false
-              console.warn(
-                '[metrics] GPU real counter disabled after repeated failures. Last stderr:',
-                stderr.trim() || '(empty)'
-              )
-            }
-            resolve(null)
-            return
-          }
-          this.gpuFailures = 0
-          const value = parseFloat(stdout.trim())
-          if (Number.isNaN(value)) {
-            resolve(null)
-            return
-          }
-          resolve(value)
-        }
-      )
-    })
   }
 
   private broadcast(sample: MetricSample): void {

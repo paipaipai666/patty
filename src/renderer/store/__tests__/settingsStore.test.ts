@@ -36,6 +36,7 @@ const DEFAULT_SETTINGS = {
   cursorStyle: 'bar',
   cursorBlink: true,
   opacity: 1.0,
+  scrollback: 5000,
   defaultShell: 'powershell',
   sidebarPosition: 'left',
   shortcuts: {

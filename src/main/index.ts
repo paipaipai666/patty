@@ -207,7 +207,9 @@ if (!gotTheLock) {
 
   perfMark('app:create-window-start')
   createWindow()
-  metricsCollector?.start()
+  // Metrics sampling stays off until the renderer opens the dashboard
+  // (metrics:setSampling) — each sample spawns a powershell.exe, so running
+  // it unconditionally costs a constant stream of short-lived processes.
 
   // Preheat the active workspace's PTYs so their shell boot overlaps renderer
   // load instead of blocking first-terminal-ready. Runs after createWindow so
