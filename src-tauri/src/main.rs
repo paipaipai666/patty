@@ -1,7 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod fonts;
 mod hooks;
 mod installer;
+mod metrics;
 mod pty;
 mod store;
 
@@ -70,8 +72,8 @@ fn detect_shells() -> Value {
 }
 
 #[tauri::command]
-fn get_fonts() -> Vec<String> {
-    Vec::new()
+fn get_fonts() -> Result<Vec<String>, String> {
+    fonts::get_fonts()
 }
 
 #[tauri::command]
@@ -83,18 +85,67 @@ fn get_hook_port() -> u16 {
 fn reset_attention() {}
 
 #[tauri::command]
-fn select_directory() -> Result<Value, String> {
-    Err("dialog: not implemented yet".into())
+async fn select_directory() -> Value {
+    let folder = rfd::AsyncFileDialog::new()
+        .set_title("Select project directory")
+        .pick_folder()
+        .await;
+    match folder {
+        Some(f) => json!({ "canceled": false, "directory": f.path().to_string_lossy() }),
+        None => json!({ "canceled": true, "directory": Value::Null }),
+    }
 }
 
 #[tauri::command]
-fn theme_export() -> Result<Value, String> {
-    Err("dialog: not implemented yet".into())
+async fn theme_export(theme: Value) -> Value {
+    let name = theme.get("name").and_then(Value::as_str).unwrap_or("theme");
+    let Some(file) = rfd::AsyncFileDialog::new()
+        .set_title("Export Theme")
+        .set_file_name(format!("{name}.json"))
+        .add_filter("JSON", &["json"])
+        .save_file()
+        .await
+    else {
+        return json!({ "success": false });
+    };
+    match serde_json::to_string_pretty(&theme) {
+        Ok(payload) => match std::fs::write(file.path(), payload) {
+            Ok(_) => json!({ "success": true }),
+            Err(e) => json!({ "success": false, "error": e.to_string() }),
+        },
+        Err(e) => json!({ "success": false, "error": e.to_string() }),
+    }
 }
 
 #[tauri::command]
-fn theme_import() -> Result<Value, String> {
-    Err("dialog: not implemented yet".into())
+async fn theme_import() -> Value {
+    let Some(file) = rfd::AsyncFileDialog::new()
+        .set_title("Import Theme")
+        .add_filter("JSON", &["json"])
+        .pick_file()
+        .await
+    else {
+        return json!({ "success": false });
+    };
+    let parse = (|| -> Result<Value, String> {
+        let raw = std::fs::read_to_string(file.path()).map_err(|e| e.to_string())?;
+        let mut theme: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+        if theme.get("name").is_none() || theme.get("ui").is_none() || theme.get("terminal").is_none() {
+            return Err("Invalid theme file".into());
+        }
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let mut entropy = [0u8; 4];
+        let _ = getrandom::fill(&mut entropy);
+        theme["id"] = json!(format!("custom-{millis}-{:06x}", u32::from_le_bytes(entropy) & 0xFFFFFF));
+        Ok(theme)
+    })();
+    match parse {
+        Ok(theme) => json!({ "success": true, "theme": theme }),
+        Err(e) => json!({ "success": false, "error": e }),
+    }
 }
 
 #[tauri::command]
@@ -104,14 +155,17 @@ fn perf_dump() -> Value {
 
 #[tauri::command]
 fn metrics_history() -> Value {
-    json!({ "firstTerminal": [], "samples": [] })
+    metrics::snapshot()
 }
 
 #[tauri::command]
-fn metrics_set_sampling() {}
+fn metrics_set_sampling(app: tauri::AppHandle, enabled: bool) {
+    metrics::set_sampling(&app, enabled)
+}
 
 #[tauri::command]
-fn metrics_record_first_terminal() -> Value {
+fn metrics_record_first_terminal(entry: Value) -> Value {
+    metrics::record_first_terminal(entry);
     json!({ "success": true })
 }
 
@@ -136,6 +190,7 @@ fn main() {
                 installer::ensure_codex_hook();
             }
             hooks::start_heartbeat_watchdog(app.handle().clone());
+            metrics::load_history();
             // Preheat the persisted workspace's shells so they boot while the
             // renderer is still loading (replay attaches on pty:create).
             pty::warm_startup(app.handle());
