@@ -9,7 +9,8 @@ import {
   resizePty,
   killPty,
   detectAvailableShells,
-  getHookPort
+  getHookPort,
+  takePreheatedBuffer
 } from './ptyManager'
 import { loadSettings, saveSettings, DEFAULT_SETTINGS } from './settingsHandler'
 import { loadState, saveState, validatePersistedState } from './stateHandler'
@@ -194,6 +195,9 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metri
   ipcMain.handle('pty:create', (_event, id: string, cwd?: string, shell?: string, cols?: number, rows?: number) => {
     try {
       const term = createPty(id, cwd, shell, cols, rows)
+      // Output a preheated PTY produced before the renderer attached (banner,
+      // prompt) is returned to the caller so it can be written before live data.
+      const replay = takePreheatedBuffer(id)
 
       // Forward PTY data to renderer
       term.onData((data) => {
@@ -208,7 +212,7 @@ export function registerIpcHandlers(getWindow: () => BrowserWindow | null, metri
       // the `pty:exit:<id>` channel — no second exit listener here, so a single
       // physical exit produces exactly one renderer notification.
 
-      return { pid: term.pid, success: true }
+      return { pid: term.pid, success: true, replay }
     } catch (error) {
       console.error('Failed to create PTY:', error)
       return { pid: 0, success: false, error: String(error) }

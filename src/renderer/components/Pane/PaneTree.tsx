@@ -9,14 +9,17 @@ import styles from './PaneTree.module.css'
 /**
  * Recursively render the pane split trees of all workspaces.
  *
- * The active workspace renders normally (display:contents so children
- * participate in the parent flex layout). Non-active workspaces render
- * with display:none — their xterm instances stay mounted (preserving PTY
- * and scrollback) but don't paint or consume WebGL contexts.
+ * The active workspace renders immediately. Non-active workspaces are not
+ * mounted until the active workspace is ready (first PTY data received), so
+ * their PTY spawn doesn't compete with the active workspace during startup.
+ * After ready, non-active workspaces render with display:none — their xterm
+ * instances stay mounted (preserving PTY and scrollback) but don't paint or
+ * consume WebGL contexts.
  */
 export function PaneTreeRoot() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const activeWorkspaceReady = useWorkspaceStore((s) => s.activeWorkspaceReady)
   const focusPane = useWorkspaceStore((s) => s.focusPane)
   const sessions = useSessionStore((s) => s.sessions)
 
@@ -38,6 +41,7 @@ export function PaneTreeRoot() {
     <>
       {list.map((ws) => {
         const active = ws.id === activeId
+        const renderChildren = active || activeWorkspaceReady
         return (
           <div
             key={ws.id}
@@ -47,7 +51,7 @@ export function PaneTreeRoot() {
               height: '100%'
             }}
           >
-            {ws.tree && renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
+            {renderChildren && ws.tree && renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
           </div>
         )
       })}

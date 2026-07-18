@@ -15,6 +15,11 @@ vi.mock('node-pty', () => ({
         handlers[event] = handlers[event] || []
         handlers[event].push(cb)
       }),
+      onData: vi.fn((cb: Function) => {
+        handlers['data'] = handlers['data'] || []
+        handlers['data'].push(cb)
+        return { dispose: vi.fn() }
+      }),
       onExit: vi.fn((cb: Function) => {
         handlers['exit'] = handlers['exit'] || []
         handlers['exit'].push(cb)
@@ -46,7 +51,7 @@ vi.mock('../heartbeat', () => ({
   removePane: vi.fn()
 }))
 
-import { createPty, killPty } from '../ptyManager'
+import { createPty, killPty, warmFirstPty, takePreheatedBuffer } from '../ptyManager'
 import { removePane } from '../heartbeat'
 
 beforeEach(() => {
@@ -91,5 +96,43 @@ describe('ptyManager heartbeat integration', () => {
     // clobbering the user's value — this fails.
     expect(env.XDG_CONFIG_HOME).toBe('/my/custom/xdg')
     delete process.env.XDG_CONFIG_HOME
+  })
+})
+
+describe('PTY preheat', () => {
+  it('warmFirstPty creates a detached session that createPty reuses without respawning', () => {
+    spawnedPtys.length = 0
+    warmFirstPty('warm-pane', undefined, undefined)
+    expect(spawnedPtys).toHaveLength(1)
+
+    const term = createPty('warm-pane', undefined, undefined, 80, 24)
+    expect(spawnedPtys).toHaveLength(1)
+    expect(term).toBe(spawnedPtys[0])
+    expect(spawnedPtys[0].resize).toHaveBeenCalledWith(80, 24)
+  })
+
+  it('createPty kills a preheated session when cwd/shell differ', () => {
+    spawnedPtys.length = 0
+    warmFirstPty('mismatch-pane', 'C:\\a', 'powershell')
+    createPty('mismatch-pane', 'C:\\b', 'powershell', 80, 24)
+    expect(spawnedPtys).toHaveLength(2)
+    expect(spawnedPtys[0].kill).toHaveBeenCalled()
+  })
+
+  it('takePreheatedBuffer drains buffered output exactly once', () => {
+    warmFirstPty('buf-pane', undefined, undefined)
+    exitHandlers['buf-pane']['data'][0]('prompt> ')
+    expect(takePreheatedBuffer('buf-pane')).toBe('prompt> ')
+    expect(takePreheatedBuffer('buf-pane')).toBeNull()
+  })
+
+  it('takePreheatedBuffer returns null for a non-preheated session', () => {
+    expect(takePreheatedBuffer('never-warmed')).toBeNull()
+  })
+
+  it('killPty disposes a pending preheat buffer', () => {
+    warmFirstPty('kill-pane', undefined, undefined)
+    killPty('kill-pane')
+    expect(takePreheatedBuffer('kill-pane')).toBeNull()
   })
 })
