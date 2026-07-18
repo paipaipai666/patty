@@ -2068,6 +2068,7 @@ dependencies = [
 name = "patty"
 version = "1.2.12"
 dependencies = [
+ "dirs",
  "serde",
  "serde_json",
  "tauri",

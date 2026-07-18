@@ -1,91 +1,37 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod store;
+
 use serde_json::{json, Value};
-use std::sync::{LazyLock, Mutex};
-
-// In-memory stand-ins so the renderer boots before the persistent store lands
-// in the next commit. Values mirror src/shared/defaultSettings.ts.
-static SETTINGS: LazyLock<Mutex<Value>> = LazyLock::new(|| {
-    Mutex::new(json!({
-        "theme": "dark",
-        "fontFamily": "Cascadia Code",
-        "fontSize": 14,
-        "cursorStyle": "bar",
-        "cursorBlink": true,
-        "opacity": 1.0,
-        "scrollback": 5000,
-        "defaultShell": "powershell",
-        "sidebarPosition": "left",
-        "shortcuts": {
-            "newTerminal": "Ctrl+T",
-            "closeTerminal": "Ctrl+W",
-            "nextTab": "Ctrl+]",
-            "prevTab": "Ctrl+[",
-            "toggleSidebar": "Ctrl+B",
-            "settings": "Ctrl+,",
-            "splitHorizontal": "Ctrl+Shift+D",
-            "splitVertical": "Ctrl+Shift+E",
-            "closePane": "Ctrl+Shift+W"
-        },
-        "customThemes": [],
-        "notifications": { "claudeCode": true, "openCode": true, "codex": true }
-    }))
-});
-
-static STATE: LazyLock<Mutex<Value>> = LazyLock::new(|| {
-    Mutex::new(json!({
-        "sessions": [],
-        "collections": [],
-        "activeSessionId": null,
-        "sidebarVisible": true,
-        "sidebarWidth": 220,
-        "workspaces": [],
-        "activeWorkspaceId": null,
-        "paneTree": null,
-        "focusedPaneId": null
-    }))
-});
 
 #[tauri::command]
 fn settings_get_all() -> Value {
-    SETTINGS.lock().unwrap().clone()
+    store::load_settings()
 }
 
 #[tauri::command]
 fn settings_set(key: &str, value: Value) -> Result<Value, String> {
-    // The in-memory map starts from the defaults and keys are never removed,
-    // so a contains-key check is equivalent to checking DEFAULT_SETTINGS.
-    let mut settings = SETTINGS.lock().unwrap();
-    let obj = settings.as_object_mut().ok_or("settings corrupt")?;
-    if !obj.contains_key(key) {
+    // Reject keys outside AppSettings so a buggy renderer or spoofed call can't
+    // silently write arbitrary fields into settings.json.
+    let defaults = store::default_settings();
+    if !defaults.as_object().unwrap().contains_key(key) {
         return Err(format!("Unknown settings key: {key}"));
     }
-    obj.insert(key.to_string(), value);
-    Ok(settings.clone())
+    let mut settings = store::load_settings();
+    settings[key] = value;
+    store::save_settings(&settings)?;
+    Ok(settings)
 }
 
 #[tauri::command]
 fn state_load() -> Value {
-    STATE.lock().unwrap().clone()
+    store::load_state()
 }
 
 #[tauri::command]
 fn state_save(state: Value) -> Result<(), String> {
-    let obj = state.as_object().ok_or("Invalid state payload: not an object")?;
-    if !obj.get("sessions").is_some_and(Value::is_array) {
-        return Err("Invalid state: sessions must be an array".into());
-    }
-    if !obj.get("collections").is_some_and(Value::is_array) {
-        return Err("Invalid state: collections must be an array".into());
-    }
-    if !obj.get("sidebarWidth").is_some_and(Value::is_number) {
-        return Err("Invalid state: sidebarWidth must be a number".into());
-    }
-    if !obj.get("sidebarVisible").is_some_and(Value::is_boolean) {
-        return Err("Invalid state: sidebarVisible must be a boolean".into());
-    }
-    *STATE.lock().unwrap() = state;
-    Ok(())
+    store::validate_state(&state)?;
+    store::save_state(&state)
 }
 
 #[tauri::command]
