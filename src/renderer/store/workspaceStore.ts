@@ -95,6 +95,24 @@ function getActiveWsOrCreate(sessionId: string): { ws: Workspace; workspaces: Wo
   return { ws, workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId }
 }
 
+// Remove every leaf of `sessionId` from all workspaces, pruning workspaces
+// that become empty and fixing up their focus. Pure helper for the move
+// semantics in insertNeighborAt / replaceLeafAt.
+function pruneSessionFromTrees(workspaces: Workspace[], sessionId: string): Workspace[] {
+  return workspaces
+    .map((w) => {
+      const { tree, removedCount } = removeLeavesBySession(w.paneTree, sessionId)
+      if (removedCount === 0) return w
+      if (!tree) return null
+      let focused = w.focusedPaneId
+      if (focused && !findLeaf(tree, focused)) {
+        focused = firstLeafId(tree)
+      }
+      return { ...w, paneTree: tree, focusedPaneId: focused }
+    })
+    .filter(Boolean) as Workspace[]
+}
+
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   workspaces: [],
   activeWorkspaceId: null,
@@ -212,10 +230,25 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   insertNeighborAt: (paneId, sessionId, direction, side) => {
     const r = getActiveWsOrCreate(sessionId)
     if (!r) return
-    const next = insertNeighbor(r.ws.paneTree, paneId, sessionId, direction, side)
+    // Dropping a session onto its own pane is a no-op.
+    if (findLeaf(r.ws.paneTree, paneId)?.sessionId === sessionId) return
+    // Move semantics: a session must live in exactly one leaf across all
+    // workspaces. Prune it from every tree before re-inserting, or the
+    // sidebar's workspace groups would render it once per tree.
+    const pruned = pruneSessionFromTrees(r.workspaces, sessionId)
+    const targetTree = pruned.find((w) => w.id === r.activeWorkspaceId)?.paneTree ?? null
+    if (!targetTree || !findLeaf(targetTree, paneId)) {
+      // Target pane didn't exist or didn't survive pruning (e.g. it was the
+      // auto-created leaf for this very session) — fall back to a fresh
+      // single-pane workspace.
+      set({ workspaces: pruned })
+      get().createWorkspace(sessionId)
+      return
+    }
+    const next = insertNeighbor(targetTree, paneId, sessionId, direction, side)
     const newLeafId = findLeafIdBySession(next, sessionId)
     set({
-      workspaces: patchWorkspace(r.workspaces, r.activeWorkspaceId, {
+      workspaces: patchWorkspace(pruned, r.activeWorkspaceId, {
         paneTree: next,
         focusedPaneId: newLeafId ?? paneId
       })
@@ -226,9 +259,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   replaceLeafAt: (paneId, sessionId) => {
     const r = getActiveWsOrCreate(sessionId)
     if (!r) return
+    if (findLeaf(r.ws.paneTree, paneId)?.sessionId === sessionId) return
+    const pruned = pruneSessionFromTrees(r.workspaces, sessionId)
+    const targetTree = pruned.find((w) => w.id === r.activeWorkspaceId)?.paneTree ?? null
+    if (!targetTree || !findLeaf(targetTree, paneId)) {
+      set({ workspaces: pruned })
+      get().createWorkspace(sessionId)
+      return
+    }
     set({
-      workspaces: patchWorkspace(r.workspaces, r.activeWorkspaceId, {
-        paneTree: replaceLeafSession(r.ws.paneTree, paneId, sessionId),
+      workspaces: patchWorkspace(pruned, r.activeWorkspaceId, {
+        paneTree: replaceLeafSession(targetTree, paneId, sessionId),
         focusedPaneId: paneId
       })
     })

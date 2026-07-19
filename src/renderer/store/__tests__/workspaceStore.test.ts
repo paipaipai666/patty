@@ -336,6 +336,59 @@ describe('insertNeighborFocused / insertNeighborAt / replaceLeafAt', () => {
     useWorkspaceStore.getState().replaceLeafAt('p1', 'sX')
     expect(useWorkspaceStore.getState().workspaces).toHaveLength(1)
   })
+
+  it('insertNeighborAt moves the session out of its previous workspace tree', () => {
+    // s2 lives in w2's tree; dragging it onto w1's pane must not leave it in w2.
+    useWorkspaceStore.getState().loadFromPersisted(
+      [
+        makeWorkspace({ id: 'w1' }),
+        makeWorkspace({ id: 'w2', paneTree: { id: 'leafX', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'leafX' })
+      ],
+      'w1'
+    )
+    useWorkspaceStore.getState().insertNeighborAt('leaf1', 's2', 'horizontal', 'second')
+    const { workspaces } = useWorkspaceStore.getState()
+    // w2 became empty and was pruned; w1's tree is a split holding s2 exactly once.
+    expect(workspaces).toHaveLength(1)
+    expect(workspaces[0].id).toBe('w1')
+    const tree = workspaces[0].paneTree as any
+    expect(tree.type).toBe('split')
+    expect(JSON.stringify(tree).match(/"sessionId":"s2"/g)).toHaveLength(1)
+  })
+
+  it('insertNeighborAt moves a session within the same tree without duplicating it', () => {
+    const tree: any = {
+      id: 'sp', type: 'split', direction: 'horizontal', ratio: 0.5,
+      first: { id: 'a', type: 'leaf', sessionId: 's1' },
+      second: { id: 'b', type: 'leaf', sessionId: 's2' }
+    }
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1', paneTree: tree, focusedPaneId: 'a' })], 'w1')
+    // Drag s2 (leaf b) onto leaf a's edge: s2 must end up as a's neighbor only.
+    useWorkspaceStore.getState().insertNeighborAt('a', 's2', 'horizontal', 'first')
+    const next = useWorkspaceStore.getState().workspaces[0].paneTree as any
+    expect(JSON.stringify(next).match(/"sessionId":"s2"/g)).toHaveLength(1)
+  })
+
+  it('insertNeighborAt onto its own pane is a no-op', () => {
+    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
+    const before = useWorkspaceStore.getState().workspaces[0].paneTree
+    useWorkspaceStore.getState().insertNeighborAt('leaf1', 's1', 'horizontal', 'second')
+    expect(useWorkspaceStore.getState().workspaces[0].paneTree).toEqual(before)
+  })
+
+  it('replaceLeafAt moves the session out of its previous workspace tree', () => {
+    useWorkspaceStore.getState().loadFromPersisted(
+      [
+        makeWorkspace({ id: 'w1' }),
+        makeWorkspace({ id: 'w2', paneTree: { id: 'leafX', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'leafX' })
+      ],
+      'w1'
+    )
+    useWorkspaceStore.getState().replaceLeafAt('leaf1', 's2')
+    const { workspaces } = useWorkspaceStore.getState()
+    expect(workspaces).toHaveLength(1)
+    expect((workspaces[0].paneTree as any).sessionId).toBe('s2')
+  })
 })
 
 describe('removeSessionEverywhere', () => {
