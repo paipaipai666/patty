@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { themeRipple } from '../../utils/themeRipple'
 import { getThemeColors } from '../../styles/themes'
 import { useSettingsStore } from '../../store/settingsStore'
+import { toast } from '../../store/toastStore'
 import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import type { AppSettings, CustomTheme, ShellType, ShortcutMap } from '../../../shared/settingsTypes'
 import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS, BUILTIN_THEMES } from '../../styles/themes'
@@ -435,7 +436,11 @@ function ThemeEditor({
   }
 
   const handleExport = (theme: CustomTheme) => {
-    window.terminalAPI.themeExport(theme)
+    window.terminalAPI.themeExport(theme).then((result) => {
+      if (!result.success && result.error) {
+        toast(`Export failed: ${result.error}`)
+      }
+    })
   }
 
   const updateEditingTheme = (updater: (t: CustomTheme) => CustomTheme) => {
@@ -583,6 +588,8 @@ function AppearanceSection({
     if (result.success && result.theme) {
       updateSetting('customThemes', [...settings.customThemes, result.theme])
       updateSetting('theme', result.theme.id)
+    } else if (result.error) {
+      toast(`Import failed: ${result.error}`)
     }
   }
 

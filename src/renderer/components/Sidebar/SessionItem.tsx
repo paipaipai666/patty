@@ -17,28 +17,14 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(session.title)
   const inputRef = useRef<HTMLInputElement>(null)
-  const itemRef = useRef<HTMLDivElement>(null)
   const prevAttention = useRef<string | null>(null)
 
-  // Attention state entrance animation
+  // Attention state entrance animation: re-key a declarative glow div on each
+  // new attention transition so the CSS animation replays.
+  const [glowNonce, setGlowNonce] = useState(0)
   useEffect(() => {
-    if (attentionType && attentionType !== prevAttention.current && itemRef.current) {
-      const style = getComputedStyle(document.documentElement)
-      const colorMap: Record<string, string> = {
-        permission: style.getPropertyValue('--attention-permission-glow').trim() || 'rgba(99,102,241,0.4)',
-        complete: style.getPropertyValue('--attention-complete-glow').trim() || 'rgba(52,211,153,0.4)',
-        error: style.getPropertyValue('--attention-error-glow').trim() || 'rgba(248,113,113,0.4)'
-      }
-      const glow = document.createElement('div')
-      glow.style.cssText = `
-        position:absolute; left:-20px; top:50%; width:40px; height:40px;
-        border-radius:50%; pointer-events:none;
-        background:radial-gradient(circle, ${colorMap[attentionType] || colorMap.complete}, transparent);
-        transform:translateY(-50%) scale(0); opacity:0;
-        animation: attentionGlow 1.05s ease-out forwards;
-      `
-      glow.onanimationend = () => glow.remove()
-      itemRef.current.appendChild(glow)
+    if (attentionType && attentionType !== prevAttention.current) {
+      setGlowNonce((n) => n + 1)
     }
     prevAttention.current = attentionType
   }, [attentionType])
@@ -127,7 +113,6 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
 
   return (
     <div
-      ref={itemRef}
       className={`${styles.item} ${isActive ? styles.itemActive : ''} ${getAttentionClass()}`}
       style={{ paddingLeft: `${depth * 16 + 8}px`, position: 'relative', overflow: 'hidden' }}
       role="tab"
@@ -142,6 +127,9 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
       onDragEnd={handleDragEnd}
     >
       {isAi && <ContributionGrid aiType={session.aiType!} />}
+      {attentionType && (
+        <div key={glowNonce} className={`${styles.glowFx} ${styles[`glow_${attentionType}`]}`} aria-hidden />
+      )}
       <div className={styles.itemContent}>
         {isAi ? (
           <span

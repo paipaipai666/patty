@@ -455,6 +455,23 @@
   100% { transform: translateY(-50%) scale(2.5); opacity: 0; }
 }
 
+/* Declarative attention glow (re-keyed per event by SessionItem). */
+.glowFx {
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0);
+  opacity: 0;
+  animation: attentionGlow 1.05s ease-out forwards;
+}
+.glow_permission { background: radial-gradient(circle, var(--attention-permission-glow), transparent); }
+.glow_complete { background: radial-gradient(circle, var(--attention-complete-glow), transparent); }
+.glow_error { background: radial-gradient(circle, var(--attention-error-glow), transparent); }
+
 @keyframes itemSlideIn {
   from { opacity: 0; transform: translateX(-40px) scale(0.92); }
   to { opacity: 1; transform: translateX(0) scale(1); }

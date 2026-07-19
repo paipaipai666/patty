@@ -13,6 +13,7 @@ import { MetricsDashboard } from './components/MetricsDashboard/MetricsDashboard
 import { ContextMenu, type MenuItem } from './components/common/ContextMenu'
 import { PromptDialog, type PromptOptions } from './components/common/PromptDialog'
 import { SettingsModal } from './components/Settings/SettingsModal'
+import { Toasts } from './components/common/Toasts'
 import styles from './App.module.css'
 
 interface ContextMenuState {
@@ -408,6 +409,7 @@ export default function App() {
       />
       <PromptDialog show={!!promptOptions} options={promptOptions ?? { title: '', defaultValue: '', onSubmit: () => {}, onCancel: () => {}}} />
       <SettingsModal />
+      <Toasts />
     </div>
   )
 }

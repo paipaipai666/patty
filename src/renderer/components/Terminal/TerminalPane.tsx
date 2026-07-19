@@ -8,6 +8,7 @@ import { ImageAddon } from '@xterm/addon-image'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
+import { toast } from '../../store/toastStore'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getThemeColors } from '../../styles/themes'
@@ -439,7 +440,11 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         .createSession(session.id, session.cwd, session.shell, term.cols, term.rows)
         .then((result) => {
           if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
-          if (result.success && result.pid) {
+          if (!result.success || !result.pid) {
+            toast(`Failed to start terminal: ${result.error ?? 'unknown error'}`)
+            return
+          }
+          {
             updatePid(session.id, result.pid)
             ptyCreatedRef.current = true
             ptyRetryCountRef.current = 0
