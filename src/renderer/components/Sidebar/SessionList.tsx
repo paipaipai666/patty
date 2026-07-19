@@ -104,6 +104,19 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
     return groups
   }, [workspaces, topLevelSessions])
 
+  // Background sessions: top-level and not in any workspace's pane tree
+  // (e.g. after Close Pane, which keeps the session alive). Without this they
+  // would vanish from the sidebar entirely whenever workspaces exist.
+  const backgroundSessions = useMemo(() => {
+    if (!topLevelWorkspaceGroups) return []
+    const inTrees = new Set<string>()
+    for (const ws of workspaces) {
+      if (ws.collectionId !== null) continue
+      for (const id of collectTreeSessionIds(ws.paneTree)) inTrees.add(id)
+    }
+    return topLevelSessions.filter((s) => !inTrees.has(s.id))
+  }, [workspaces, topLevelSessions, topLevelWorkspaceGroups])
+
   // While loading from disk, render nothing to avoid flashing the empty state
   if (!loaded) return null
 
@@ -130,8 +143,9 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
       {topLevelCollections.map((collection) =>
         renderCollection(collection, filteredCollections, filteredSessions, activeSessionId, onClose, onSelect, onCollectionContextMenu, 0)
       )}
-      {topLevelWorkspaceGroups
-        ? topLevelWorkspaceGroups.flatMap((group) => [
+      {topLevelWorkspaceGroups ? (
+        <>
+          {topLevelWorkspaceGroups.flatMap((group) => [
             group.sessions.length > 1 ? (
               <div
                 key={`ws-hdr-${group.wsId}`}
@@ -150,8 +164,8 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
                 depth={group.sessions.length > 1 ? 1 : 0}
               />
             ))
-          ])
-        : topLevelSessions.map((session) => (
+          ])}
+          {backgroundSessions.map((session) => (
             <SessionItem
               key={session.id}
               session={session}
@@ -161,6 +175,19 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
               depth={0}
             />
           ))}
+        </>
+      ) : (
+        topLevelSessions.map((session) => (
+          <SessionItem
+            key={session.id}
+            session={session}
+            isActive={session.id === activeSessionId}
+            onClose={onClose}
+            onSelect={onSelect}
+            depth={0}
+          />
+        ))
+      )}
     </div>
   )
 }
