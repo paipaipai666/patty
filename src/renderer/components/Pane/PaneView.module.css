@@ -36,8 +36,55 @@
   opacity: 0.6;
 }
 
+/* Drop-zone hint shown on every pane while a sidebar drag is in flight:
+ * dashed outline + center cross marking the four edge zones. */
+.dropHint {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  border: 1.5px dashed var(--accent);
+  border-radius: 4px;
+  opacity: 0.3;
+}
+.dropHint::before,
+.dropHint::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+  opacity: 0.5;
+}
+.dropHint::before {
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.dropHint::after {
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+/* Entrance settle for newly created panes (split, drag-in, new workspace). */
+.paneView {
+  animation: paneIn 140ms var(--ease-out);
+}
+@keyframes paneIn {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .paneView {
     transition: none;
+    animation: none;
   }
 }

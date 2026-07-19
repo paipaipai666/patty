@@ -98,6 +98,11 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
       id: session.id
     }))
     e.dataTransfer.effectAllowed = 'move'
+    useSessionStore.getState().setDraggingSession(session.id)
+  }
+
+  const handleDragEnd = () => {
+    useSessionStore.getState().setDraggingSession(null)
   }
 
   const isAi = !!session.aiType
@@ -134,6 +139,7 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
       onKeyDown={handleKeyDown}
       draggable={!isEditing}
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
       {isAi && <ContributionGrid aiType={session.aiType!} />}
       <div className={styles.itemContent}>

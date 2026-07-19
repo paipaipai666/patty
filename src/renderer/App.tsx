@@ -27,6 +27,8 @@ interface CollectionContextMenuState {
   collectionId: string
 }
 
+const LAST_CWD_KEY = 'patty-last-cwd'
+
 export default function App() {
   const addSession = useSessionStore((s) => s.addSession)
   const removeSession = useSessionStore((s) => s.removeSession)
@@ -132,10 +134,20 @@ export default function App() {
     }
   }, [loadState])
 
-  const handleNewTerminal = useCallback(async () => {
+  const handleNewTerminal = useCallback(() => {
+    // Instant create: reuse the last picked directory, or the user's home
+    // (pty.rs falls back to USERPROFILE when cwd is undefined). The native
+    // folder picker stays available as a separate menu item.
+    const cwd = localStorage.getItem(LAST_CWD_KEY) || undefined
+    const newId = addSession({ cwd, shell: defaultShell })
+    useWorkspaceStore.getState().createWorkspace(newId)
+  }, [addSession, defaultShell])
+
+  const handleNewTerminalPickFolder = useCallback(async () => {
     try {
       const result = await window.terminalAPI.selectDirectory()
       if (result.canceled) return
+      if (result.directory) localStorage.setItem(LAST_CWD_KEY, result.directory)
       const newId = addSession({ cwd: result.directory || undefined, shell: defaultShell })
       useWorkspaceStore.getState().createWorkspace(newId)
     } catch (err) {
@@ -365,7 +377,7 @@ export default function App() {
       <TitleBar onOpenSettings={openSettings} sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         <div className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
-          <Sidebar onNewTerminal={handleNewTerminal} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
+          <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
         </div>
         <div
           className={styles.content}

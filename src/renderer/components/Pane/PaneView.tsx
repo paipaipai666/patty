@@ -59,6 +59,10 @@ function zoneFromPoint(x: number, y: number, rect: DOMRect): DropZone {
 export function PaneView({ session, focused, onFocus, paneId, visible = true }: PaneViewProps) {
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const dropZoneRef = useRef<DropZone>(null)
+  // Any sidebar drag in flight → hint every other pane's drop zones so the
+  // feature is discoverable. The pane actually hovered gets the full overlay.
+  const draggingSessionId = useSessionStore((s) => s.draggingSessionId)
+  const showDropHint = !!draggingSessionId && draggingSessionId !== session.id && !dropZone
 
   const handleFocus = useCallback(() => {
     onFocus(paneId)
@@ -124,6 +128,7 @@ export function PaneView({ session, focused, onFocus, paneId, visible = true }: 
     >
       <div className={styles.paneContent}>
         <TerminalPane session={session} visible={visible} onUsed={handleFocus} />
+        {showDropHint && <div className={styles.dropHint} aria-hidden />}
         <DropTargetOverlay zone={dropZone} />
       </div>
     </div>

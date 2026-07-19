@@ -6,12 +6,13 @@ import styles from './Sidebar.module.css'
 
 interface SidebarProps {
   onNewTerminal: () => void
+  onNewTerminalPickFolder: () => void
   onCloseSession: (id: string) => void
   onSelectSession: (id: string) => void
   onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
 
-export function Sidebar({ onNewTerminal, onCloseSession, onSelectSession, onCollectionContextMenu }: SidebarProps) {
+export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onCloseSession, onSelectSession, onCollectionContextMenu }: SidebarProps) {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const addCollection = useSessionStore((s) => s.addCollection)
@@ -103,6 +104,11 @@ export function Sidebar({ onNewTerminal, onCloseSession, onSelectSession, onColl
     onNewTerminal()
   }
 
+  const handleNewTerminalPickFolderClick = () => {
+    setShowMenu(false)
+    onNewTerminalPickFolder()
+  }
+
   return (
     <div className={styles.sidebar} style={{ width: sidebarWidth }}>
       <div className={styles.header}>
@@ -139,6 +145,17 @@ export function Sidebar({ onNewTerminal, onCloseSession, onSelectSession, onColl
                   <path d="M4 6L5.5 7.5L8 5" stroke="currentColor" strokeWidth="1" fill="none" />
                 </svg>
                 New Terminal
+              </button>
+              <button type="button" className={styles.menuItem} onClick={handleNewTerminalPickFolderClick}>
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <path
+                    d="M1 3C1 2.45 1.45 2 2 2H4.5L5.5 3H10C10.55 3 11 3.45 11 4V9C11 9.55 10.55 10 10 10H2C1.45 10 1 9.55 1 9V3Z"
+                    stroke="currentColor"
+                    fill="none"
+                    strokeWidth="1"
+                  />
+                </svg>
+                New Terminal (Choose Folder)…
               </button>
               <button type="button" className={styles.menuItem} onClick={handleNewCollection}>
                 <svg width="12" height="12" viewBox="0 0 12 12">

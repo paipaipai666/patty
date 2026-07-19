@@ -44,6 +44,9 @@ interface SessionStore {
   sidebarTransitioning: boolean
   loaded: boolean
   attentionMap: Record<string, string | null>
+  /** Session being dragged from the sidebar (HTML5 DnD), or null. Panes read
+   *  this to show their drop-zone hints while any drag is in flight. */
+  draggingSessionId: string | null
 
   addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null }) => string
   removeSession: (id: string) => void
@@ -69,6 +72,7 @@ interface SessionStore {
   setAttention: (id: string, eventType: string | null) => void
   resetAttention: (id: string) => void
   setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | null) => void
+  setDraggingSession: (id: string | null) => void
 
   loadState: () => Promise<PersistedState | null>
 }
@@ -93,6 +97,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sidebarTransitioning: false,
   loaded: false,
   attentionMap: {},
+  draggingSessionId: null,
 
   loadState: async () => {
     try {
@@ -200,7 +205,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setActive: (id: string) => {
     set({ activeSessionId: id })
-    markDirty()
+  },
+
+  setDraggingSession: (id: string | null) => {
+    set({ draggingSessionId: id })
   },
 
   renameSession: (id: string, title: string) => {
