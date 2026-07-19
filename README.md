@@ -8,7 +8,7 @@ A modern, minimal terminal manager for Windows with a sidebar layout.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
-![Electron](https://img.shields.io/badge/electron-33-47848F.svg)
+![Tauri](https://img.shields.io/badge/tauri-2-24C8D8.svg)
 
 </div>
 
@@ -113,6 +113,8 @@ All shortcuts are remappable in Settings.
 
 ### From Source
 
+Prerequisites: Node.js 20+ and a stable Rust toolchain (1.77+).
+
 ```bash
 # Clone the repository
 git clone https://github.com/paipaipai666/patty.git
@@ -132,48 +134,53 @@ npm run dev
 npm run package
 ```
 
-The installer will be created in the `dist` directory.
+The installer will be created in `src-tauri/target/release/bundle/nsis`.
 
 ## Tech Stack
 
-- **Framework**: Electron 33 + electron-vite 2.3
-- **Language**: TypeScript 5.7 (strict mode)
+- **Framework**: Tauri 2 (Rust backend + system WebView2)
+- **Language**: TypeScript 5.7 (strict mode) + Rust (edition 2021)
 - **UI**: React 18.3 + CSS Modules
-- **Terminal**: xterm.js 5.5 (WebGL renderer, Fit, WebLinks, Unicode11 addons)
-- **Backend**: node-pty 1.0 (Windows ConPTY)
+- **Terminal**: xterm.js 5.5 (WebGL renderer with canvas fallback, Fit, WebLinks, Unicode11 addons)
+- **PTY**: portable-pty (Windows ConPTY)
 - **State**: Zustand 5
-- **Packaging**: electron-builder 25 (NSIS installer)
+- **Packaging**: tauri-bundler (NSIS installer)
 
 ## Project Structure
 
 ```
 patty/
+├── src-tauri/
+│   ├── src/
+│   │   ├── main.rs              # App entry, command registration, startup wiring
+│   │   ├── pty.rs               # PTY sessions (spawn/write/resize/kill, preheat, ConPTY DSR)
+│   │   ├── hooks.rs             # Hook HTTP server, heartbeat watchdog, attention mapping
+│   │   ├── installer.rs         # Claude Code / OpenCode / Codex hook installers
+│   │   ├── store.rs             # Settings/state JSON persistence with migration
+│   │   ├── metrics.rs           # Resource metrics collector (PowerShell counters)
+│   │   └── fonts.rs             # System font enumeration (registry)
+│   ├── tauri.conf.json          # Window, bundle (NSIS), resource mapping
+│   └── capabilities/            # IPC permission set
 ├── src/
-│   ├── main/                    # Electron main process
-│   │   ├── index.ts             # App entry point, window creation
-│   │   ├── ipcHandlers.ts       # All IPC handlers
-│   │   ├── ptyManager.ts        # PTY session management + hook server
-│   │   ├── settingsHandler.ts   # Settings persistence with migration
-│   │   ├── stateHandler.ts      # Session state persistence
-│   │   └── hookInstaller.ts     # Claude Code / OpenCode hook installer
-│   ├── preload/
-│   │   └── index.ts             # contextBridge (typed terminalAPI)
 │   ├── renderer/                # React application
+│   │   ├── api.ts               # window.terminalAPI shim over Tauri invoke/listen
 │   │   ├── components/
 │   │   │   ├── TitleBar/        # Custom frameless title bar
 │   │   │   ├── Sidebar/         # Sidebar, session tree, collection tree
 │   │   │   ├── Terminal/        # xterm.js terminal panes
+│   │   │   ├── Pane/            # Split tree, sash, drag-drop targets
 │   │   │   ├── StatusBar/       # Session info bar
 │   │   │   ├── Settings/        # Settings modal (5 categories)
 │   │   │   ├── ContributionGrid/ # Animated AI activity indicator
-│   │   │   └── common/          # ContextMenu, PromptDialog
-│   │   ├── store/               # Zustand stores (session, settings)
+│   │   │   └── common/          # ContextMenu, PromptDialog, Toasts
+│   │   ├── store/               # Zustand stores (session, workspace, settings, toast)
 │   │   ├── hooks/               # Shared React hooks
 │   │   └── styles/              # Global CSS, theme definitions
 │   └── shared/                  # Shared TypeScript types
 ├── resources/                   # App icon, Claude Code hook, OpenCode plugin
+├── scripts/shell-integration/   # Shell startup scripts injected into PTYs
 ├── logo/                        # Logo assets
-├── electron.vite.config.ts
+├── vite.config.ts
 ├── package.json
 ├── tsconfig.json
 └── ...
@@ -186,5 +193,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Acknowledgments
 
 - [xterm.js](https://xtermjs.org/) - Terminal emulator for the web
-- [Electron](https://www.electronjs.org/) - Build cross-platform desktop apps
+- [Tauri](https://v2.tauri.app/) - Build tiny, fast desktop apps with a web frontend
 - [Zustand](https://github.com/pmndrs/zustand) - State management

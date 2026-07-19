@@ -180,6 +180,16 @@ fn main() {
                 let _ = window.set_focus();
             }
         }))
+        // The window starts hidden (tauri.conf.json visible:false) so the
+        // webview's default white background never flashes on screen — same
+        // pattern as Electron's show:false + ready-to-show. Reveal on first
+        // finished page load.
+        .on_page_load(|window, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        })
         .setup(|app| {
             pty::init_resource_dir(app.handle());
             // Hook server first: PTYs spawned after this point get a real

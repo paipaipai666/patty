@@ -15,6 +15,9 @@ npm run version:major
 
 These commands only update `package.json` version. No git operations.
 
+> The version also lives in `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`
+> — bump both to match before tagging, or the installer shows the old version.
+
 ## Manual Release Steps
 
 ```bash
