@@ -2,7 +2,6 @@
   "name": "patty",
   "version": "1.2.12",
   "description": "Patty",
-  "main": "./out/main/index.js",
   "scripts": {
     "dev": "tauri dev",
     "build": "vite build",
@@ -25,77 +24,19 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
-    "node-pty": "^1.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
-    "@electron-toolkit/preload": "^3.0.1",
-    "@electron-toolkit/utils": "^3.0.0",
-    "@electron/rebuild": "^3.7.1",
     "@tauri-apps/cli": "^2.11.4",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^4.1.9",
     "@vitest/expect": "^4.1.9",
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8",
-    "electron-vite": "^2.3.0",
     "jsdom": "^29.1.1",
     "typescript": "^5.7.2",
     "vitest": "^4.1.9"
-  },
-  "build": {
-    "appId": "com.patty.app",
-    "productName": "Patty",
-    "npmRebuild": false,
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "out/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "node_modules/node-pty/prebuilds/",
-        "to": "prebuilds/"
-      },
-      {
-        "from": "node_modules/node-pty/build/",
-        "to": "build/"
-      },
-      {
-        "from": "resources/patty-hook.ps1",
-        "to": "resources/patty-hook.ps1"
-      },
-      {
-        "from": "resources/opencode-patty-plugin.ts",
-        "to": "resources/opencode-patty-plugin.ts"
-      },
-      {
-        "from": "scripts/shell-integration",
-        "to": "scripts/shell-integration"
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "resources/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Patty"
-    }
   }
 }
