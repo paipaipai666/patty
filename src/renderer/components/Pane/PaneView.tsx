@@ -1,5 +1,5 @@
 import { useCallback, useState, useRef } from 'react'
-import { type TerminalSession } from '../../store/sessionStore'
+import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { TerminalPane } from '../Terminal/TerminalPane'
 import { DropTargetOverlay, type DropZone } from './DropTargetOverlay'
@@ -60,8 +60,11 @@ export function PaneView({ session, focused, onFocus, paneId, visible = true }: 
   const [dropZone, setDropZone] = useState<DropZone>(null)
   const dropZoneRef = useRef<DropZone>(null)
 
-  const handleFocus = useCallback(() => onFocus(paneId), [onFocus, paneId])
-  const handleUsed = useCallback(() => onFocus(paneId), [onFocus, paneId])
+  const handleFocus = useCallback(() => {
+    onFocus(paneId)
+    // Keep the status bar / sidebar highlight in sync with the focused pane.
+    useSessionStore.getState().setActive(session.id)
+  }, [onFocus, paneId, session.id])
 
   const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     // Only accept drags carrying a sidebar session payload.
@@ -120,7 +123,7 @@ export function PaneView({ session, focused, onFocus, paneId, visible = true }: 
       onDrop={onDrop}
     >
       <div className={styles.paneContent}>
-        <TerminalPane session={session} visible={visible} onUsed={handleUsed} />
+        <TerminalPane session={session} visible={visible} onUsed={handleFocus} />
         <DropTargetOverlay zone={dropZone} />
       </div>
     </div>

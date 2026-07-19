@@ -42,7 +42,17 @@ function webglUsable(): boolean {
   if (webglSupported === null) {
     try {
       const gl = document.createElement('canvas').getContext('webgl2')
-      webglSupported = !!gl && !gl.isContextLost()
+      if (!gl || gl.isContextLost()) {
+        webglSupported = false
+      } else {
+        // A context that is created but produces nothing must not count:
+        // force a draw and read it back.
+        gl.clearColor(1, 0, 0, 1)
+        gl.clear(gl.COLOR_BUFFER_BIT)
+        const px = new Uint8Array(4)
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px)
+        webglSupported = px[0] > 200
+      }
     } catch {
       webglSupported = false
     }
@@ -269,19 +279,26 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
 
     // Renderer: WebGL when usable, canvas otherwise (see webglUsable).
+    // Hidden panes (non-active workspaces) keep the built-in DOM renderer:
+    // creating WebGL contexts for every restored pane at startup can exceed
+    // Chromium's live-context cap and force-lose the visible pane's context
+    // (white pane until the loss timer swaps it). The visibility effect
+    // installs a real renderer when the pane is shown.
     let webglAddon: WebglAddon | null = null
     let canvasAddon: CanvasAddon | null = null
     if (perfEnabled) perfMark('terminal:webgl-init')
-    try {
-      if (webglUsable()) {
-        webglAddon = new WebglAddon()
-        term.loadAddon(webglAddon)
-      } else {
-        canvasAddon = new CanvasAddon()
-        term.loadAddon(canvasAddon)
+    if (visible) {
+      try {
+        if (webglUsable()) {
+          webglAddon = new WebglAddon()
+          term.loadAddon(webglAddon)
+        } else {
+          canvasAddon = new CanvasAddon()
+          term.loadAddon(canvasAddon)
+        }
+      } catch {
+        console.warn('GPU renderer failed to load, using built-in DOM renderer')
       }
-    } catch {
-      console.warn('GPU renderer failed to load, using built-in DOM renderer')
     }
     if (perfEnabled) perfMeasure('terminal:webgl-init', 'terminal:webgl-init')
 
