@@ -13,6 +13,14 @@ fn home_dir() -> PathBuf {
 }
 
 fn claude_settings_path() -> PathBuf {
+    // Patty hooks go to settings.local.json, not settings.json: rtk/headroom
+    // rewrites settings.json on every Claude session start and strips any
+    // hooks it doesn't own. Claude merges both files, so hooks fire from
+    // either location.
+    home_dir().join(".claude").join("settings.local.json")
+}
+
+fn claude_shared_settings_path() -> PathBuf {
     home_dir().join(".claude").join("settings.json")
 }
 
@@ -194,7 +202,32 @@ fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_
 
 pub fn ensure_claude_code_hook() {
     let hook_script = ensure_hook_script_exists();
+    // Drop Patty entries from settings.json (older installs put them there)
+    // so hooks don't fire twice now that they live in settings.local.json.
+    strip_patty_hooks(&claude_shared_settings_path());
     install_at(&claude_settings_path(), apply_claude_hooks, &hook_script.to_string_lossy(), false);
+}
+
+/// Remove Patty-managed hook entries from a settings file, leaving all other
+/// entries (user hooks, rtk hooks) untouched. Writes only when something
+/// actually changed.
+fn strip_patty_hooks(path: &PathBuf) {
+    let Ok(raw) = fs::read_to_string(path) else { return };
+    let Ok(mut settings) = serde_json::from_str::<Value>(&raw) else { return };
+    let Some(hooks) = settings.get_mut("hooks").and_then(Value::as_object_mut) else { return };
+    let mut changed = false;
+    for list in hooks.values_mut() {
+        if let Some(arr) = list.as_array_mut() {
+            let before = arr.len();
+            arr.retain(|h| !is_patty_cmd_hook(h) && !is_patty_args_hook(h));
+            changed |= arr.len() != before;
+        }
+    }
+    if changed {
+        if let Ok(payload) = serde_json::to_string_pretty(&settings) {
+            let _ = fs::write(path, payload);
+        }
+    }
 }
 
 pub fn ensure_codex_hook() {
@@ -277,6 +310,33 @@ mod tests {
         fs::write(&file, "{corrupt").unwrap();
         install_at(&file, apply_claude_hooks, "X/patty-hook.ps1", false);
         assert_eq!(fs::read_to_string(&file).unwrap(), "{corrupt");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn strip_removes_only_patty_hooks() {
+        let dir = std::env::temp_dir().join(format!("patty-strip-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("settings.json");
+        let patty_cmd = cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into());
+        let patty_args = args_hook("", "session_start", "X/patty-hook.ps1");
+        let other = cmd_hook("Bash", "rtk hook claude".into());
+        fs::write(
+            &file,
+            serde_json::to_string(&json!({
+                "hooks": { "Stop": [patty_cmd, other], "SessionStart": [patty_args] }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        strip_patty_hooks(&file);
+        let written: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(written["hooks"]["Stop"].as_array().unwrap().len(), 1);
+        assert_eq!(written["hooks"]["Stop"][0]["hooks"][0]["command"], "rtk hook claude");
+        assert_eq!(written["hooks"]["SessionStart"].as_array().unwrap().len(), 0);
+        // No Patty entries left: second call must not rewrite the file.
+        strip_patty_hooks(&file);
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -47,7 +47,14 @@ export const PattyNotifier = async ({
       await fetch(`http://127.0.0.1:${PATTY_PORT}/hook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paneId: PANE_ID, event, source: 'opencode' }),
+        body: JSON.stringify({
+          paneId: PANE_ID,
+          event,
+          source: 'opencode',
+          // The hook server rejects unauthenticated callers (401); the secret
+          // is injected into the terminal env by Patty's pty layer.
+          secret: process.env.PATTY_HOOK_SECRET
+        }),
         signal: controller.signal
       })
     } catch {
