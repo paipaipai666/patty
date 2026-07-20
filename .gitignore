@@ -17,6 +17,8 @@ Thumbs.db
 .idea/
 .omc/
 .codegraph/
+.claude/
+.agents/
 *.swp
 *.swo
 CLAUDE**.md
