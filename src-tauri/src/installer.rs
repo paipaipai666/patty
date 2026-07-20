@@ -341,6 +341,27 @@ mod tests {
     }
 
     #[test]
+    fn claude_hooks_install_to_local_settings() {
+        // Regression guard: rtk/headroom rewrites settings.json on every
+        // Claude session start — hooks installed there get stripped.
+        assert_eq!(
+            claude_settings_path().file_name().unwrap(),
+            "settings.local.json"
+        );
+    }
+
+    #[test]
+    fn hook_clients_authenticate_with_secret() {
+        // Regression guard: the hook server 401s any POST without the
+        // per-process secret. Both hook clients must send it — the opencode
+        // plugin shipped without it once and every event was silently dropped.
+        let plugin = fs::read_to_string(opencode_plugin_source()).unwrap();
+        assert!(plugin.contains("PATTY_HOOK_SECRET"), "opencode plugin must send the hook secret");
+        let ps1 = fs::read_to_string(hook_script_source()).unwrap();
+        assert!(ps1.contains("PATTY_HOOK_SECRET"), "patty-hook.ps1 must send the hook secret");
+    }
+
+    #[test]
     fn install_writes_end_to_end() {
         let dir = std::env::temp_dir().join(format!("patty-installer-e2e-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);

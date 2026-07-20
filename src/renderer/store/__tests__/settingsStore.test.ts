@@ -79,7 +79,9 @@ describe('init', () => {
     expect(state.loaded).toBe(true)
     expect(state.settings.theme).toBe('dark')
     expect(localStorage.setItem).toHaveBeenCalledWith('patty-theme', 'dark')
-    expect(localStorage.setItem).toHaveBeenCalledWith('patty-boot-bg', expect.any(String))
+    // Exact value, not just any string: the boot splash and the Rust window
+    // background both read this cache to paint the theme color before load.
+    expect(localStorage.setItem).toHaveBeenCalledWith('patty-boot-bg', '#0a0a0c')
     expect(mockSetProperty).toHaveBeenCalled()
   })
 
@@ -102,6 +104,9 @@ describe('updateSetting', () => {
     mockSettingsSet.mockResolvedValue(undefined)
     await useSettingsStore.getState().updateSetting('theme', 'light')
     expect(mockSetProperty).toHaveBeenCalled()
+    // Boot cache must follow the new theme or the next launch paints the old one.
+    expect(localStorage.setItem).toHaveBeenCalledWith('patty-theme', 'light')
+    expect(localStorage.setItem).toHaveBeenCalledWith('patty-boot-bg', '#f6f7f9')
   })
 
   it('applies theme when customThemes changes', async () => {

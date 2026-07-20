@@ -223,26 +223,44 @@ fn handle_request(
     if request.as_reader().read_to_string(&mut body).is_err() {
         return tiny_http::Response::from_string(String::new()).with_status_code(400);
     }
-    let Ok(data) = serde_json::from_str::<Value>(&body) else {
+    let (status, payload, forward) = evaluate_hook_body(secret, &body, crate::pty::session_exists);
+    if status == 400 {
         return tiny_http::Response::from_string(String::new()).with_status_code(400);
-    };
+    }
+    if let Some((pane_id, event, source)) = forward {
+        on_hook_request(app, &pane_id, &event, &source);
+    }
+    json_response(status, payload)
+}
 
+/// Pure hook-request evaluation, split from the tiny_http plumbing so the
+/// auth/validation contract is directly unit-testable. Returns the HTTP
+/// status, response payload, and — for valid requests — the
+/// (pane_id, event, source) tuple to forward to on_hook_request.
+fn evaluate_hook_body(
+    secret: &str,
+    body: &str,
+    session_exists: impl Fn(&str) -> bool,
+) -> (u16, Value, Option<(String, String, String)>) {
+    let Ok(data) = serde_json::from_str::<Value>(body) else {
+        return (400, Value::Null, None);
+    };
     // Authenticate: reject any caller that can't present the per-process secret.
     if data.get("secret").and_then(Value::as_str) != Some(secret) {
-        return json_response(401, json!({ "ok": false, "error": "unauthorized" }));
+        return (401, json!({ "ok": false, "error": "unauthorized" }), None);
     }
-
     let pane_id = data.get("paneId").and_then(Value::as_str).unwrap_or("");
     let event = data.get("event").and_then(Value::as_str).unwrap_or("");
     let source = data.get("source").and_then(Value::as_str).unwrap_or("unknown");
-
     // Validate session exists
-    if !crate::pty::session_exists(pane_id) {
-        return json_response(200, json!({ "ok": true, "ignored": true }));
+    if !session_exists(pane_id) {
+        return (200, json!({ "ok": true, "ignored": true }), None);
     }
-
-    on_hook_request(app, pane_id, event, source);
-    json_response(200, json!({ "ok": true }))
+    (
+        200,
+        json!({ "ok": true }),
+        Some((pane_id.to_string(), event.to_string(), source.to_string())),
+    )
 }
 
 #[cfg(test)]
@@ -309,22 +327,56 @@ mod tests {
     }
 
     #[test]
+    fn evaluate_rejects_missing_and_wrong_secret() {
+        let (status, ..) = evaluate_hook_body("sec", r#"{"paneId":"x","event":"y"}"#, |_| true);
+        assert_eq!(status, 401);
+        let (status, ..) = evaluate_hook_body("sec", r#"{"paneId":"x","event":"y","secret":"nope"}"#, |_| true);
+        assert_eq!(status, 401);
+    }
+
+    #[test]
+    fn evaluate_rejects_malformed_json() {
+        let (status, ..) = evaluate_hook_body("sec", "{not json", |_| true);
+        assert_eq!(status, 400);
+    }
+
+    #[test]
+    fn evaluate_ignores_unknown_pane() {
+        let (status, body, forward) = evaluate_hook_body(
+            "sec",
+            r#"{"paneId":"ghost","event":"idle","source":"opencode","secret":"sec"}"#,
+            |_| false,
+        );
+        assert_eq!(status, 200);
+        assert_eq!(body["ignored"], true);
+        assert!(forward.is_none());
+    }
+
+    #[test]
+    fn evaluate_forwards_valid_request() {
+        let (status, body, forward) = evaluate_hook_body(
+            "sec",
+            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec"}"#,
+            |p| p == "p1",
+        );
+        assert_eq!(status, 200);
+        assert_eq!(body["ok"], true);
+        assert_eq!(forward, Some(("p1".to_string(), "idle".to_string(), "opencode".to_string())));
+    }
+
+    #[test]
     fn hook_server_auth_and_validation() {
         let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
         let port = server.server_addr().to_ip().unwrap().port();
         let secret = "test-secret";
         thread::spawn(move || {
             for mut request in server.incoming_requests() {
-                // Mini version of handle_request without the AppHandle emit.
+                // HTTP plumbing over the SAME evaluation the real server uses.
                 let mut body = String::new();
                 request.as_reader().read_to_string(&mut body).unwrap();
-                let data = serde_json::from_str::<Value>(&body).unwrap_or(Value::Null);
-                let response = if data.get("secret").and_then(Value::as_str) != Some(secret) {
-                    tiny_http::Response::from_string(r#"{"ok":false,"error":"unauthorized"}"#)
-                        .with_status_code(401)
-                } else {
-                    tiny_http::Response::from_string(r#"{"ok":true}"#).with_status_code(200)
-                };
+                let (status, payload, _) = evaluate_hook_body(secret, &body, |_| true);
+                let response = tiny_http::Response::from_string(payload.to_string())
+                    .with_status_code(status);
                 let _ = request.respond(response);
             }
         });
