@@ -1,4 +1,5 @@
 use std::process::Command;
+use std::os::windows::process::CommandExt;
 use std::sync::{LazyLock, Mutex};
 
 // Font names from the registry come back in the console's OEM codepage, so
@@ -12,7 +13,7 @@ fn codepage_encoding() -> &'static encoding_rs::Encoding {
 }
 
 fn detect_codepage_label() -> String {
-    let Ok(out) = Command::new("chcp").output() else {
+    let Ok(out) = Command::new("chcp").creation_flags(0x08000000).output() else {
         return "utf-8".into();
     };
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -36,7 +37,7 @@ fn detect_codepage_label() -> String {
 }
 
 fn scan_font_key(key: &str) -> Option<Vec<u8>> {
-    let out = Command::new("reg").args(["query", key, "/s"]).output().ok()?;
+    let out = Command::new("reg").args(["query", key, "/s"]).creation_flags(0x08000000).output().ok()?;
     Some(out.stdout)
 }
 

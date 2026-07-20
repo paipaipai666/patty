@@ -1,6 +1,7 @@
 use serde_json::{json, Value};
 use std::fs;
 use std::process::Command;
+use std::os::windows::process::CommandExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
@@ -111,6 +112,8 @@ fn sample_counters(gpu_available: bool) -> (f64, Option<f64>) {
     let script = if gpu_available { CPU_GPU_SCRIPT } else { CPU_ONLY_SCRIPT };
     let out = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        // GUI app: without this flag each sample would pop a visible console.
+        .creation_flags(0x08000000)
         .output();
     let Ok(out) = out else {
         return (0.0, None);

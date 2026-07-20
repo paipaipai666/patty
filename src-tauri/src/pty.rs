@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::os::windows::process::CommandExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 use std::thread;
@@ -65,7 +66,7 @@ fn shell_paths(name: &str) -> Option<&'static str> {
 fn find_pwsh() -> Option<PathBuf> {
     static PWSH: OnceLock<Option<PathBuf>> = OnceLock::new();
     PWSH.get_or_init(|| {
-        let out = Command::new("where.exe").arg("pwsh").output().ok()?;
+        let out = Command::new("where.exe").arg("pwsh").creation_flags(0x08000000).output().ok()?;
         if !out.status.success() {
             return None;
         }
