@@ -24,7 +24,7 @@ script (`scripts/sync-version.mjs`), also sync the version into
 npm run version:patch
 
 # 2. Commit
-git add package.json
+git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
 git commit -m "v1.0.1"
 
 # 3. Tag
