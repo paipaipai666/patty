@@ -10,6 +10,46 @@ mod store;
 use serde_json::{json, Value};
 use tauri::Manager;
 
+/// Resolve the persisted theme's --bg-app so the window is painted the right
+/// color before the webview finishes loading (window background can't change
+/// after creation on Windows).
+fn boot_background_color() -> tauri::window::Color {
+    const BUILTIN: [(&str, &str); 6] = [
+        ("dark", "#0a0a0c"),
+        ("light", "#f6f7f9"),
+        ("dracula", "#282a36"),
+        ("nord", "#2e3440"),
+        ("tokyo-night", "#1a1b26"),
+        ("solarized-light", "#fdf6e3"),
+    ];
+    let settings = store::load_settings();
+    let theme = settings["theme"].as_str().unwrap_or("dark");
+    let hex = BUILTIN
+        .iter()
+        .find(|(id, _)| *id == theme)
+        .map(|(_, hex)| *hex)
+        .or_else(|| {
+            settings["customThemes"]
+                .as_array()?
+                .iter()
+                .find(|t| t["id"].as_str() == Some(theme))
+                .and_then(|t| t["ui"]["--bg-app"].as_str())
+        })
+        .unwrap_or("#0a0a0c");
+    parse_hex_color(hex).unwrap_or(tauri::window::Color(10, 10, 12, 255))
+}
+
+fn parse_hex_color(hex: &str) -> Option<tauri::window::Color> {
+    let h = hex.strip_prefix('#')?;
+    if h.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&h[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&h[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&h[4..6], 16).ok()?;
+    Some(tauri::window::Color(r, g, b, 255))
+}
+
 #[tauri::command]
 fn settings_get_all() -> Value {
     store::load_settings()
@@ -181,28 +221,49 @@ fn main() {
             }
         }))
         .setup(|app| {
+            // The window is built in code (not config) so its background can
+            // match the persisted theme — a static config color flashes the
+            // wrong theme for light-theme users before the webview paints.
+            tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+                .title("Patty")
+                .inner_size(1280.0, 800.0)
+                .min_inner_size(600.0, 400.0)
+                .decorations(false)
+                .resizable(true)
+                .disable_drag_drop_handler()
+                .background_color(boot_background_color())
+                .build()?;
+
             pty::init_resource_dir(app.handle());
             // Hook server first: PTYs spawned after this point get a real
             // PATTY_PORT / PATTY_HOOK_SECRET in their environment.
             if let Err(e) = hooks::start_hook_server(app.handle().clone()) {
                 eprintln!("[main] hook server failed to start: {e}");
             }
-            // Install AI-tool hooks only when the user has them enabled.
-            let settings = store::load_settings();
-            if settings["notifications"]["claudeCode"].as_bool().unwrap_or(true) {
-                installer::ensure_claude_code_hook();
-            }
-            if settings["notifications"]["openCode"].as_bool().unwrap_or(true) {
-                installer::ensure_opencode_plugin();
-            }
-            if settings["notifications"]["codex"].as_bool().unwrap_or(true) {
-                installer::ensure_codex_hook();
-            }
             hooks::start_heartbeat_watchdog(app.handle().clone());
             metrics::load_history();
-            // Preheat the persisted workspace's shells so they boot while the
-            // renderer is still loading (replay attaches on pty:create).
-            pty::warm_startup(app.handle());
+
+            // Slow boot work (hook installers write files; warm_startup spawns
+            // one ConPTY per pane) must not run on the main thread: the webview
+            // can't serve index.html until setup returns, so every millisecond
+            // here was dead time on a blank window. SPAWN_LOCK in pty.rs
+            // serializes warm spawns against the renderer's pty:create calls.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let settings = store::load_settings();
+                if settings["notifications"]["claudeCode"].as_bool().unwrap_or(true) {
+                    installer::ensure_claude_code_hook();
+                }
+                if settings["notifications"]["openCode"].as_bool().unwrap_or(true) {
+                    installer::ensure_opencode_plugin();
+                }
+                if settings["notifications"]["codex"].as_bool().unwrap_or(true) {
+                    installer::ensure_codex_hook();
+                }
+                // Preheat the persisted workspace's shells so they boot while
+                // the renderer is still loading (replay attaches on pty:create).
+                pty::warm_startup(&handle);
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

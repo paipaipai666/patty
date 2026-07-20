@@ -10,19 +10,6 @@
     "beforeBuildCommand": "npx vite build"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Patty",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 600,
-        "minHeight": 400,
-        "decorations": false,
-        "resizable": true,
-        "dragDropEnabled": false,
-        "backgroundColor": "#0f0f12"
-      }
-    ],
     "security": {
       "csp": null
     }

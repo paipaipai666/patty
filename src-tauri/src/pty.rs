@@ -36,6 +36,12 @@ pub struct Session {
 static SESSIONS: LazyLock<Mutex<HashMap<String, Arc<Session>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+// Serializes the check-then-spawn sequence in create() and warm(). Startup
+// warming runs on a background thread, so without this a renderer create()
+// and a warm() for the same id could both pass the map check and spawn two
+// PTYs — the loser leaks and duplicates output onto the shared event channel.
+static SPAWN_LOCK: Mutex<()> = Mutex::new(());
+
 fn emit(app: &Option<AppHandle>, event: &str, payload: impl serde::Serialize + Clone) {
     if let Some(app) = app {
         let _ = app.emit(event, payload);
@@ -392,6 +398,7 @@ pub fn create(
     cols: Option<u16>,
     rows: Option<u16>,
 ) -> Value {
+    let _spawn_guard = SPAWN_LOCK.lock().unwrap();
     // Reattach to a preheated session when cwd/shell match.
     let mut map = SESSIONS.lock().unwrap();
     if let Some(existing) = map.get(id) {
@@ -426,6 +433,7 @@ pub fn create(
 /// Pre-spawn a PTY for a session expected to mount soon; early output is
 /// buffered and replayed on attach.
 pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>) {
+    let _spawn_guard = SPAWN_LOCK.lock().unwrap();
     if SESSIONS.lock().unwrap().contains_key(id) {
         return;
     }
