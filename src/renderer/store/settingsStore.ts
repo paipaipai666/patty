@@ -1,7 +1,22 @@
 import { create } from 'zustand'
 import type { AppSettings } from '../../shared/settingsTypes'
 import { DEFAULT_SETTINGS } from '../../shared/defaultSettings'
-import { applyTheme, applyFontSettings } from '../styles/themes'
+import { applyTheme, applyFontSettings, getThemeColors } from '../styles/themes'
+
+// Persist the resolved theme background so the next launch can paint the
+// window (Rust) and the boot splash (inline script in index.html) in the
+// right color before any JS/settings load. localStorage, not sessionStorage:
+// WebView2 clears sessionStorage on app exit, so the cache would always miss
+// exactly when it's needed — at cold start.
+function cacheBootTheme(theme: string, customThemes: AppSettings['customThemes']) {
+  try {
+    localStorage.setItem('patty-theme', theme)
+    localStorage.setItem('patty-boot-bg', getThemeColors(theme, customThemes).ui['--bg-app'])
+    document.documentElement.dataset.theme = theme
+  } catch {
+    // ignore localStorage failures
+  }
+}
 
 interface SettingsStore {
   settings: AppSettings
@@ -23,13 +38,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     try {
       const settings = await window.terminalAPI.settingsGetAll()
       set({ settings, loaded: true })
-      // Cache theme for synchronous boot on next launch (prevents dark flash)
-      try {
-        sessionStorage.setItem('patty-theme', settings.theme)
-        document.documentElement.dataset.theme = settings.theme
-      } catch {
-        // ignore sessionStorage failures
-      }
+      cacheBootTheme(settings.theme, settings.customThemes)
       applyTheme(settings.theme, settings.customThemes)
       applyFontSettings(settings.fontFamily, settings.fontSize)
     } catch (err) {
@@ -47,6 +56,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       const theme = key === 'theme' ? (value as string) : prev.theme
       const customs = key === 'customThemes' ? (value as AppSettings['customThemes']) : prev.customThemes
       applyTheme(theme, customs)
+      cacheBootTheme(theme, customs)
     }
     if (key === 'fontFamily' || key === 'fontSize') {
       applyFontSettings(

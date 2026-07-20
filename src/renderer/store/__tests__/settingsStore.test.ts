@@ -12,7 +12,7 @@ vi.stubGlobal('window', {
   addEventListener: vi.fn()
 })
 
-vi.stubGlobal('sessionStorage', {
+vi.stubGlobal('localStorage', {
   setItem: vi.fn()
 })
 
@@ -78,7 +78,8 @@ describe('init', () => {
     const state = useSettingsStore.getState()
     expect(state.loaded).toBe(true)
     expect(state.settings.theme).toBe('dark')
-    expect(sessionStorage.setItem).toHaveBeenCalledWith('patty-theme', 'dark')
+    expect(localStorage.setItem).toHaveBeenCalledWith('patty-theme', 'dark')
+    expect(localStorage.setItem).toHaveBeenCalledWith('patty-boot-bg', expect.any(String))
     expect(mockSetProperty).toHaveBeenCalled()
   })
 

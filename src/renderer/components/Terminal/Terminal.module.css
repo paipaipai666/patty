@@ -74,11 +74,39 @@
   pointer-events: none;
 }
 
+/* Shown until the PTY's first output lands — a soft sweep so a cold-spawned
+   shell reads as "starting" instead of a dead black pane. */
+.bootShimmer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: bootShimmerSweep 1.4s linear infinite;
+}
+
+@keyframes bootShimmerSweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .area {
     transition: none;
   }
   .area::after {
     transition: none;
+  }
+  .bootShimmer {
+    animation: none;
   }
 }

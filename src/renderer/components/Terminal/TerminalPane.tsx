@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { Terminal, type ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -92,6 +92,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
   const firstDataReceivedRef = useRef(false)
+  // Drives the boot shimmer overlay shown until the PTY's first output lands.
+  const [hasData, setHasData] = useState(false)
   const renderCountRef = useRef(0)
   const updatePid = useSessionStore((s) => s.updatePid)
   const updateCwd = useSessionStore((s) => s.updateCwd)
@@ -134,6 +136,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     // the previous session could also fire against the new terminal.
     ptyCreatedRef.current = false
     firstDataReceivedRef.current = false
+    setHasData(false)
     markTerminalOpen(session.id, session.shell)
     if (perfEnabled) perfMark('terminal:mount')
     cleanupDataRef.current?.()
@@ -454,10 +457,12 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
               // live data so ordering is preserved.
               term.write(iipPatcherRef.current!(result.replay))
               useWorkspaceStore.getState().tryMarkActiveWorkspaceReady(session.id)
+              setHasData(true)
             }
             cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
               if (!firstDataReceivedRef.current) {
                 firstDataReceivedRef.current = true
+                setHasData(true)
                 if (perfEnabled) perfMeasure('terminal:first-data', 'terminal:create-session-ipc-start')
                 useWorkspaceStore.getState().tryMarkActiveWorkspaceReady(session.id)
               }
@@ -639,6 +644,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       ref={containerRef}
       className={styles.pane}
       style={{ opacity: settings.opacity < 1 ? settings.opacity : 1 }}
-    />
+    >
+      {!hasData && visible && <div className={styles.bootShimmer} aria-hidden="true" />}
+    </div>
   )
 }

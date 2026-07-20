@@ -77,6 +77,15 @@ export default function App() {
     })
   }, [])
 
+  // Dismiss the boot splash (rendered by index.html before the bundle loads)
+  // once React has painted. Idempotent — StrictMode double-invokes effects.
+  useEffect(() => {
+    const splash = document.getElementById('patty-splash')
+    if (!splash) return
+    splash.classList.add('patty-splash-hide')
+    setTimeout(() => splash.remove(), 200)
+  }, [])
+
   // Initialize settings on mount
   useEffect(() => {
     if (perfEnabled) perfMark('renderer:settings-init-start')

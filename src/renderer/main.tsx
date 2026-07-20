@@ -6,14 +6,15 @@ import { ErrorBoundary } from './components/common/ErrorBoundary'
 import './styles/global.css'
 
 // Apply cached theme synchronously before React renders to prevent dark flash.
-// sessionStorage is set by settingsStore.init after the first successful load.
+// localStorage is written by settingsStore (init + theme changes) and survives
+// app restarts in the WebView2 user data folder.
 try {
-  const cachedTheme = sessionStorage.getItem('patty-theme')
+  const cachedTheme = localStorage.getItem('patty-theme')
   if (cachedTheme) {
     document.documentElement.dataset.theme = cachedTheme
   }
 } catch {
-  // sessionStorage may be unavailable (privacy mode); ignore
+  // localStorage may be unavailable (privacy mode); ignore
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
