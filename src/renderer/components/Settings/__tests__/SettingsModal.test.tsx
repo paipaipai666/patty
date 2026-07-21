@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
@@ -66,19 +66,67 @@ vi.mock('../../../store/toastStore', () => ({
   toast: vi.fn()
 }))
 
-import { SettingsModal } from '../SettingsModal'
+import { SettingsModal, formatShortcut } from '../SettingsModal'
+
+describe('formatShortcut', () => {
+  it('Ctrl+letter', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: 't', ctrlKey: true }))).toBe('Ctrl+T')
+  })
+
+  it('Ctrl+Shift+letter', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true, shiftKey: true }))).toBe('Ctrl+Shift+D')
+  })
+
+  it('Ctrl+Alt+key', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, altKey: true }))).toBe('Ctrl+Alt+,')
+  })
+
+  it('Meta+key uses Meta prefix', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: 'b', metaKey: true }))).toBe('Meta+B')
+  })
+
+  it('modifier-only key returns just the modifier', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true }))).toBe('Ctrl')
+  })
+
+  it('keeps special key names as-is', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: 'Escape' }))).toBe('Escape')
+  })
+
+  it('Enter key', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe('Enter')
+  })
+
+  it('Shift+F1', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: 'F1', shiftKey: true }))).toBe('Shift+F1')
+  })
+
+  it('single letter uppercases', () => {
+    expect(formatShortcut(new KeyboardEvent('keydown', { key: 'a' }))).toBe('A')
+  })
+})
+
+const roots: ReturnType<typeof createRoot>[] = []
 
 beforeEach(() => {
   vi.clearAllMocks()
+  settingsState.settings.customThemes = []
+  settingsState.settings.theme = 'dark'
   settingsState.settingsOpen = true
   document.body.innerHTML = ''
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+})
+
+afterEach(() => {
+  roots.forEach(r => r.unmount())
+  roots.length = 0
 })
 
 function render() {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
+  roots.push(root)
   act(() => { root.render(<SettingsModal />) })
   return { container, root }
 }
@@ -142,5 +190,86 @@ describe('SettingsModal', () => {
     expect(closeBtn).toBeTruthy()
     act(() => { closeBtn!.click() })
     expect(mockCloseSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('Escape while not capturing closes settings', () => {
+    render()
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    })
+    expect(mockCloseSettings).toHaveBeenCalledTimes(1)
+  })
+
+  it('Escape during shortcut capture cancels capture without closing', () => {
+    const { container } = render()
+    const navButtons = container.querySelectorAll('nav button')
+    act(() => { (navButtons[2] as HTMLButtonElement).click() })
+    const editBtns = Array.from(container.querySelectorAll('button'))
+    const editBtn = editBtns.find(b => b.textContent === 'Edit')
+    act(() => { editBtn!.click() })
+    expect(container.textContent).toContain('Press keys...')
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    })
+    expect(container.textContent).not.toContain('Press keys...')
+    expect(mockCloseSettings).toHaveBeenCalledTimes(0)
+  })
+
+  it('shortcut capture completes on key combo', () => {
+    const { container } = render()
+    const navButtons = container.querySelectorAll('nav button')
+    act(() => { (navButtons[2] as HTMLButtonElement).click() })
+    const editBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Edit')
+    act(() => { editBtn!.click() })
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true }))
+    })
+    expect(mockUpdateSetting).toHaveBeenCalledWith('shortcuts', expect.objectContaining({ newTerminal: 'Ctrl+Y' }))
+  })
+
+  it('terminal section cursor style buttons work', () => {
+    const { container } = render()
+    const navButtons = container.querySelectorAll('nav button')
+    act(() => { (navButtons[1] as HTMLButtonElement).click() })
+    const cursorBtns = Array.from(container.querySelectorAll('button')).filter(b =>
+      ['Block', 'Underline', 'Bar'].includes(b.textContent!)
+    )
+    expect(cursorBtns.length).toBe(3)
+    act(() => { cursorBtns[0].click() })
+    expect(mockUpdateSetting).toHaveBeenCalledWith('cursorStyle', 'block')
+  })
+
+  it('layout section sidebar position buttons work', () => {
+    const { container } = render()
+    const navButtons = container.querySelectorAll('nav button')
+    act(() => { (navButtons[3] as HTMLButtonElement).click() })
+    const posBtns = Array.from(container.querySelectorAll('button')).filter(b =>
+      ['Left', 'Right'].includes(b.textContent!)
+    )
+    expect(posBtns.length).toBe(2)
+    act(() => { posBtns[1].click() })
+    expect(mockUpdateSetting).toHaveBeenCalledWith('sidebarPosition', 'right')
+  })
+
+  it('ThemeEditor appears with custom themes', () => {
+    settingsState.settings.customThemes = [{ id: 't1', name: 'My Theme', ui: { '--bg-app': '#000' }, terminal: { '--black': '#000' } }]
+    settingsState.settings.theme = 't1'
+    const { container } = render()
+    expect(container.textContent).toContain('My Theme')
+    const themeItem = container.querySelector('[class*="themeItem"]') as HTMLElement
+    expect(themeItem).toBeTruthy()
+    act(() => { themeItem.click() })
+    expect(container.textContent).toContain('App Background')
+  })
+
+  it('ThemeEditor delete removes theme and reverts to builtin', () => {
+    settingsState.settings.customThemes = [{ id: 't1', name: 'My Theme', ui: { '--bg-app': '#000' }, terminal: { '--black': '#000' } }]
+    settingsState.settings.theme = 't1'
+    const { container } = render()
+    const deleteBtns = Array.from(container.querySelectorAll('button')).filter(b => b.getAttribute('aria-label') === 'Delete theme')
+    expect(deleteBtns.length).toBe(1)
+    act(() => { deleteBtns[0].click() })
+    expect(mockUpdateSetting).toHaveBeenCalledWith('customThemes', [])
+    expect(mockUpdateSetting).toHaveBeenCalledWith('theme', 'dark')
   })
 })

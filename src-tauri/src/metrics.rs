@@ -39,6 +39,14 @@ fn history_path() -> std::path::PathBuf {
     crate::store::data_dir().join("metrics-history.json")
 }
 
+#[doc(hidden)]
+pub fn reset_for_test() {
+    *DATA.lock().unwrap() = MetricsData {
+        first_terminal: Vec::new(),
+        samples: Vec::new(),
+    };
+}
+
 pub fn load_history() {
     let Ok(raw) = fs::read_to_string(history_path()) else {
         return;
@@ -244,6 +252,13 @@ pub fn set_sampling(app: &AppHandle, enabled: bool) {
 mod tests {
     use super::*;
 
+    fn reset_data() {
+        *DATA.lock().unwrap() = MetricsData {
+            first_terminal: Vec::new(),
+            samples: Vec::new(),
+        };
+    }
+
     #[test]
     fn first_terminal_capped_at_max() {
         let mut data = MetricsData { first_terminal: Vec::new(), samples: Vec::new() };
@@ -269,5 +284,97 @@ mod tests {
         assert_eq!(find("CPU:"), Some(12.5));
         assert_eq!(find("GPU:"), Some(42.75));
         assert_eq!(find("MEM:"), None);
+    }
+
+    #[test]
+    fn snapshot_returns_empty_initial() {
+        reset_data();
+        let s = snapshot();
+        assert_eq!(s["firstTerminal"].as_array().unwrap().len(), 0);
+        assert_eq!(s["samples"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn record_first_terminal_adds_to_data() {
+        reset_data();
+        record_first_terminal(json!({"iso": "a", "shell": "pwsh", "durationMs": 100}));
+        let s = snapshot();
+        assert_eq!(s["firstTerminal"].as_array().unwrap().len(), 1);
+        assert_eq!(s["firstTerminal"][0]["shell"], "pwsh");
+    }
+
+    #[test]
+    fn record_first_terminal_trims_at_max() {
+        reset_data();
+        for i in 0..(MAX_FIRST_TERMINALS + 3) {
+            record_first_terminal(json!({"iso": i, "shell": "pwsh", "durationMs": i}));
+        }
+        let s = snapshot();
+        assert_eq!(s["firstTerminal"].as_array().unwrap().len(), MAX_FIRST_TERMINALS);
+        assert_eq!(s["firstTerminal"][0]["durationMs"], 3);
+    }
+
+    #[test]
+    fn persist_and_load_history_roundtrip() {
+        reset_data();
+        let dir = std::env::temp_dir()
+            .join(format!("patty-metrics-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let old = crate::store::data_dir();
+        crate::store::set_data_dir_for_test(dir.clone());
+
+        record_first_terminal(json!({"shell": "pwsh", "durationMs": 42}));
+        // persist() is called by record_first_terminal
+
+        reset_data();
+        assert!(snapshot()["firstTerminal"].as_array().unwrap().is_empty());
+
+        load_history();
+        let s = snapshot();
+        assert_eq!(s["firstTerminal"].as_array().unwrap().len(), 1);
+        assert_eq!(s["firstTerminal"][0]["durationMs"], 42);
+
+        crate::store::set_data_dir_for_test(old);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn persist_writes_valid_json() {
+        reset_data();
+        let dir = std::env::temp_dir()
+            .join(format!("patty-metrics-persist-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let old = crate::store::data_dir();
+        crate::store::set_data_dir_for_test(dir.clone());
+
+        record_first_terminal(json!({"shell": "cmd", "durationMs": 10}));
+        let path = history_path();
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert_eq!(parsed["version"], 1);
+        assert_eq!(parsed["firstTerminal"][0]["shell"], "cmd");
+
+        crate::store::set_data_dir_for_test(old);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_history_ignores_wrong_version() {
+        reset_data();
+        let dir = std::env::temp_dir()
+            .join(format!("patty-metrics-version-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let old = crate::store::data_dir();
+        crate::store::set_data_dir_for_test(dir.clone());
+
+        let path = history_path();
+        std::fs::write(&path, r#"{"version":999,"firstTerminal":[{"shell":"pwsh","durationMs":1}]}"#).unwrap();
+        load_history();
+        let s = snapshot();
+        assert_eq!(s["firstTerminal"].as_array().unwrap().len(), 0);
+
+        crate::store::set_data_dir_for_test(old);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

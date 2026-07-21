@@ -12,7 +12,7 @@ fn home_dir() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn claude_settings_path() -> PathBuf {
+pub fn claude_settings_path() -> PathBuf {
     // Patty hooks go to settings.local.json, not settings.json: rtk/headroom
     // rewrites settings.json on every Claude session start and strips any
     // hooks it doesn't own. Claude merges both files, so hooks fire from
@@ -24,7 +24,7 @@ fn claude_shared_settings_path() -> PathBuf {
     home_dir().join(".claude").join("settings.json")
 }
 
-fn codex_settings_path() -> PathBuf {
+pub fn codex_settings_path() -> PathBuf {
     home_dir().join(".codex").join("hooks.json")
 }
 
@@ -41,7 +41,7 @@ fn hook_script_source() -> PathBuf {
         .join("patty-hook.ps1")
 }
 
-fn opencode_plugin_source() -> PathBuf {
+pub fn opencode_plugin_source() -> PathBuf {
     let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("resources")
@@ -54,11 +54,11 @@ fn opencode_plugin_source() -> PathBuf {
         .join("opencode-patty-plugin.ts")
 }
 
-fn installed_hook_path() -> PathBuf {
+pub fn installed_hook_path() -> PathBuf {
     crate::store::data_dir().join("patty-hook.ps1")
 }
 
-fn ensure_hook_script_exists() -> PathBuf {
+pub fn ensure_hook_script_exists() -> PathBuf {
     let dest = installed_hook_path();
     if let Some(dir) = dest.parent() {
         let _ = fs::create_dir_all(dir);
@@ -365,6 +365,63 @@ mod tests {
         // No Patty entries left: second call must not rewrite the file.
         strip_patty_hooks(&file);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn is_patty_codex_hook_matches() {
+        let entry = cmd_hook("startup|resume", "powershell -File \"C:/patty-hook.ps1\" -Source \"codex\"".into());
+        assert!(is_patty_codex_hook(&entry));
+    }
+
+    #[test]
+    fn is_patty_codex_hook_rejects_non_codex_hook() {
+        let entry = args_hook("", &["-Source", "claude-code"], "C:/patty-hook.ps1");
+        assert!(!is_patty_codex_hook(&entry));
+    }
+
+    #[test]
+    fn is_patty_hook_matches_cmd_form() {
+        let entry = cmd_hook("", "powershell -File \"C:/patty-hook.ps1\" -Source codex".into());
+        assert!(is_patty_hook(&entry));
+    }
+
+    #[test]
+    fn is_patty_hook_matches_args_form() {
+        let entry = args_hook("", &["-Source", "claude-code"], "C:/patty-hook.ps1");
+        assert!(is_patty_hook(&entry));
+    }
+
+    #[test]
+    fn is_patty_hook_rejects_non_patty() {
+        let entry = cmd_hook("", "rtk hook claude".into());
+        assert!(!is_patty_hook(&entry));
+    }
+
+    #[test]
+    fn home_dir_falls_back_to_dot() {
+        // Unset USERPROFILE and HOME, verify the fallback.
+        let old_u = std::env::var("USERPROFILE").ok();
+        let old_h = std::env::var("HOME").ok();
+        std::env::remove_var("USERPROFILE");
+        std::env::remove_var("HOME");
+        let dir = home_dir();
+        assert_eq!(dir, std::path::PathBuf::from("."));
+        if let Some(v) = old_u { std::env::set_var("USERPROFILE", v); }
+        if let Some(v) = old_h { std::env::set_var("HOME", v); }
+    }
+
+    #[test]
+    fn claude_settings_path_ends_in_local_settings() {
+        let path = claude_settings_path();
+        assert_eq!(path.file_name().unwrap(), "settings.local.json");
+        assert!(path.to_string_lossy().contains(".claude"));
+    }
+
+    #[test]
+    fn codex_settings_path_ends_in_hooks_json() {
+        let path = codex_settings_path();
+        assert_eq!(path.file_name().unwrap(), "hooks.json");
+        assert!(path.to_string_lossy().contains(".codex"));
     }
 
     #[test]

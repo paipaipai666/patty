@@ -6,10 +6,20 @@ use std::sync::{LazyLock, Mutex};
 // Same directory the Electron build used for userData (%APPDATA%\Patty), so
 // existing installs keep their settings.json / state.json after the switch.
 pub fn data_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("Patty")
+    TEST_DATA_DIR
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("Patty"))
 }
+
+#[doc(hidden)]
+pub fn set_data_dir_for_test(dir: PathBuf) {
+    *TEST_DATA_DIR.lock().unwrap() = Some(dir);
+    *SETTINGS_CACHE.lock().unwrap() = None;
+}
+
+static TEST_DATA_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 pub fn default_settings() -> Value {
     json!({
@@ -252,6 +262,86 @@ mod tests {
         let loaded = load_json_from(&file, &default_settings(), merge_settings);
         assert_eq!(loaded, default_settings());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn default_state_shape() {
+        let s = default_state();
+        assert_eq!(s["sessions"], json!([]));
+        assert_eq!(s["sidebarWidth"], 220);
+        assert!(s["activeSessionId"].is_null());
+        assert!(s["sidebarVisible"].as_bool().unwrap());
+    }
+
+    #[test]
+    fn deep_merge_subobject_merges_and_preserves() {
+        let defaults = json!({"a": 1, "b": 2, "nested": {"x": 10, "y": 20}});
+        let parsed = json!({"a": 99, "nested": {"x": 100}});
+        let mut target = defaults.clone();
+        deep_merge_subobject(&defaults, &parsed, &mut target, "nested");
+        // parsed overrides default values for nested keys
+        assert_eq!(target["nested"]["x"], 100);
+        // default values preserved for keys not in parsed
+        assert_eq!(target["nested"]["y"], 20);
+        // top-level keys not in nested are untouched
+        assert_eq!(target["a"], 99);
+        assert_eq!(target["b"], 2);
+    }
+
+    #[test]
+    fn deep_merge_subobject_handles_missing_key_in_defaults() {
+        let defaults = json!({"a": 1});
+        let parsed = json!({"nested": {"z": 30}});
+        let mut target = defaults.clone();
+        deep_merge_subobject(&defaults, &parsed, &mut target, "nested");
+        assert_eq!(target["nested"]["z"], 30);
+    }
+
+    #[test]
+    fn save_atomic_to_creates_parent_dir() {
+        let dir = tmp_dir("deep_nested");
+        let file = dir.join("sub").join("nested").join("settings.json");
+        let data = json!({"key": "val"});
+        save_atomic_to(&file, &data).unwrap();
+        assert!(file.exists());
+        let loaded = load_json_from(&file, &default_settings(), merge_settings);
+        assert_eq!(loaded["key"], "val");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_atomic_to_removes_tmp_on_success() {
+        let dir = tmp_dir("no_tmp_left");
+        let file = dir.join("state.json");
+        save_atomic_to(&file, &json!({"a": 1})).unwrap();
+        assert!(!file.with_extension("json.tmp").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_json_from_non_existent_path_returns_defaults() {
+        let dir = tmp_dir("nonexistent");
+        let loaded = load_json_from(&dir.join("nope.json"), &default_settings(), merge_settings);
+        assert_eq!(loaded, default_settings());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_json_from_empty_file_returns_defaults() {
+        let dir = tmp_dir("empty_file");
+        let file = dir.join("settings.json");
+        fs::write(&file, "").unwrap();
+        let loaded = load_json_from(&file, &default_settings(), merge_settings);
+        assert_eq!(loaded, default_settings());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn merge_state_preserves_extra_keys() {
+        let parsed = json!({"extraField": "hello", "sessions": []});
+        let merged = merge_state(&parsed, &default_state());
+        assert_eq!(merged["extraField"], "hello");
+        assert_eq!(merged["sessions"], json!([]));
     }
 
     #[test]

@@ -173,7 +173,7 @@ pub fn init_resource_dir(app: &AppHandle) {
     }
 }
 
-fn shell_spawn_args(shell_path: &str) -> Vec<String> {
+pub fn shell_spawn_args(shell_path: &str) -> Vec<String> {
     let stem = Path::new(shell_path)
         .file_stem()
         .map(|s| s.to_string_lossy().to_lowercase())
@@ -202,7 +202,7 @@ fn shell_spawn_args(shell_path: &str) -> Vec<String> {
 // node-pty handed us JS strings; portable-pty gives raw bytes. ConPTY output
 // can split a multi-byte sequence across reads, so carry the incomplete tail.
 
-fn decode(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
+pub fn decode(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
     carry.extend_from_slice(chunk);
     let mut out = String::new();
     loop {
@@ -240,7 +240,7 @@ fn decode(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
 // stuck forever. Answer it here instead and strip it from the stream,
 // reporting a fresh-terminal cursor at 1;1.
 
-enum DsrState {
+pub enum DsrState {
     /// Candidate prefix of the query seen so far.
     Pending(String),
     Done,
@@ -252,7 +252,7 @@ const DSR_REPLY: &[u8] = b"\x1b[1;1R";
 /// Returns the text to forward (None = hold for the next chunk) and whether to
 /// send the reply. Only inspects the stream start: a chunk that isn't a prefix
 /// of the query ends interception.
-fn dsr_filter(state: &mut DsrState, text: &str) -> (Option<String>, bool) {
+pub fn dsr_filter(state: &mut DsrState, text: &str) -> (Option<String>, bool) {
     let DsrState::Pending(holdback) = state else {
         return (Some(text.to_string()), false);
     };
@@ -502,7 +502,7 @@ pub fn warm_startup(app: &AppHandle) {
     }
 }
 
-fn leaf_session_ids(tree: &Value) -> Vec<String> {
+pub fn leaf_session_ids(tree: &Value) -> Vec<String> {
     if tree.get("type").and_then(Value::as_str) == Some("leaf") {
         return tree
             .get("sessionId")
@@ -692,6 +692,48 @@ mod tests {
         let (forward, reply) = dsr_filter(&mut state, "hello");
         assert!(!reply);
         assert_eq!(forward.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn try_begin_spawn_first_acquires_then_rejects_duplicate() {
+        let guard = try_begin_spawn("lock-test-1");
+        assert!(guard.is_some(), "first attempt should acquire");
+        let second = try_begin_spawn("lock-test-1");
+        assert!(second.is_none(), "duplicate should be rejected");
+        drop(guard);
+        let after_drop = try_begin_spawn("lock-test-1");
+        assert!(after_drop.is_some(), "after drop should re-acquire");
+    }
+
+    #[test]
+    fn try_begin_spawn_different_ids_are_independent() {
+        let a = try_begin_spawn("lock-a");
+        let b = try_begin_spawn("lock-b");
+        assert!(a.is_some());
+        assert!(b.is_some());
+    }
+
+    #[test]
+    fn session_exists_is_false_for_unknown_id() {
+        assert!(!session_exists("no-such-session"));
+    }
+
+    #[test]
+    fn write_to_unknown_session_is_noop() {
+        write("no-such-session", "data");
+        // Should not panic.
+    }
+
+    #[test]
+    fn resize_unknown_session_is_noop() {
+        resize("no-such-session", 80, 24);
+        // Should not panic.
+    }
+
+    #[test]
+    fn kill_unknown_session_returns_success() {
+        let result = kill("no-such-session");
+        assert_eq!(result["success"], true);
     }
 
     #[test]

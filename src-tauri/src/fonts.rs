@@ -107,4 +107,28 @@ mod tests {
         let text = "    Custom Font (OpenType)    REG_EXPAND_SZ    %PATH%\\font.otf\r\n";
         assert_eq!(parse_fonts(text), vec!["Custom Font"]);
     }
+
+    #[test]
+    fn parse_fonts_empty_input() {
+        assert!(parse_fonts("").is_empty());
+    }
+
+    #[test]
+    fn parse_fonts_no_matching_lines() {
+        let text = "foo\n  bar    REG_DWORD    1\n  baz\n";
+        assert!(parse_fonts(text).is_empty());
+    }
+
+    #[test]
+    fn parse_fonts_strips_trailing_type_suffix() {
+        let text = "    Cascadia Code (TrueType)    REG_SZ    cascadia.ttf\r\n    Segoe UI (All res)    REG_SZ    segoeui.ttf\r\n    FiraCode (OpenType)    REG_SZ    firacode.otf\r\n";
+        let fonts = parse_fonts(text);
+        assert_eq!(fonts, vec!["Cascadia Code", "FiraCode", "Segoe UI"]);
+    }
+
+    #[test]
+    fn parse_fonts_empty_name_after_strip_is_skipped() {
+        let text = "    ()    REG_SZ    font.ttf\r\n    Name (TrueType)    REG_SZ    name.ttf\r\n";
+        assert_eq!(parse_fonts(text), vec!["Name"]);
+    }
 }

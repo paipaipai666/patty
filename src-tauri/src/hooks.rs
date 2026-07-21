@@ -390,6 +390,22 @@ mod tests {
         assert_eq!(map_event_to_attention_type("post_tool_use"), None);
     }
 
+    #[test]
+    fn source_to_ai_type_mapping() {
+        assert_eq!(map_source_to_ai_type("opencode"), Some("opencode"));
+        assert_eq!(map_source_to_ai_type("codex"), Some("codex"));
+        assert_eq!(map_source_to_ai_type("claude-code"), Some("claude"));
+        assert_eq!(map_source_to_ai_type("unknown-tool"), None);
+    }
+
+    #[test]
+    fn heartbeat_timeout_direct() {
+        assert_eq!(heartbeat_timeout_ms("opencode"), Some(8_000));
+        assert_eq!(heartbeat_timeout_ms("claude-code"), Some(600_000));
+        assert_eq!(heartbeat_timeout_ms("codex"), Some(600_000));
+        assert_eq!(heartbeat_timeout_ms("unknown"), None);
+    }
+
     fn http_post(port: u16, body: &str) -> (u16, String) {
         let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
         let req = format!(

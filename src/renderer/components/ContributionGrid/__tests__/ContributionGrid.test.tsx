@@ -7,7 +7,7 @@ vi.mock('../../../utils/gridScheduler', () => ({
   unregisterGrid: vi.fn()
 }))
 
-import { ContributionGrid } from '../ContributionGrid'
+import { ContributionGrid, parseRgb } from '../ContributionGrid'
 
 beforeEach(() => {
   document.body.innerHTML = ''
@@ -70,5 +70,35 @@ describe('ContributionGrid', () => {
     const { container } = render('codex')
     const div = container.firstElementChild as HTMLElement
     expect(div?.dataset?.type).toBe('codex')
+  })
+})
+
+describe('parseRgb', () => {
+  it('parses rgb() function syntax', () => {
+    expect(parseRgb('rgb(100, 200, 50)')).toEqual([100, 200, 50])
+  })
+
+  it('parses rgba() function syntax (ignores alpha)', () => {
+    expect(parseRgb('rgba(255, 0, 128, 0.5)')).toEqual([255, 0, 128])
+  })
+
+  it('parses 6-digit hex color', () => {
+    expect(parseRgb('#ff8000')).toEqual([255, 128, 0])
+  })
+
+  it('parses hex with uppercase letters', () => {
+    expect(parseRgb('#AA00CC')).toEqual([170, 0, 204])
+  })
+
+  it('returns fallback [200,200,200] for short hex', () => {
+    expect(parseRgb('#fff')).toEqual([200, 200, 200])
+  })
+
+  it('returns fallback for empty string', () => {
+    expect(parseRgb('')).toEqual([200, 200, 200])
+  })
+
+  it('returns fallback for invalid color', () => {
+    expect(parseRgb('not-a-color')).toEqual([200, 200, 200])
   })
 })

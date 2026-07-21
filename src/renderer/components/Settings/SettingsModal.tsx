@@ -38,7 +38,7 @@ const SHORTCUT_KEYS: { key: keyof ShortcutMap; label: string }[] = [
   { key: 'settings', label: 'Open Settings' }
 ]
 
-function formatShortcut(e: KeyboardEvent): string {
+export function formatShortcut(e: KeyboardEvent): string {
   const parts: string[] = []
   if (e.ctrlKey) parts.push('Ctrl')
   if (e.altKey) parts.push('Alt')
