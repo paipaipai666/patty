@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import styles from './MetricsDashboard.module.css'
 import type { MetricSample, FirstTerminalEntry } from '../../../shared/metricsTypes'
 
@@ -21,7 +21,7 @@ function formatAxisValue(n: number, unit: string): string {
   return `${n.toFixed(n >= 100 ? 0 : 1)}${unit}`
 }
 
-function HistoryChart({
+const HistoryChart = memo(function HistoryChart({
   series,
   width = 720,
   height = 120,
@@ -116,7 +116,7 @@ function HistoryChart({
       </div>
     </div>
   )
-}
+})
 
 export function MetricsDashboard({ open, onClose }: MetricsDashboardProps) {
   const [samples, setSamples] = useState<MetricSample[]>([])
@@ -142,6 +142,35 @@ export function MetricsDashboard({ open, onClose }: MetricsDashboardProps) {
       unsubscribe()
     }
   }, [open])
+
+  // Memoized chart inputs: without this, every render rebuilds all series
+  // arrays, defeating HistoryChart's memo.
+  const cpuSeries = useMemo(
+    () => [
+      { data: samples.map((s) => s.systemCpu), color: 'var(--cyan)', label: 'System CPU load' },
+      { data: samples.map((s) => s.appCpu), color: 'var(--amber)', label: 'App CPU load' }
+    ],
+    [samples]
+  )
+  const memSeries = useMemo(
+    () => [
+      { data: samples.map((s) => s.systemMemUsedMB), color: 'var(--green)', label: 'System memory' },
+      { data: samples.map((s) => s.appMemMB), color: 'var(--amber)', label: 'App memory' }
+    ],
+    [samples]
+  )
+  const gpuUtilSeries = useMemo(
+    () => [
+      { data: samples.map((s) => s.gpuUtil ?? 0), color: 'var(--indigo)', label: 'GPU 3D (system-wide)' }
+    ],
+    [samples]
+  )
+  const gpuMemSeries = useMemo(
+    () => [
+      { data: samples.map((s) => s.gpuMemMB), color: 'var(--indigo)', label: 'GPU memory (proxy)' }
+    ],
+    [samples]
+  )
 
   if (!open) return null
 
@@ -202,46 +231,14 @@ export function MetricsDashboard({ open, onClose }: MetricsDashboardProps) {
 
           <div className={styles.section}>
             <div className={styles.sectionTitle}>History</div>
-            <HistoryChart
-              series={[
-                { data: samples.map((s) => s.systemCpu), color: 'var(--cyan)', label: 'System CPU load' },
-                { data: samples.map((s) => s.appCpu), color: 'var(--amber)', label: 'App CPU load' }
-              ]}
-              maxY={100}
-              unit="%"
-            />
-            <HistoryChart
-              series={[
-                { data: samples.map((s) => s.systemMemUsedMB), color: 'var(--green)', label: 'System memory' },
-                { data: samples.map((s) => s.appMemMB), color: 'var(--amber)', label: 'App memory' }
-              ]}
-              unit="MB"
-            />
+            <HistoryChart series={cpuSeries} maxY={100} unit="%" />
+            <HistoryChart series={memSeries} unit="MB" />
             {hasGpuUtil ? (
-              <HistoryChart
-                series={[
-                  {
-                    data: samples.map((s) => s.gpuUtil ?? 0),
-                    color: 'var(--indigo)',
-                    label: 'GPU 3D (system-wide)'
-                  }
-                ]}
-                maxY={100}
-                unit="%"
-              />
+              <HistoryChart series={gpuUtilSeries} maxY={100} unit="%" />
             ) : (
               <div className={styles.empty}>No real GPU utilization history yet (proxy mode).</div>
             )}
-            <HistoryChart
-              series={[
-                {
-                  data: samples.map((s) => s.gpuMemMB),
-                    color: 'var(--indigo)',
-                    label: 'GPU memory (proxy)'
-                }
-              ]}
-              unit="MB"
-            />
+            <HistoryChart series={gpuMemSeries} unit="MB" />
           </div>
 
           <div className={styles.section}>

@@ -106,16 +106,43 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-// ponytail: no spawn timeout (the TS version used 10s) — a wedged powershell
-// stalls the sequential sampling thread instead of piling up processes.
-fn sample_counters(gpu_available: bool) -> (f64, Option<f64>) {
-    let script = if gpu_available { CPU_GPU_SCRIPT } else { CPU_ONLY_SCRIPT };
-    let out = Command::new("powershell.exe")
+// A wedged powershell (e.g. a stuck WMI provider) must not stall the
+// sequential sampling thread forever — kill it after a timeout and skip.
+const SAMPLE_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn run_powershell(script: &str) -> Option<std::process::Output> {
+    let mut child = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
         // GUI app: without this flag each sample would pop a visible console.
         .creation_flags(0x08000000)
-        .output();
-    let Ok(out) = out else {
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    let deadline = std::time::Instant::now() + SAMPLE_TIMEOUT;
+    loop {
+        match child.try_wait() {
+            // wait_with_output after exit just drains the pipe; the script's
+            // output is two lines, far under the pipe buffer, so the child can
+            // never block on a full pipe while we poll.
+            Ok(Some(_)) => return child.wait_with_output().ok(),
+            Ok(None) if std::time::Instant::now() < deadline => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            Ok(None) => {
+                eprintln!("[metrics] powershell sample timed out; killing");
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Err(_) => return None,
+        }
+    }
+}
+
+fn sample_counters(gpu_available: bool) -> (f64, Option<f64>) {
+    let script = if gpu_available { CPU_GPU_SCRIPT } else { CPU_ONLY_SCRIPT };
+    let Some(out) = run_powershell(script) else {
         return (0.0, None);
     };
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -181,7 +208,9 @@ fn capture_sample(app: &AppHandle) {
             data.samples.remove(0);
         }
     }
-    let _ = app.emit("metrics:tick", sample);
+    if let Err(e) = app.emit("metrics:tick", sample) {
+        eprintln!("[metrics] emit metrics:tick failed: {e}");
+    }
 }
 
 pub fn set_sampling(app: &AppHandle, enabled: bool) {

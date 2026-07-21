@@ -3,13 +3,14 @@ use std::os::windows::process::CommandExt;
 use std::sync::{LazyLock, Mutex};
 
 // Font names from the registry come back in the console's OEM codepage, so
-// decode with the active codepage (chcp) instead of assuming UTF-8.
+// decode with the active codepage (chcp) instead of assuming UTF-8. Detected
+// fresh on each fetch: the codepage can change at runtime (e.g. `chcp 65001`)
+// and a cached encoding would decode names with the stale codepage. get_fonts
+// caches the decoded result, so this only runs on first fetch — one chcp call
+// is negligible.
 fn codepage_encoding() -> &'static encoding_rs::Encoding {
-    static CACHE: LazyLock<&'static encoding_rs::Encoding> = LazyLock::new(|| {
-        let label = detect_codepage_label();
-        encoding_rs::Encoding::for_label(label.as_bytes()).unwrap_or(encoding_rs::UTF_8)
-    });
-    *CACHE
+    let label = detect_codepage_label();
+    encoding_rs::Encoding::for_label(label.as_bytes()).unwrap_or(encoding_rs::UTF_8)
 }
 
 fn detect_codepage_label() -> String {

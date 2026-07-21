@@ -1,3 +1,22 @@
+.workspaceActive {
+  width: 100%;
+  height: 100%;
+  animation: workspaceFadeIn 160ms ease-out;
+}
+
+.workspaceHidden {
+  display: none;
+}
+
+@keyframes workspaceFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .split {
   display: flex;
   width: 100%;
@@ -27,6 +46,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .workspaceActive {
+    animation: none;
+  }
   .split {
     transition: none;
   }

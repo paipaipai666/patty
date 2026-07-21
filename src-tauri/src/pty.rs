@@ -1,12 +1,12 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::os::windows::process::CommandExt;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -34,18 +34,47 @@ pub struct Session {
     shared: Arc<Shared>,
 }
 
-static SESSIONS: LazyLock<Mutex<HashMap<String, Arc<Session>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+static SESSIONS: LazyLock<RwLock<HashMap<String, Arc<Session>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
-// Serializes the check-then-spawn sequence in create() and warm(). Startup
-// warming runs on a background thread, so without this a renderer create()
-// and a warm() for the same id could both pass the map check and spawn two
-// PTYs — the loser leaks and duplicates output onto the shared event channel.
-static SPAWN_LOCK: Mutex<()> = Mutex::new(());
+// Per-id spawn guards: serialize the check-then-spawn sequence in create() and
+// warm() for the SAME id only. Startup warming runs on a background thread, so
+// without this a renderer create() and a warm() for the same id could both
+// pass the map check and spawn two PTYs — the loser leaks and duplicates
+// output onto the shared event channel. Unrelated ids spawn concurrently.
+static SPAWNING: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+
+struct SpawnGuard(String);
+
+impl Drop for SpawnGuard {
+    fn drop(&mut self) {
+        SPAWNING.lock().unwrap().remove(&self.0);
+    }
+}
+
+fn try_begin_spawn(id: &str) -> Option<SpawnGuard> {
+    let mut set = SPAWNING.lock().unwrap();
+    if set.insert(id.to_string()) {
+        Some(SpawnGuard(id.to_string()))
+    } else {
+        None
+    }
+}
+
+fn begin_spawn(id: &str) -> SpawnGuard {
+    loop {
+        if let Some(guard) = try_begin_spawn(id) {
+            return guard;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+}
 
 fn emit(app: &Option<AppHandle>, event: &str, payload: impl serde::Serialize + Clone) {
     if let Some(app) = app {
-        let _ = app.emit(event, payload);
+        if let Err(e) = app.emit(event, payload) {
+            eprintln!("[pty] emit {event} failed: {e}");
+        }
     }
 }
 
@@ -293,7 +322,7 @@ fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
     // Only the session still registered under this id may report its exit —
     // a replaced pty must not delete its successor or emit a stale event.
     let app = {
-        let mut map = SESSIONS.lock().unwrap();
+        let mut map = SESSIONS.write().unwrap();
         let Some(session) = map.get(&id) else { return };
         if !Arc::ptr_eq(&session.child, &child) {
             return;
@@ -368,7 +397,7 @@ fn spawn_inner(
         child: child.clone(),
         shared: shared.clone(),
     });
-    SESSIONS.lock().unwrap().insert(id.to_string(), session.clone());
+    SESSIONS.write().unwrap().insert(id.to_string(), session.clone());
 
     let reader_id = id.to_string();
     let reader_session = session.clone();
@@ -399,9 +428,9 @@ pub fn create(
     cols: Option<u16>,
     rows: Option<u16>,
 ) -> Value {
-    let _spawn_guard = SPAWN_LOCK.lock().unwrap();
+    let _spawn_guard = begin_spawn(id);
     // Reattach to a preheated session when cwd/shell match.
-    let mut map = SESSIONS.lock().unwrap();
+    let mut map = SESSIONS.write().unwrap();
     if let Some(existing) = map.get(id) {
         let matches = existing.cwd.as_deref() == cwd && existing.shell.as_deref() == shell;
         if !existing.shared.attached.load(Ordering::Relaxed) && matches {
@@ -434,8 +463,11 @@ pub fn create(
 /// Pre-spawn a PTY for a session expected to mount soon; early output is
 /// buffered and replayed on attach.
 pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>) {
-    let _spawn_guard = SPAWN_LOCK.lock().unwrap();
-    if SESSIONS.lock().unwrap().contains_key(id) {
+    // A spawn for this id is already in flight — this warm is redundant.
+    let Some(_spawn_guard) = try_begin_spawn(id) else {
+        return;
+    };
+    if SESSIONS.read().unwrap().contains_key(id) {
         return;
     }
     if let Err(e) = spawn_inner(Some(app), id, cwd, shell, None, None, false) {
@@ -488,7 +520,7 @@ fn leaf_session_ids(tree: &Value) -> Vec<String> {
 }
 
 pub fn write(id: &str, data: &str) {
-    let session = SESSIONS.lock().unwrap().get(id).cloned();
+    let session = SESSIONS.read().unwrap().get(id).cloned();
     if let Some(session) = session {
         let mut writer = session.writer.lock().unwrap();
         // PTY may have exited; ignore write errors (EPIPE), same as before.
@@ -498,7 +530,7 @@ pub fn write(id: &str, data: &str) {
 }
 
 pub fn resize(id: &str, cols: u16, rows: u16) {
-    let session = SESSIONS.lock().unwrap().get(id).cloned();
+    let session = SESSIONS.read().unwrap().get(id).cloned();
     if let Some(session) = session {
         let _ = session.master.lock().unwrap().resize(PtySize {
             rows,
@@ -510,7 +542,7 @@ pub fn resize(id: &str, cols: u16, rows: u16) {
 }
 
 pub fn kill(id: &str) -> Value {
-    let victim = SESSIONS.lock().unwrap().remove(id);
+    let victim = SESSIONS.write().unwrap().remove(id);
     if let Some(session) = victim {
         let _ = session.child.lock().unwrap().kill();
     }
@@ -519,7 +551,7 @@ pub fn kill(id: &str) -> Value {
 }
 
 pub fn session_exists(id: &str) -> bool {
-    SESSIONS.lock().unwrap().contains_key(id)
+    SESSIONS.read().unwrap().contains_key(id)
 }
 
 #[cfg(test)]
@@ -547,7 +579,45 @@ mod tests {
     }
 
     #[test]
-    fn shell_args_inject_integration_for_powershell() {
+    fn decode_empty_input_yields_empty_string() {
+        let mut carry = Vec::new();
+        let out = decode(&mut carry, &[]);
+        assert_eq!(out, "");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn decode_all_invalid_consumes_and_replaces() {
+        let mut carry = Vec::new();
+        let out = decode(&mut carry, &[0xFF, 0xFE, 0x80]);
+        assert_eq!(out, "\u{FFFD}\u{FFFD}\u{FFFD}");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn decode_carry_persists_across_empty_chunk() {
+        let mut carry = Vec::new();
+        let first = decode(&mut carry, &[0xE7]);
+        assert_eq!(first, "");
+        assert_eq!(carry, vec![0xE7]);
+        let second = decode(&mut carry, &[]);
+        assert_eq!(second, "", "empty chunk should preserve carry");
+        assert_eq!(carry, vec![0xE7], "carry must survive empty input");
+        let third = decode(&mut carry, &[0x81, 0xAB]);
+        assert_eq!(third, "火");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn shell_args_integration_for_pwsh_path() {
+        let args = shell_spawn_args(r"D:\PowerShell7\7\pwsh.exe");
+        assert!(args.contains(&"-NoLogo".into()), "pwsh gets no-logo args");
+        assert!(args.contains(&"-NoExit".into()));
+        assert!(args.last().unwrap().contains("pwsh.ps1"));
+    }
+
+    #[test]
+    fn shell_args_for_powershell() {
         let args = shell_spawn_args(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe");
         assert!(args.contains(&"-ExecutionPolicy".into()));
         assert!(args.last().unwrap().contains("pwsh.ps1"));
@@ -557,6 +627,20 @@ mod tests {
     fn shell_args_cmd_and_other() {
         assert_eq!(shell_spawn_args(r"C:\Windows\System32\cmd.exe")[0], "/k");
         assert!(shell_spawn_args(r"C:\Program Files\Git\bin\bash.exe").is_empty());
+    }
+
+    #[test]
+    fn shell_args_unknown_shell_returns_empty() {
+        assert!(shell_spawn_args(r"C:\tools\my-custom-shell.exe").is_empty());
+        assert!(shell_spawn_args(r"").is_empty(), "empty path yields empty args");
+    }
+
+    #[test]
+    fn shell_args_pwsh_accepts_various_pwsh_paths() {
+        let args = shell_spawn_args(r"/usr/bin/pwsh");
+        assert!(args.last().unwrap().contains("pwsh.ps1"), "unix-style pwsh path works");
+        let args = shell_spawn_args(r"pwsh");
+        assert!(args.last().unwrap().contains("pwsh.ps1"), "bare pwsh name works");
     }
 
     #[test]
@@ -620,7 +704,7 @@ mod tests {
         assert!(pid > 0);
         thread::sleep(Duration::from_millis(500));
         {
-            let map = SESSIONS.lock().unwrap();
+            let map = SESSIONS.read().unwrap();
             let session = map.get(&id).expect("session registered");
             let buffered = session.shared.buffer.lock().unwrap().join("");
             assert!(!buffered.is_empty(), "expected some shell banner output");
@@ -630,7 +714,7 @@ mod tests {
         write(&id, "exit\r");
         let mut gone = false;
         for _ in 0..40 {
-            if !SESSIONS.lock().unwrap().contains_key(&id) {
+            if !SESSIONS.read().unwrap().contains_key(&id) {
                 gone = true;
                 break;
             }

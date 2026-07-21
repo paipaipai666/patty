@@ -174,6 +174,16 @@ export default function App() {
     [removeSession]
   )
 
+  // Close every terminal: removeSession kills each PTY (it calls api.kill
+  // internally), removeSessionEverywhere prunes the pane trees.
+  const handleCloseAllSessions = useCallback(() => {
+    const ids = useSessionStore.getState().sessions.map((s) => s.id)
+    for (const id of ids) {
+      removeSession(id)
+      useWorkspaceStore.getState().removeSessionEverywhere(id)
+    }
+  }, [removeSession])
+
   // Split the focused pane: the new half inherits the focused session's cwd
   // (tmux-style) and shell. The new session becomes a leaf beside the focused
   // one and receives focus.
@@ -332,6 +342,10 @@ export default function App() {
       {
         label: 'Close',
         action: () => handleCloseSession(sessionId)
+      },
+      {
+        label: 'Close All Terminals',
+        action: () => handleCloseAllSessions()
       }
     ]
   }

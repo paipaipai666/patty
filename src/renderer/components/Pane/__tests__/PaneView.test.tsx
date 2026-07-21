@@ -121,4 +121,20 @@ describe('PaneView', () => {
     expect(onFocus).toHaveBeenCalledWith('p1')
     expect(useSessionStore.getState().setActive).toHaveBeenCalledWith('s1')
   })
+
+  it('shows drop hint when another session is being dragged', () => {
+    useSessionStore.getState().draggingSessionId = 's2'
+    const { container } = renderPaneView()
+    const hint = container.querySelector('[aria-hidden]')
+    expect(hint).not.toBeNull()
+  })
+
+  it('does not show drop hint when dragging own session', () => {
+    useSessionStore.getState().draggingSessionId = 's1'
+    const { container } = renderPaneView()
+    const hint = container.querySelector('[aria-hidden]')
+    expect(hint).toBeNull()
+  })
+
+
 })

@@ -86,7 +86,9 @@ pub fn start_heartbeat_watchdog(app: AppHandle) {
             expired
         };
         for id in expired {
-            let _ = app.emit("pty:attn", (id, Value::Null, Value::Null));
+            if let Err(e) = app.emit("pty:attn", (id, Value::Null, Value::Null)) {
+                eprintln!("[hooks] emit pty:attn failed: {e}");
+            }
         }
     });
 }
@@ -123,18 +125,8 @@ fn map_source_to_ai_type(source: &str) -> Option<&'static str> {
 }
 
 pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str) {
-    // 心跳租约：所有来源事件都刷新该 pane 的 keepalive
     note_event(pane_id, event, source);
 
-    // 会话结束 → 清除 aiType。清理信号必须在 enabled 检查之前发射：
-    // 用户在会话活跃期间关掉通知开关后，session_end 仍要熄灭动画，
-    // 否则 ACTIVE 已移除条目但前端 aiType 永久残留。
-    if event == "session_end" || event == "session_deleted" {
-        let _ = app.emit("pty:attn", (pane_id.to_string(), Value::Null, Value::Null));
-        return;
-    }
-
-    // 检查对应工具是否启用
     let settings = crate::store::load_settings();
     let enabled = match source {
         "claude-code" => settings["notifications"]["claudeCode"].as_bool().unwrap_or(true),
@@ -142,23 +134,38 @@ pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str
         "codex" => settings["notifications"]["codex"].as_bool().unwrap_or(true),
         _ => true,
     };
+    for (evt, payload) in compute_hook_events(pane_id, event, source, enabled) {
+        if let Err(e) = app.emit(evt, payload) {
+            eprintln!("[hooks] emit {evt} failed: {e}");
+        }
+    }
+}
+
+/// Pure event computation for a hook request — no Tauri dependency.
+/// Returns a list of (event_name, payload) to emit; empty = nothing to do.
+fn compute_hook_events<'a>(
+    pane_id: &'a str,
+    event: &'a str,
+    source: &'a str,
+    enabled: bool,
+) -> Vec<(&'a str, Value)> {
+    let pane = pane_id.to_string();
+
+    if event == "session_end" || event == "session_deleted" {
+        return vec![("pty:attn", json!((pane, Value::Null, Value::Null)))];
+    }
     if !enabled {
-        return;
+        return vec![];
     }
 
     let ai_type = map_source_to_ai_type(source);
-    let pane = pane_id.to_string();
-
     match event {
-        // 会话开始 → 设置 aiType
         "session_start" | "session_created" => {
-            let _ = app.emit("pty:attn", (pane, Value::Null, ai_type));
+            vec![("pty:attn", json!((pane, Value::Null, ai_type)))]
         }
-        _ => {
-            if let Some(attention_type) = map_event_to_attention_type(event) {
-                let _ = app.emit("pty:attn", (pane, attention_type, ai_type));
-            }
-        }
+        _ => map_event_to_attention_type(event)
+            .map(|kind| vec![("pty:attn", json!((pane, kind, ai_type)))])
+            .unwrap_or_default(),
     }
 }
 
@@ -188,7 +195,7 @@ pub fn start_hook_server(app: AppHandle) -> Result<u16, String> {
         return Ok(hook_port());
     }
     let secret = hook_secret().to_string();
-    let server = tiny_http::Server::http("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let server = std::sync::Arc::new(tiny_http::Server::http("127.0.0.1:0").map_err(|e| e.to_string())?);
     let port = server
         .server_addr()
         .to_ip()
@@ -197,12 +204,19 @@ pub fn start_hook_server(app: AppHandle) -> Result<u16, String> {
     HOOK_PORT.store(port, Ordering::Relaxed);
     eprintln!("[hook-server] listening on 127.0.0.1:{port}");
 
-    thread::spawn(move || {
-        for mut request in server.incoming_requests() {
-            let response = handle_request(&app, &mut request, &secret);
-            let _ = request.respond(response);
-        }
-    });
+    // Small worker pool pulling from the shared request queue: hook bursts
+    // from multiple AI tools no longer queue behind one sequential loop.
+    for _ in 0..4 {
+        let server = server.clone();
+        let app = app.clone();
+        let secret = secret.clone();
+        thread::spawn(move || {
+            for mut request in server.incoming_requests() {
+                let response = handle_request(&app, &mut request, &secret);
+                let _ = request.respond(response);
+            }
+        });
+    }
     Ok(port)
 }
 
@@ -301,6 +315,70 @@ mod tests {
         // At 599_999, codex (600s) is still alive; opencode is long gone.
         let later = collect_expired_with_now(&active, 599_999);
         assert!(!later.contains(&"b".to_string()));
+    }
+
+    #[test]
+    fn compute_events_session_end_clears_ai_type() {
+        let events = compute_hook_events("p1", "session_end", "opencode", true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, "pty:attn");
+        assert_eq!(events[0].1[0], "p1");
+        assert!(events[0].1[1].is_null());
+        assert!(events[0].1[2].is_null());
+    }
+
+    #[test]
+    fn compute_events_session_end_ignores_enabled_flag() {
+        let events = compute_hook_events("p1", "session_end", "opencode", false);
+        assert_eq!(events.len(), 1, "session_end clears ai even when disabled");
+    }
+
+    #[test]
+    fn compute_events_disabled_source_returns_nothing() {
+        let events = compute_hook_events("p1", "idle", "opencode", false);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn compute_events_session_start_sets_ai_type() {
+        let events = compute_hook_events("p1", "session_start", "opencode", true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1[2], "opencode");
+    }
+
+    #[test]
+    fn compute_events_session_start_with_codex() {
+        let events = compute_hook_events("p1", "session_start", "codex", true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1[2], "codex");
+    }
+
+    #[test]
+    fn compute_events_permission_maps_to_attention() {
+        let events = compute_hook_events("p1", "permission_prompt", "claude-code", true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1[1], "permission");
+        assert_eq!(events[0].1[2], "claude");
+    }
+
+    #[test]
+    fn compute_events_unknown_source_sets_null_ai_type() {
+        let events = compute_hook_events("p1", "idle", "unknown-tool", true);
+        assert_eq!(events.len(), 1);
+        assert!(events[0].1[2].is_null());
+    }
+
+    #[test]
+    fn compute_events_unknown_event_returns_nothing() {
+        let events = compute_hook_events("p1", "post_tool_use", "opencode", true);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn compute_events_error_event_maps_to_error_attention() {
+        let events = compute_hook_events("p1", "error_rate_limit", "opencode", true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1[1], "error");
     }
 
     #[test]

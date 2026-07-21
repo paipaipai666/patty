@@ -96,7 +96,9 @@ export const terminalAPI = {
   // State persistence
   stateLoad: () => invoke<PersistedState>('state_load'),
   stateSave: (state: PersistedState) => {
-    void invoke('state_save', { state })
+    void invoke('state_save', { state }).catch((err) => {
+      console.error('[state] save failed:', err)
+    })
   },
 
   // Perf

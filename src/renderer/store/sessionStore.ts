@@ -86,6 +86,16 @@ let sidebarTransitionTimer: ReturnType<typeof setTimeout> | null = null
 
 export function teardownSessionIPC() {
   if (ipcCleanup) ipcCleanup()
+  // Also reset module-level timers so tests and StrictMode remounts don't
+  // inherit stale timer state from a previous mount.
+  for (const id of Object.keys(attentionTimers)) {
+    clearTimeout(attentionTimers[id])
+    delete attentionTimers[id]
+  }
+  if (sidebarTransitionTimer) {
+    clearTimeout(sidebarTransitionTimer)
+    sidebarTransitionTimer = null
+  }
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({

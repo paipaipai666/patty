@@ -45,11 +45,7 @@ export function PaneTreeRoot() {
         return (
           <div
             key={ws.id}
-            style={{
-              display: active ? 'contents' : 'none',
-              width: '100%',
-              height: '100%'
-            }}
+            className={active ? styles.workspaceActive : styles.workspaceHidden}
           >
             {renderChildren && ws.tree && renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
           </div>

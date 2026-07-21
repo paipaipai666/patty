@@ -15,7 +15,24 @@ export default defineConfig({
   build: {
     outDir: resolve('out/renderer'),
     emptyOutDir: true,
-    target: 'es2022'
+    target: 'es2022',
+    rollupOptions: {
+      output: {
+        // Split the xterm bundle out of the main chunk so the app shell parses
+        // first; the terminal chunk loads in parallel.
+        manualChunks: {
+          xterm: [
+            '@xterm/xterm',
+            '@xterm/addon-canvas',
+            '@xterm/addon-fit',
+            '@xterm/addon-image',
+            '@xterm/addon-unicode11',
+            '@xterm/addon-web-links',
+            '@xterm/addon-webgl'
+          ]
+        }
+      }
+    }
   },
   server: {
     // Tauri requires a fixed devUrl port.
