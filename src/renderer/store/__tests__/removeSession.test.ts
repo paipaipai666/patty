@@ -6,8 +6,7 @@ vi.stubGlobal('window', {
     kill,
     stateLoad: vi.fn(),
     onAttentionChange: vi.fn(() => vi.fn()),
-    onPtyExit: vi.fn(() => vi.fn()),
-    resetAttention: vi.fn()
+    onPtyExit: vi.fn(() => vi.fn())
   },
   addEventListener: vi.fn()
 })

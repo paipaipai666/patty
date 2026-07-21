@@ -101,17 +101,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   loadState: async () => {
     try {
-      const state = await window.terminalAPI.stateLoad()
-      set({
-        sessions: state.sessions.map((s) => ({ ...s, createdAt: s.createdAt ?? Date.now(), pid: 0, aiType: null })),
-        collections: state.collections,
-        activeSessionId: state.activeSessionId,
-        sidebarVisible: state.sidebarVisible,
-        sidebarWidth: state.sidebarWidth,
-        loaded: true
-      })
-
-      // Listen for attention changes from hook server
+      // Listen for attention changes from hook server.
+      // Registered BEFORE awaiting stateLoad: the hook server starts before
+      // the webview, so events arriving during the await would be lost.
       // Guard against duplicate registration (e.g. React StrictMode remount)
       if (ipcCleanup) ipcCleanup()
       const offAttention = window.terminalAPI.onAttentionChange((sessionId, eventType, aiType) => {
@@ -134,6 +126,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         offPtyExit()
         ipcCleanup = null
       }
+
+      const state = await window.terminalAPI.stateLoad()
+      set({
+        sessions: state.sessions.map((s) => ({ ...s, createdAt: s.createdAt ?? Date.now(), pid: 0, aiType: null })),
+        collections: state.collections,
+        activeSessionId: state.activeSessionId,
+        sidebarVisible: state.sidebarVisible,
+        sidebarWidth: state.sidebarWidth,
+        loaded: true
+      })
 
       // Return the raw persisted state so the caller (App) can forward the
       // workspaces/activeWorkspaceId to workspaceStore without a second IPC
@@ -384,6 +386,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }, 1000)
     }
     set((state) => {
+      if (eventType === null) {
+        // Remove the key entirely so cleared entries don't linger in the map
+        if (!(id in state.attentionMap)) return state
+        const next = { ...state.attentionMap }
+        delete next[id]
+        return { attentionMap: next }
+      }
       if (state.attentionMap[id] === eventType) return state
       return { attentionMap: { ...state.attentionMap, [id]: eventType } }
     })
@@ -391,7 +400,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   resetAttention: (id: string) => {
     get().setAttention(id, null)
-    window.terminalAPI.resetAttention(id)
   },
 
   setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | null) => {

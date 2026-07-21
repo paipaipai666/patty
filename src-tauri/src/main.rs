@@ -123,9 +123,6 @@ fn get_hook_port() -> u16 {
 }
 
 #[tauri::command]
-fn reset_attention() {}
-
-#[tauri::command]
 async fn select_directory() -> Value {
     let folder = rfd::AsyncFileDialog::new()
         .set_title("Select project directory")
@@ -278,7 +275,6 @@ fn main() {
             detect_shells,
             get_fonts,
             get_hook_port,
-            reset_attention,
             select_directory,
             theme_export,
             theme_import,

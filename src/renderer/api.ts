@@ -43,10 +43,6 @@ export const terminalAPI = {
     asyncUnsub(listen<number>(`pty:exit:${id}`, (event) => callback(event.payload))),
 
   // Attention management
-  resetAttention: (id: string) => {
-    void invoke('reset_attention', { id })
-  },
-
   onAttentionChange: (
     callback: (sessionId: string, eventType: string | null, aiType?: string | null) => void
   ): Unsubscribe =>

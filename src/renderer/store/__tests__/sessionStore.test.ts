@@ -15,14 +15,12 @@ const mockOnPtyExit = vi.fn((cb) => {
   capturedPtyExitCallback = cb
   return vi.fn()
 })
-const mockResetAttention = vi.fn()
 
 vi.stubGlobal('window', {
   terminalAPI: {
     stateLoad: mockStateLoad,
     onAttentionChange: mockOnAttentionChange,
-    onPtyExit: mockOnPtyExit,
-    resetAttention: mockResetAttention
+    onPtyExit: mockOnPtyExit
   },
   addEventListener: vi.fn()
 })
@@ -327,10 +325,11 @@ describe('attention', () => {
     expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
   })
 
-  it('setAttention with null clears the event type', () => {
+  it('setAttention with null removes the entry', () => {
     useSessionStore.setState({ attentionMap: { s1: 'start' } })
     useSessionStore.getState().setAttention('s1', null)
-    expect(useSessionStore.getState().attentionMap['s1']).toBeNull()
+    expect(useSessionStore.getState().attentionMap['s1']).toBeUndefined()
+    expect('s1' in useSessionStore.getState().attentionMap).toBe(false)
   })
 
   it('setAttention latest call wins within the coalesce window', () => {
@@ -342,9 +341,10 @@ describe('attention', () => {
     expect(useSessionStore.getState().attentionMap['s1']).toBe('permission')
   })
 
-  it('resetAttention calls setAttention with null and IPC', () => {
+  it('resetAttention clears the attention entry', () => {
+    useSessionStore.setState({ attentionMap: { s1: 'start' } })
     useSessionStore.getState().resetAttention('s1')
-    expect(mockResetAttention).toHaveBeenCalledWith('s1')
+    expect('s1' in useSessionStore.getState().attentionMap).toBe(false)
   })
 
   it('setAiType sets the ai type on a session', () => {
@@ -461,7 +461,7 @@ describe('loadState / saveState', () => {
     // Simulate a PTY exit event
     capturedPtyExitCallback!('s1')
 
-    expect(useSessionStore.getState().attentionMap['s1']).toBeNull()
+    expect(useSessionStore.getState().attentionMap['s1']).toBeUndefined()
     expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
   })
 
