@@ -79,13 +79,20 @@ fn cmd_hook(matcher: &str, command: String) -> Value {
     })
 }
 
-fn args_hook(matcher: &str, event_type: &str, hook_script_path: &str) -> Value {
+fn args_hook(matcher: &str, extra_args: &[&str], hook_script_path: &str) -> Value {
+    let mut args = vec![
+        json!("-ExecutionPolicy"),
+        json!("Bypass"),
+        json!("-File"),
+        json!(hook_script_path),
+    ];
+    args.extend(extra_args.iter().map(|a| json!(a)));
     json!({
         "matcher": matcher,
         "hooks": [{
             "type": "command",
             "command": "powershell",
-            "args": ["-ExecutionPolicy", "Bypass", "-File", hook_script_path, "-EventType", event_type]
+            "args": args
         }]
     })
 }
@@ -111,21 +118,24 @@ fn command_contains(h: &Value, needle: &str) -> bool {
         .is_some_and(|c| c.contains(needle))
 }
 
-fn is_patty_cmd_hook(n: &Value) -> bool {
-    n.get("hooks")
-        .and_then(Value::as_array)
-        .is_some_and(|hooks| hooks.iter().any(|h| command_contains(h, "patty-hook.ps1")))
-}
-
-fn is_patty_args_hook(n: &Value) -> bool {
+// Unified Patty-entry predicate: matches both the legacy cmd form (full
+// command string containing the script path) and the current args form
+// (script path inside the args array), so old installs are replaced in
+// place instead of duplicated on upgrade.
+fn is_patty_hook(n: &Value) -> bool {
     n.get("hooks")
         .and_then(Value::as_array)
         .is_some_and(|hooks| {
             hooks.iter().any(|h| {
-                command_contains(h, "powershell")
-                    && h.get("args")
+                command_contains(h, "patty-hook.ps1")
+                    || h
+                        .get("args")
                         .and_then(Value::as_array)
-                        .is_some_and(|args| args.iter().any(|a| a.as_str() == Some("-EventType")))
+                        .is_some_and(|args| {
+                            args.iter().any(|a| {
+                                a.as_str().is_some_and(|s| s.contains("patty-hook.ps1"))
+                            })
+                        })
             })
         })
 }
@@ -141,19 +151,18 @@ fn is_patty_codex_hook(n: &Value) -> bool {
 }
 
 fn apply_claude_hooks(settings: &mut Value, hook_script_path: &str) {
-    let hook_command = format!("powershell -ExecutionPolicy Bypass -File \"{hook_script_path}\"");
     let obj = settings.as_object_mut().expect("settings object");
     let hooks = obj.entry("hooks".to_string()).or_insert_with(|| json!({}));
     let path = hook_script_path;
 
-    upsert_hook(hooks, "Notification", cmd_hook(HOOK_MATCHER, hook_command.clone()), is_patty_cmd_hook);
-    upsert_hook(hooks, "Stop", cmd_hook("", hook_command.clone()), is_patty_cmd_hook);
-    upsert_hook(hooks, "StopFailure", cmd_hook(STOP_FAILURE_MATCHER, hook_command), is_patty_cmd_hook);
-    upsert_hook(hooks, "SessionStart", args_hook("startup|resume", "session_start", path), is_patty_args_hook);
-    upsert_hook(hooks, "SessionEnd", args_hook("", "session_end", path), is_patty_args_hook);
-    upsert_hook(hooks, "PreToolUse", args_hook("", "pre_tool_use", path), is_patty_args_hook);
-    upsert_hook(hooks, "PostToolUse", args_hook("", "post_tool_use", path), is_patty_args_hook);
-    upsert_hook(hooks, "UserPromptSubmit", args_hook("", "user_prompt_submit", path), is_patty_args_hook);
+    upsert_hook(hooks, "Notification", args_hook(HOOK_MATCHER, &[], path), is_patty_hook);
+    upsert_hook(hooks, "Stop", args_hook("", &[], path), is_patty_hook);
+    upsert_hook(hooks, "StopFailure", args_hook(STOP_FAILURE_MATCHER, &[], path), is_patty_hook);
+    upsert_hook(hooks, "SessionStart", args_hook("startup|resume", &["-EventType", "session_start"], path), is_patty_hook);
+    upsert_hook(hooks, "SessionEnd", args_hook("", &["-EventType", "session_end"], path), is_patty_hook);
+    upsert_hook(hooks, "PreToolUse", args_hook("", &["-EventType", "pre_tool_use"], path), is_patty_hook);
+    upsert_hook(hooks, "PostToolUse", args_hook("", &["-EventType", "post_tool_use"], path), is_patty_hook);
+    upsert_hook(hooks, "UserPromptSubmit", args_hook("", &["-EventType", "user_prompt_submit"], path), is_patty_hook);
 }
 
 fn apply_codex_hooks(settings: &mut Value, hook_script_path: &str) {
@@ -219,7 +228,7 @@ fn strip_patty_hooks(path: &PathBuf) {
     for list in hooks.values_mut() {
         if let Some(arr) = list.as_array_mut() {
             let before = arr.len();
-            arr.retain(|h| !is_patty_cmd_hook(h) && !is_patty_args_hook(h));
+            arr.retain(|h| !is_patty_hook(h));
             changed |= arr.len() != before;
         }
     }
@@ -259,18 +268,30 @@ mod tests {
     #[test]
     fn upsert_appends_then_replaces() {
         let mut hooks = json!({});
-        let entry = cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into());
-        upsert_hook(&mut hooks, "Stop", entry.clone(), is_patty_cmd_hook);
+        let entry = args_hook("", &[], "X/patty-hook.ps1");
+        upsert_hook(&mut hooks, "Stop", entry.clone(), is_patty_hook);
         assert_eq!(hooks["Stop"].as_array().unwrap().len(), 1);
 
         // An unrelated user hook is preserved; ours is replaced, not duplicated.
         hooks["Stop"].as_array_mut().unwrap().push(cmd_hook("", "echo hi".into()));
-        let updated = cmd_hook("m", "powershell -File \"Y/patty-hook.ps1\"".into());
-        upsert_hook(&mut hooks, "Stop", updated, is_patty_cmd_hook);
+        let updated = args_hook("m", &[], "Y/patty-hook.ps1");
+        upsert_hook(&mut hooks, "Stop", updated, is_patty_hook);
         let list = hooks["Stop"].as_array().unwrap();
         assert_eq!(list.len(), 2);
         assert_eq!(list[0]["matcher"], "m");
         assert_eq!(list[1]["hooks"][0]["command"], "echo hi");
+    }
+
+    #[test]
+    fn upsert_replaces_legacy_cmd_form_entry() {
+        // Old installs used a full command string; the unified predicate must
+        // still match it so upgrades replace in place instead of duplicating.
+        let mut hooks = json!({});
+        hooks["Stop"] = json!([cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into())]);
+        upsert_hook(&mut hooks, "Stop", args_hook("", &[], "X/patty-hook.ps1"), is_patty_hook);
+        let list = hooks["Stop"].as_array().unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(list[0]["hooks"][0].get("args").is_some());
     }
 
     #[test]
@@ -282,6 +303,12 @@ mod tests {
         }
         assert_eq!(settings["model"], "opus");
         assert_eq!(settings["hooks"]["Notification"][0]["matcher"], HOOK_MATCHER);
+        // All claude hooks use the unified args form (command + args array).
+        assert_eq!(
+            settings["hooks"]["Notification"][0]["hooks"][0]["command"],
+            "powershell"
+        );
+        assert!(settings["hooks"]["Notification"][0]["hooks"][0].get("args").is_some());
         assert_eq!(
             settings["hooks"]["SessionStart"][0]["hooks"][0]["args"].as_array().unwrap().last().unwrap(),
             "session_start"
@@ -320,7 +347,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("settings.json");
         let patty_cmd = cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into());
-        let patty_args = args_hook("", "session_start", "X/patty-hook.ps1");
+        let patty_args = args_hook("", &["-EventType", "session_start"], "X/patty-hook.ps1");
         let other = cmd_hook("Bash", "rtk hook claude".into());
         fs::write(
             &file,
