@@ -3,7 +3,7 @@ import { getHeartbeatConfig } from '../heartbeat'
 
 describe('getHeartbeatConfig', () => {
   it('returns config for opencode', () => {
-    expect(getHeartbeatConfig('opencode')).toEqual({ timeoutMs: 15000 })
+    expect(getHeartbeatConfig('opencode')).toEqual({ timeoutMs: 8000 })
   })
 
   it('returns config for claude-code', () => {

@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter};
 
 fn heartbeat_timeout_ms(source: &str) -> Option<u64> {
     match source {
-        "opencode" => Some(15_000),
+        "opencode" => Some(8_000),
         "claude-code" => Some(600_000),
         "codex" => Some(600_000),
         _ => None,
@@ -126,6 +126,14 @@ pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str
     // 心跳租约：所有来源事件都刷新该 pane 的 keepalive
     note_event(pane_id, event, source);
 
+    // 会话结束 → 清除 aiType。清理信号必须在 enabled 检查之前发射：
+    // 用户在会话活跃期间关掉通知开关后，session_end 仍要熄灭动画，
+    // 否则 ACTIVE 已移除条目但前端 aiType 永久残留。
+    if event == "session_end" || event == "session_deleted" {
+        let _ = app.emit("pty:attn", (pane_id.to_string(), Value::Null, Value::Null));
+        return;
+    }
+
     // 检查对应工具是否启用
     let settings = crate::store::load_settings();
     let enabled = match source {
@@ -145,10 +153,6 @@ pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str
         // 会话开始 → 设置 aiType
         "session_start" | "session_created" => {
             let _ = app.emit("pty:attn", (pane, Value::Null, ai_type));
-        }
-        // 会话结束 → 清除 aiType
-        "session_end" | "session_deleted" => {
-            let _ = app.emit("pty:attn", (pane, Value::Null, Value::Null));
         }
         _ => {
             if let Some(attention_type) = map_event_to_attention_type(event) {
@@ -291,7 +295,7 @@ mod tests {
         let mut active = HashMap::new();
         active.insert("a".to_string(), ActiveEntry { source: "opencode".into(), last_seen: 1000 });
         active.insert("b".to_string(), ActiveEntry { source: "codex".into(), last_seen: 1000 });
-        // opencode times out at 15s, codex at 600s.
+        // opencode times out at 8s, codex at 600s.
         let expired = collect_expired_with_now(&active, 20_000);
         assert_eq!(expired, vec!["a".to_string()]);
         // At 599_999, codex (600s) is still alive; opencode is long gone.

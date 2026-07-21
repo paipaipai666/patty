@@ -9,6 +9,8 @@
  * - session.error: 执行出错
  */
 
+import { spawn } from 'node:child_process'
+
 interface PattyContext {
   project?: string
   directory?: string
@@ -47,20 +49,40 @@ export const PattyNotifier = async ({
       await fetch(`http://127.0.0.1:${PATTY_PORT}/hook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paneId: PANE_ID,
-          event,
-          source: 'opencode',
-          // The hook server rejects unauthenticated callers (401); the secret
-          // is injected into the terminal env by Patty's pty layer.
-          secret: process.env.PATTY_HOOK_SECRET
-        }),
+        body: hookBody(event),
         signal: controller.signal
       })
     } catch {
       // 静默忽略网络错误
     } finally {
       clearTimeout(timeoutId)
+    }
+  }
+
+  const hookBody = (event: string) =>
+    JSON.stringify({
+      paneId: PANE_ID,
+      event,
+      source: 'opencode',
+      // The hook server rejects unauthenticated callers (401); the secret
+      // is injected into the terminal env by Patty's pty layer.
+      secret: process.env.PATTY_HOOK_SECRET
+    })
+
+  // opencode 的 event dispatch 不 await 插件 handler，进程退出时 fire-and-forget
+  // 的 fetch 来不及完成。用 detached 子进程投递 session_deleted，使其脱离本
+  // 进程生命周期；spawn 失败时回退到普通 fetch（看门狗兜底）。
+  const notifyPattyDetached = (event: string) => {
+    try {
+      const child = spawn(
+        'curl',
+        ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '-d', hookBody(event)],
+        { detached: true, stdio: 'ignore' }
+      )
+      child.on('error', () => {})
+      child.unref()
+    } catch {
+      void notifyPatty(event)
     }
   }
 
@@ -88,7 +110,7 @@ export const PattyNotifier = async ({
             clearInterval(aliveInterval)
             aliveInterval = null
           }
-          await notifyPatty('session_deleted')
+          notifyPattyDetached('session_deleted')
           break
         }
 
