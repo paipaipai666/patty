@@ -13,15 +13,15 @@ fn home_dir() -> PathBuf {
 }
 
 pub fn claude_settings_path() -> PathBuf {
-    // Patty hooks go to settings.local.json, not settings.json: rtk/headroom
-    // rewrites settings.json on every Claude session start and strips any
-    // hooks it doesn't own. Claude merges both files, so hooks fire from
-    // either location.
-    home_dir().join(".claude").join("settings.local.json")
+    // Hooks must live in the user-level settings.json: Claude Code's
+    // localSettings source only reads <project>/.claude/settings.local.json —
+    // a user-level ~/.claude/settings.local.json is never loaded, so hooks
+    // installed there silently never fire.
+    home_dir().join(".claude").join("settings.json")
 }
 
-fn claude_shared_settings_path() -> PathBuf {
-    home_dir().join(".claude").join("settings.json")
+fn claude_legacy_local_settings_path() -> PathBuf {
+    home_dir().join(".claude").join("settings.local.json")
 }
 
 pub fn codex_settings_path() -> PathBuf {
@@ -79,6 +79,9 @@ fn cmd_hook(matcher: &str, command: String) -> Value {
     })
 }
 
+// Test-only helper for the legacy exec/args hook form, kept so tests can
+// verify that old args-form installs are still matched and replaced.
+#[cfg(test)]
 fn args_hook(matcher: &str, extra_args: &[&str], hook_script_path: &str) -> Value {
     let mut args = vec![
         json!("-ExecutionPolicy"),
@@ -118,10 +121,10 @@ fn command_contains(h: &Value, needle: &str) -> bool {
         .is_some_and(|c| c.contains(needle))
 }
 
-// Unified Patty-entry predicate: matches both the legacy cmd form (full
-// command string containing the script path) and the current args form
-// (script path inside the args array), so old installs are replaced in
-// place instead of duplicated on upgrade.
+// Unified Patty-entry predicate: matches both the shell form (full command
+// string containing the script path) and the legacy 2.0.x args form (script
+// path inside the args array), so old installs are replaced in place instead
+// of duplicated on upgrade.
 fn is_patty_hook(n: &Value) -> bool {
     n.get("hooks")
         .and_then(Value::as_array)
@@ -153,16 +156,19 @@ fn is_patty_codex_hook(n: &Value) -> bool {
 fn apply_claude_hooks(settings: &mut Value, hook_script_path: &str) {
     let obj = settings.as_object_mut().expect("settings object");
     let hooks = obj.entry("hooks".to_string()).or_insert_with(|| json!({}));
-    let path = hook_script_path;
+    // Shell form (same shape as the codex hooks) — verified end-to-end; the
+    // exec/args form was never proven to spawn in the user's environment.
+    let base = format!("powershell -ExecutionPolicy Bypass -File \"{hook_script_path}\"");
+    let with_event = |event: &str| format!("{base} -EventType {event}");
 
-    upsert_hook(hooks, "Notification", args_hook(HOOK_MATCHER, &[], path), is_patty_hook);
-    upsert_hook(hooks, "Stop", args_hook("", &[], path), is_patty_hook);
-    upsert_hook(hooks, "StopFailure", args_hook(STOP_FAILURE_MATCHER, &[], path), is_patty_hook);
-    upsert_hook(hooks, "SessionStart", args_hook("startup|resume", &["-EventType", "session_start"], path), is_patty_hook);
-    upsert_hook(hooks, "SessionEnd", args_hook("", &["-EventType", "session_end"], path), is_patty_hook);
-    upsert_hook(hooks, "PreToolUse", args_hook("", &["-EventType", "pre_tool_use"], path), is_patty_hook);
-    upsert_hook(hooks, "PostToolUse", args_hook("", &["-EventType", "post_tool_use"], path), is_patty_hook);
-    upsert_hook(hooks, "UserPromptSubmit", args_hook("", &["-EventType", "user_prompt_submit"], path), is_patty_hook);
+    upsert_hook(hooks, "Notification", cmd_hook(HOOK_MATCHER, base.clone()), is_patty_hook);
+    upsert_hook(hooks, "Stop", cmd_hook("", base.clone()), is_patty_hook);
+    upsert_hook(hooks, "StopFailure", cmd_hook(STOP_FAILURE_MATCHER, base.clone()), is_patty_hook);
+    upsert_hook(hooks, "SessionStart", cmd_hook("startup|resume", with_event("session_start")), is_patty_hook);
+    upsert_hook(hooks, "SessionEnd", cmd_hook("", with_event("session_end")), is_patty_hook);
+    upsert_hook(hooks, "PreToolUse", cmd_hook("", with_event("pre_tool_use")), is_patty_hook);
+    upsert_hook(hooks, "PostToolUse", cmd_hook("", with_event("post_tool_use")), is_patty_hook);
+    upsert_hook(hooks, "UserPromptSubmit", cmd_hook("", with_event("user_prompt_submit")), is_patty_hook);
 }
 
 fn apply_codex_hooks(settings: &mut Value, hook_script_path: &str) {
@@ -211,9 +217,9 @@ fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_
 
 pub fn ensure_claude_code_hook() {
     let hook_script = ensure_hook_script_exists();
-    // Drop Patty entries from settings.json (older installs put them there)
-    // so hooks don't fire twice now that they live in settings.local.json.
-    strip_patty_hooks(&claude_shared_settings_path());
+    // Drop Patty entries from settings.local.json (the broken 2.0.x install
+    // location that Claude never reads) so stale copies can't confuse anyone.
+    strip_patty_hooks(&claude_legacy_local_settings_path());
     install_at(&claude_settings_path(), apply_claude_hooks, &hook_script.to_string_lossy(), false);
 }
 
@@ -268,13 +274,13 @@ mod tests {
     #[test]
     fn upsert_appends_then_replaces() {
         let mut hooks = json!({});
-        let entry = args_hook("", &[], "X/patty-hook.ps1");
+        let entry = cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into());
         upsert_hook(&mut hooks, "Stop", entry.clone(), is_patty_hook);
         assert_eq!(hooks["Stop"].as_array().unwrap().len(), 1);
 
         // An unrelated user hook is preserved; ours is replaced, not duplicated.
         hooks["Stop"].as_array_mut().unwrap().push(cmd_hook("", "echo hi".into()));
-        let updated = args_hook("m", &[], "Y/patty-hook.ps1");
+        let updated = cmd_hook("m", "powershell -File \"Y/patty-hook.ps1\"".into());
         upsert_hook(&mut hooks, "Stop", updated, is_patty_hook);
         let list = hooks["Stop"].as_array().unwrap();
         assert_eq!(list.len(), 2);
@@ -283,15 +289,15 @@ mod tests {
     }
 
     #[test]
-    fn upsert_replaces_legacy_cmd_form_entry() {
-        // Old installs used a full command string; the unified predicate must
+    fn upsert_replaces_legacy_args_form_entry() {
+        // 2.0.x installs used the exec/args form; the unified predicate must
         // still match it so upgrades replace in place instead of duplicating.
         let mut hooks = json!({});
-        hooks["Stop"] = json!([cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into())]);
-        upsert_hook(&mut hooks, "Stop", args_hook("", &[], "X/patty-hook.ps1"), is_patty_hook);
+        hooks["Stop"] = json!([args_hook("", &[], "X/patty-hook.ps1")]);
+        upsert_hook(&mut hooks, "Stop", cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into()), is_patty_hook);
         let list = hooks["Stop"].as_array().unwrap();
         assert_eq!(list.len(), 1);
-        assert!(list[0]["hooks"][0].get("args").is_some());
+        assert!(list[0]["hooks"][0]["command"].as_str().unwrap().contains("patty-hook.ps1"));
     }
 
     #[test]
@@ -303,16 +309,15 @@ mod tests {
         }
         assert_eq!(settings["model"], "opus");
         assert_eq!(settings["hooks"]["Notification"][0]["matcher"], HOOK_MATCHER);
-        // All claude hooks use the unified args form (command + args array).
-        assert_eq!(
-            settings["hooks"]["Notification"][0]["hooks"][0]["command"],
-            "powershell"
-        );
-        assert!(settings["hooks"]["Notification"][0]["hooks"][0].get("args").is_some());
-        assert_eq!(
-            settings["hooks"]["SessionStart"][0]["hooks"][0]["args"].as_array().unwrap().last().unwrap(),
-            "session_start"
-        );
+        // All claude hooks use the shell form (full command string).
+        let cmd = settings["hooks"]["SessionStart"][0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(cmd.starts_with("powershell -ExecutionPolicy Bypass -File "));
+        assert!(cmd.contains("patty-hook.ps1"));
+        assert!(cmd.ends_with("-EventType session_start"));
+        assert!(settings["hooks"]["SessionStart"][0]["hooks"][0].get("args").is_none());
+        // Events parsed from stdin carry no -EventType argument.
+        let stop = settings["hooks"]["Stop"][0]["hooks"][0]["command"].as_str().unwrap();
+        assert!(!stop.contains("-EventType"));
     }
 
     #[test]
@@ -411,9 +416,9 @@ mod tests {
     }
 
     #[test]
-    fn claude_settings_path_ends_in_local_settings() {
+    fn claude_settings_path_ends_in_user_settings() {
         let path = claude_settings_path();
-        assert_eq!(path.file_name().unwrap(), "settings.local.json");
+        assert_eq!(path.file_name().unwrap(), "settings.json");
         assert!(path.to_string_lossy().contains(".claude"));
     }
 
@@ -425,12 +430,13 @@ mod tests {
     }
 
     #[test]
-    fn claude_hooks_install_to_local_settings() {
-        // Regression guard: rtk/headroom rewrites settings.json on every
-        // Claude session start — hooks installed there get stripped.
+    fn claude_hooks_install_to_user_settings() {
+        // Regression guard: Claude Code's localSettings source only reads
+        // <project>/.claude/settings.local.json — a user-level
+        // settings.local.json is never loaded, so hooks there never fire.
         assert_eq!(
             claude_settings_path().file_name().unwrap(),
-            "settings.local.json"
+            "settings.json"
         );
     }
 

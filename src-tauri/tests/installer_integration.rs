@@ -62,7 +62,7 @@ fn opencode_plugin_source_exists() {
 #[test]
 fn claude_settings_path_format() {
     let path = patty::installer::claude_settings_path();
-    assert_eq!(path.file_name().unwrap(), "settings.local.json");
+    assert_eq!(path.file_name().unwrap(), "settings.json");
     assert!(path.to_string_lossy().contains(".claude"));
 }
 

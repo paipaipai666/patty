@@ -134,7 +134,7 @@ export const PattyNotifier = async ({
         case 'session.status': {
           const sessionID = (event as any)?.properties?.sessionID
           const status = (event as any)?.properties?.status
-          if (status?.type === 'idle' && sessionID && !mainSessions.has(sessionID)) {
+          if (status?.type === 'idle' && sessionID && mainSessions.has(sessionID)) {
             await notifyPatty('idle')
           }
           break
