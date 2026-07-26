@@ -4,6 +4,7 @@ export interface HeartbeatConfig {
 
 export const SOURCE_HEARTBEAT: Record<string, HeartbeatConfig> = {
   opencode: { timeoutMs: 8000 },
+  omp: { timeoutMs: 8000 },
   'claude-code': { timeoutMs: 600000 },
   codex: { timeoutMs: 600000 }
 }

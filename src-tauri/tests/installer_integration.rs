@@ -60,6 +60,15 @@ fn opencode_plugin_source_exists() {
 }
 
 #[test]
+fn omp_hook_source_exists() {
+    let path = patty::installer::omp_hook_source();
+    assert!(path.exists(), "omp hook source should exist: {}", path.display());
+    let content = fs::read_to_string(&path).unwrap();
+    assert!(content.contains("PATTY_HOOK_SECRET"), "omp hook must send the hook secret");
+    assert!(content.contains("PATTY_PORT"), "omp hook must reference PATTY_PORT");
+}
+
+#[test]
 fn claude_settings_path_format() {
     let path = patty::installer::claude_settings_path();
     assert_eq!(path.file_name().unwrap(), "settings.json");

@@ -45,3 +45,7 @@
 .grid[data-type="codex"]::after {
   background: var(--fire-gradient-codex);
 }
+
+.grid[data-type="omp"]::after {
+  background: var(--fire-gradient-omp);
+}

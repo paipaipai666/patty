@@ -3,8 +3,12 @@ import { registerGrid, unregisterGrid } from '../../utils/gridScheduler'
 import styles from './ContributionGrid.module.css'
 
 interface Props {
-  aiType: 'claude' | 'opencode' | 'codex' | null
+  aiType: 'claude' | 'opencode' | 'codex' | 'omp' | null
 }
+
+const FIRE_VARS: Record<string, string> = { claude: '--fire-claude', opencode: '--fire-opencode', codex: '--fire-codex', omp: '--fire-omp' }
+const GLOW3_VARS: Record<string, string> = { claude: '--fire-glow-claude-3', opencode: '--fire-glow-opencode-3', codex: '--fire-glow-codex-3', omp: '--fire-glow-omp-3' }
+const GLOW4_VARS: Record<string, string> = { claude: '--fire-glow-claude-4', opencode: '--fire-glow-opencode-4', codex: '--fire-glow-codex-4', omp: '--fire-glow-omp-4' }
 
 const ROWS = 5
 const GAP = 2
@@ -35,11 +39,9 @@ function buildPalette(varName: string): string[] {
 
 function getGlowColors(aiType: string): [string, string] {
   const s = getComputedStyle(document.documentElement)
-  const key3 = aiType === 'claude' ? '--fire-glow-claude-3' : aiType === 'codex' ? '--fire-glow-codex-3' : '--fire-glow-opencode-3'
-  const key4 = aiType === 'claude' ? '--fire-glow-claude-4' : aiType === 'codex' ? '--fire-glow-codex-4' : '--fire-glow-opencode-4'
   return [
-    s.getPropertyValue(key3).trim() || 'rgba(255,255,255,0.25)',
-    s.getPropertyValue(key4).trim() || 'rgba(255,255,255,0.5)',
+    s.getPropertyValue(GLOW3_VARS[aiType]).trim() || 'rgba(255,255,255,0.25)',
+    s.getPropertyValue(GLOW4_VARS[aiType]).trim() || 'rgba(255,255,255,0.5)',
   ]
 }
 
@@ -135,9 +137,7 @@ export function ContributionGrid({ aiType }: Props) {
 
     container.dataset.type = aiType
 
-    const palette = buildPalette(
-      aiType === 'claude' ? '--fire-claude' : aiType === 'codex' ? '--fire-codex' : '--fire-opencode'
-    )
+    const palette = buildPalette(FIRE_VARS[aiType])
     const [glowColor3, glowColor4] = getGlowColors(aiType)
 
     let heat: number[][]

@@ -58,6 +58,9 @@ export const UI_COLOR_LABELS: Record<keyof UITheme, string> = {
   '--ai-codex-color': 'AI Codex Icon',
   '--ai-codex-bg': 'AI Codex Background',
   '--ai-codex-glow': 'AI Codex Glow',
+  '--ai-omp-color': 'AI Oh My Pi Icon',
+  '--ai-omp-bg': 'AI Oh My Pi Background',
+  '--ai-omp-glow': 'AI Oh My Pi Glow',
 
   '--fire-claude': 'Fire Claude',
   '--fire-opencode': 'Fire OpenCode',
@@ -71,6 +74,10 @@ export const UI_COLOR_LABELS: Record<keyof UITheme, string> = {
   '--fire-gradient-claude': 'Fire Claude Gradient',
   '--fire-gradient-opencode': 'Fire OpenCode Gradient',
   '--fire-gradient-codex': 'Fire Codex Gradient',
+  '--fire-omp': 'Fire Oh My Pi',
+  '--fire-glow-omp-3': 'Fire Oh My Pi Glow (low)',
+  '--fire-glow-omp-4': 'Fire Oh My Pi Glow (high)',
+  '--fire-gradient-omp': 'Fire Oh My Pi Gradient',
 
   '--attention-complete-bg': 'Attention Complete BG',
   '--attention-complete-bar': 'Attention Complete Bar',

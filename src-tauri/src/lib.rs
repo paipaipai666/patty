@@ -242,6 +242,9 @@ pub fn run() {
                 if settings["notifications"]["codex"].as_bool().unwrap_or(true) {
                     installer::ensure_codex_hook();
                 }
+                if settings["notifications"]["ohMyPi"].as_bool().unwrap_or(true) {
+                    installer::ensure_omp_hook();
+                }
                 pty::warm_startup(&handle);
             });
             Ok(())

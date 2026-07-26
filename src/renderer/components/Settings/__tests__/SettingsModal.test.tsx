@@ -28,7 +28,7 @@ const { mockUpdateSetting, mockCloseSettings, settingsState } = vi.hoisted(() =>
         closePane: 'Ctrl+Shift+W'
       },
       customThemes: [],
-      notifications: { claudeCode: true, openCode: true, codex: true }
+      notifications: { claudeCode: true, openCode: true, codex: true, ohMyPi: true }
     },
     settingsOpen: true,
     closeSettings: mockCloseSettings,

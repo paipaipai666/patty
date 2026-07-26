@@ -55,7 +55,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   notifications: {
     claudeCode: true,
     openCode: true,
-    codex: true
+    codex: true,
+    ohMyPi: true
   }
 }
 

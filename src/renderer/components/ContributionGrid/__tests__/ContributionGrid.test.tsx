@@ -36,7 +36,7 @@ beforeEach(() => {
   style.setProperty('--fire-glow-claude-4', 'rgba(200,60,200,0.5)')
 })
 
-function render(aiType: 'claude' | 'opencode' | 'codex' | null) {
+function render(aiType: 'claude' | 'opencode' | 'codex' | 'omp' | null) {
   const container = document.createElement('div')
   container.style.width = '200px'
   container.style.height = '100px'
@@ -70,6 +70,12 @@ describe('ContributionGrid', () => {
     const { container } = render('codex')
     const div = container.firstElementChild as HTMLElement
     expect(div?.dataset?.type).toBe('codex')
+  })
+
+  it('sets dataset.type for omp', () => {
+    const { container } = render('omp')
+    const div = container.firstElementChild as HTMLElement
+    expect(div?.dataset?.type).toBe('omp')
   })
 })
 

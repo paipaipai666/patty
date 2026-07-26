@@ -68,6 +68,9 @@ export interface UITheme {
   '--ai-codex-color': string
   '--ai-codex-bg': string
   '--ai-codex-glow': string
+  '--ai-omp-color': string
+  '--ai-omp-bg': string
+  '--ai-omp-glow': string
 
   '--fire-claude': string
   '--fire-opencode': string
@@ -81,6 +84,10 @@ export interface UITheme {
   '--fire-gradient-claude': string
   '--fire-gradient-opencode': string
   '--fire-gradient-codex': string
+  '--fire-omp': string
+  '--fire-glow-omp-3': string
+  '--fire-glow-omp-4': string
+  '--fire-gradient-omp': string
 
   '--attention-complete-bg': string
   '--attention-complete-bar': string
@@ -145,6 +152,7 @@ export interface NotificationSettings {
   claudeCode: boolean
   openCode: boolean
   codex: boolean
+  ohMyPi: boolean
 }
 
 export interface AppSettings {

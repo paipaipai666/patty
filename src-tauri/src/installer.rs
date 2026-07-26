@@ -54,6 +54,19 @@ pub fn opencode_plugin_source() -> PathBuf {
         .join("opencode-patty-plugin.ts")
 }
 
+pub fn omp_hook_source() -> PathBuf {
+    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("resources")
+        .join("omp-patty-hook.ts");
+    if dev.exists() {
+        return dev;
+    }
+    crate::pty::resource_dir()
+        .join("resources")
+        .join("omp-patty-hook.ts")
+}
+
 pub fn installed_hook_path() -> PathBuf {
     crate::store::data_dir().join("patty-hook.ps1")
 }
@@ -264,6 +277,26 @@ pub fn ensure_opencode_plugin() {
         }
     } else {
         eprintln!("[installer] opencode plugin source not found: {}", source.display());
+    }
+}
+
+pub fn ensure_omp_hook() {
+    let source = omp_hook_source();
+    // Install target is the extensions dir, NOT hooks/: hook-factory discovery
+    // exposes only the legacy HookAPI, which lacks session_stop,
+    // tool_approval_requested and ctx.setInterval.
+    let dest_dir = home_dir().join(".omp").join("agent").join("extensions");
+    let dest = dest_dir.join("patty-notifier.ts");
+    if let Err(e) = fs::create_dir_all(&dest_dir) {
+        eprintln!("[installer] omp extensions dir: {e}");
+        return;
+    }
+    if source.exists() {
+        if let Err(e) = fs::copy(&source, &dest) {
+            eprintln!("[installer] omp hook copy: {e}");
+        }
+    } else {
+        eprintln!("[installer] omp hook source not found: {}", source.display());
     }
 }
 

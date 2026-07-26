@@ -44,7 +44,7 @@ pub fn default_settings() -> Value {
             "closePane": "Ctrl+Shift+W"
         },
         "customThemes": [],
-        "notifications": { "claudeCode": true, "openCode": true, "codex": true }
+        "notifications": { "claudeCode": true, "openCode": true, "codex": true, "ohMyPi": true }
     })
 }
 

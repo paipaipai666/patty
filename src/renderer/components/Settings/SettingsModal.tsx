@@ -824,6 +824,13 @@ function NotificationsSection({
     })
   }
 
+  const toggleOhMyPi = () => {
+    updateSetting('notifications', {
+      ...settings.notifications,
+      ohMyPi: !settings.notifications?.ohMyPi
+    })
+  }
+
   return (
     <div className={styles.section}>
       <div className={styles.sectionTitle}>Attention Notifications</div>
@@ -885,8 +892,26 @@ function NotificationsSection({
         </button>
       </div>
 
+      <div className={styles.settingRow}>
+        <div>
+          <span className={styles.settingLabel}>Oh My Pi</span>
+          <div className={styles.settingDesc}>
+            Show indicators when Oh My Pi needs your attention
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={settings.notifications.ohMyPi}
+          className={`${styles.toggle} ${settings.notifications.ohMyPi ? styles.toggleOn : ''}`}
+          onClick={toggleOhMyPi}
+        >
+          <div className={styles.toggleKnob} />
+        </button>
+      </div>
+
       <div className={styles.settingDesc} style={{ marginTop: '16px' }}>
-        ℹ️ When disabled, external config files (Claude Code settings.json, OpenCode plugin, Codex hooks.json) will not be modified.
+        ℹ️ When disabled, external config files (Claude Code settings.json, OpenCode plugin, Codex hooks.json, Oh My Pi extensions) will not be modified.
       </div>
     </div>
   )

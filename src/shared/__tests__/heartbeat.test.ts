@@ -6,6 +6,10 @@ describe('getHeartbeatConfig', () => {
     expect(getHeartbeatConfig('opencode')).toEqual({ timeoutMs: 8000 })
   })
 
+  it('returns config for omp', () => {
+    expect(getHeartbeatConfig('omp')).toEqual({ timeoutMs: 8000 })
+  })
+
   it('returns config for claude-code', () => {
     expect(getHeartbeatConfig('claude-code')).toEqual({ timeoutMs: 600000 })
   })

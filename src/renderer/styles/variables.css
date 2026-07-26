@@ -29,6 +29,13 @@
   --fire-gradient-claude:    linear-gradient(90deg, transparent 0%, rgba(224, 154, 126, 0.08) 40%, rgba(224, 154, 126, 0.18) 100%);
   --fire-gradient-opencode:  linear-gradient(90deg, transparent 0%, rgba(163, 181, 212, 0.06) 40%, rgba(163, 181, 212, 0.14) 100%);
   --fire-gradient-codex:     linear-gradient(90deg, transparent 0%, rgba(79, 212, 176, 0.08) 40%, rgba(79, 212, 176, 0.18) 100%);
+  --ai-omp-color:        #a78bfa;
+  --ai-omp-bg:           rgba(167, 139, 250, 0.10);
+  --ai-omp-glow:         rgba(167, 139, 250, 0.25);
+  --fire-omp:            #a78bfa;
+  --fire-glow-omp-3:     rgba(167, 139, 250, 0.18);
+  --fire-glow-omp-4:     rgba(167, 139, 250, 0.35);
+  --fire-gradient-omp:   linear-gradient(90deg, transparent 0%, rgba(167, 139, 250, 0.08) 40%, rgba(167, 139, 250, 0.18) 100%);
 
   /* Attention states (session list) */
   --attention-complete-bg:     rgba(48, 209, 88, 0.10);
@@ -198,9 +205,12 @@
   --ai-opencode-bg:    rgba(61,79,110,0.08);
   --ai-codex-color:    #0d8f71;
   --ai-codex-bg:       rgba(13,143,113,0.10);
+  --ai-omp-color:      #7c3aed;
+  --ai-omp-bg:         rgba(124,58,237,0.10);
   --fire-claude:       #b0553a;
   --fire-opencode:     #4a5d7a;
   --fire-codex:        #0d8f71;
+  --fire-omp:          #7c3aed;
   --overlay-bg:        rgba(0, 0, 0, 0.25);
   --scrollbar-thumb:   rgba(0,0,0,0.12);
   --neutral:           #6b7280;

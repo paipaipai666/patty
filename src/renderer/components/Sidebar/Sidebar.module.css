@@ -134,6 +134,11 @@
   background: var(--ai-codex-bg);
 }
 
+.aiIconOmp {
+  color: var(--ai-omp-color);
+  background: var(--ai-omp-bg);
+}
+
 .item {
   display: flex;
   align-items: center;
@@ -192,6 +197,10 @@
 
 .itemActive .aiIconCodex {
   box-shadow: 0 0 6px var(--ai-codex-glow);
+}
+
+.itemActive .aiIconOmp {
+  box-shadow: 0 0 6px var(--ai-omp-glow);
 }
 
 @keyframes ripple {

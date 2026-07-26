@@ -45,6 +45,13 @@
     "--fire-gradient-claude": "linear-gradient(90deg, transparent 0%, rgba(255,158,100,0.10) 40%, rgba(255,158,100,0.22) 100%)",
     "--fire-gradient-opencode": "linear-gradient(90deg, transparent 0%, rgba(125,207,255,0.08) 40%, rgba(125,207,255,0.18) 100%)",
     "--fire-gradient-codex": "linear-gradient(90deg, transparent 0%, rgba(158, 206, 106, 0.10) 40%, rgba(158, 206, 106, 0.22) 100%)",
+    "--ai-omp-color": "#bb9af7",
+    "--ai-omp-bg": "rgba(187, 154, 247, 0.12)",
+    "--ai-omp-glow": "rgba(187, 154, 247, 0.25)",
+    "--fire-omp": "#bb9af7",
+    "--fire-glow-omp-3": "rgba(187, 154, 247, 0.25)",
+    "--fire-glow-omp-4": "rgba(187, 154, 247, 0.50)",
+    "--fire-gradient-omp": "linear-gradient(90deg, transparent 0%, rgba(187, 154, 247, 0.10) 40%, rgba(187, 154, 247, 0.22) 100%)",
 
     "--attention-complete-bg": "rgba(158,206,106,0.12)",
     "--attention-complete-bar": "#9ece6a",
