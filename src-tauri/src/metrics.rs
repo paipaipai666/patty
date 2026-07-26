@@ -252,6 +252,14 @@ pub fn set_sampling(app: &AppHandle, enabled: bool) {
 mod tests {
     use super::*;
 
+    // The DATA / SAMPLING globals and the test data_dir are shared process-wide;
+    // serialize tests that touch them (same pattern as tests/installer_integration.rs).
+    static SERIAL: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn serial() -> std::sync::MutexGuard<'static, ()> {
+        SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn reset_data() {
         *DATA.lock().unwrap() = MetricsData {
             first_terminal: Vec::new(),
@@ -288,6 +296,7 @@ mod tests {
 
     #[test]
     fn snapshot_returns_empty_initial() {
+        let _g = serial();
         reset_data();
         let s = snapshot();
         assert_eq!(s["firstTerminal"].as_array().unwrap().len(), 0);
@@ -296,26 +305,47 @@ mod tests {
 
     #[test]
     fn record_first_terminal_adds_to_data() {
+        let _g = serial();
         reset_data();
+        let dir = std::env::temp_dir()
+            .join(format!("patty-metrics-add-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let old = crate::store::data_dir();
+        crate::store::set_data_dir_for_test(dir.clone());
+
         record_first_terminal(json!({"iso": "a", "shell": "pwsh", "durationMs": 100}));
         let s = snapshot();
         assert_eq!(s["firstTerminal"].as_array().unwrap().len(), 1);
         assert_eq!(s["firstTerminal"][0]["shell"], "pwsh");
+
+        crate::store::set_data_dir_for_test(old);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn record_first_terminal_trims_at_max() {
+        let _g = serial();
         reset_data();
+        let dir = std::env::temp_dir()
+            .join(format!("patty-metrics-trim-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let old = crate::store::data_dir();
+        crate::store::set_data_dir_for_test(dir.clone());
+
         for i in 0..(MAX_FIRST_TERMINALS + 3) {
             record_first_terminal(json!({"iso": i, "shell": "pwsh", "durationMs": i}));
         }
         let s = snapshot();
         assert_eq!(s["firstTerminal"].as_array().unwrap().len(), MAX_FIRST_TERMINALS);
         assert_eq!(s["firstTerminal"][0]["durationMs"], 3);
+
+        crate::store::set_data_dir_for_test(old);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn persist_and_load_history_roundtrip() {
+        let _g = serial();
         reset_data();
         let dir = std::env::temp_dir()
             .join(format!("patty-metrics-{}", std::process::id()));
@@ -340,6 +370,7 @@ mod tests {
 
     #[test]
     fn persist_writes_valid_json() {
+        let _g = serial();
         reset_data();
         let dir = std::env::temp_dir()
             .join(format!("patty-metrics-persist-{}", std::process::id()));
@@ -360,6 +391,7 @@ mod tests {
 
     #[test]
     fn load_history_ignores_wrong_version() {
+        let _g = serial();
         reset_data();
         let dir = std::env::temp_dir()
             .join(format!("patty-metrics-version-{}", std::process::id()));

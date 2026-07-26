@@ -1,0 +1,12 @@
+# Test binaries don't receive the Common-Controls v6 manifest that
+# tauri-build embeds into bins only (and cargo's rustc-link-arg-tests does not
+# reach lib unit-test links). Without the manifest, muda/rfd's static
+# TaskDialogIndirect import binds against comctl32 v5.82 and every test exe
+# crashes at startup with STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139).
+# Delay-loading comctl32 defers the binding to first use (never hit in tests;
+# resolved against v6 in the manifest-activated app), so `cargo test` runs.
+[target.x86_64-pc-windows-msvc]
+rustflags = [
+  "-C", "link-arg=/DELAYLOAD:comctl32.dll",
+  "-C", "link-arg=delayimp.lib",
+]

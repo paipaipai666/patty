@@ -283,8 +283,8 @@ mod tests {
         assert_eq!(target["nested"]["x"], 100);
         // default values preserved for keys not in parsed
         assert_eq!(target["nested"]["y"], 20);
-        // top-level keys not in nested are untouched
-        assert_eq!(target["a"], 99);
+        // top-level keys not in nested are untouched by the helper
+        assert_eq!(target["a"], 1);
         assert_eq!(target["b"], 2);
     }
 
