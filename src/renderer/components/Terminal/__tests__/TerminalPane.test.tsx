@@ -156,6 +156,38 @@ describe('TerminalPane PTY lifecycle (C5)', () => {
   })
 })
 
+describe('TerminalPane async create (SSH StrictMode race)', () => {
+  it('ignores a createSession result that resolves after unmount', async () => {
+    const { useToastStore } = await import('../../../store/toastStore')
+    const { useSessionStore } = await import('../../../store/sessionStore')
+    useToastStore.setState({ toasts: [] })
+    ;(useSessionStore.getState().updatePid as ReturnType<typeof vi.fn>).mockClear()
+
+    type CreateResult = { success: boolean; pid: number; error?: string }
+    let resolveCreate: (value: CreateResult) => void = () => {}
+    terminalAPI.createSession.mockImplementationOnce(
+      () => new Promise<CreateResult>((resolve) => { resolveCreate = resolve })
+    )
+    const { root } = render()
+    expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
+
+    // Pane unmounts while the (SSH) connection is still being established.
+    act(() => { root.unmount() })
+    expect(terminalAPI.kill).toHaveBeenCalledTimes(1)
+
+    // The aborted create resolves late with a failure: no toast, no state
+    // updates, no listeners wired onto the disposed terminal.
+    await act(async () => {
+      resolveCreate({ success: false, pid: 0, error: 'cancelled' })
+      await Promise.resolve()
+    })
+    expect(useToastStore.getState().toasts).toHaveLength(0)
+    expect(useSessionStore.getState().updatePid).not.toHaveBeenCalled()
+    expect(terminalAPI.onData).not.toHaveBeenCalled()
+    expect(terminalAPI.onExit).not.toHaveBeenCalled()
+  })
+})
+
 describe('TerminalPane WebGL context loss (M1)', () => {
   it('registers a context-loss handler so the WebGL addon can be re-created', () => {
     const container = document.createElement('div')

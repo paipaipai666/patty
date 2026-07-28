@@ -23,6 +23,7 @@ tauri-plugin-single-instance = "2.0.0-rc.5"
 russh = { version = "=0.62.4", default-features = false, features = ["ring", "flate2", "rsa"] }
 tokio = { version = "1", features = ["sync", "time"] }
 bytes = "1"
+futures = "0.3"
 
 [dev-dependencies]
 rand = "0.10"

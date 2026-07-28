@@ -431,6 +431,11 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
     // PTY lifecycle
     ptyRetryCountRef.current = 0
+    // SSH creation is async across user dialogs (host key, password): this
+    // effect can be torn down (StrictMode remount, pane closed) while the
+    // createSession promise is still pending. A late resolution must not
+    // toast, update state, or wire listeners onto the disposed terminal.
+    let effectDisposed = false
     const startPty = () => {
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current)
@@ -442,6 +447,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       window.terminalAPI
         .createSession(session.id, session.cwd, session.shell, term.cols, term.rows, session.ssh ?? null)
         .then((result) => {
+          if (effectDisposed) return
           if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
           if (!result.success || !result.pid) {
             toast(`Failed to start terminal: ${result.error ?? 'unknown error'}`)
@@ -489,6 +495,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     startPty()
 
     return () => {
+      effectDisposed = true
       container.removeEventListener('webglcontextlost', onContextLost, true)
       container.removeEventListener('webglcontextrestored', onContextRestored, true)
       osc7Disposable.dispose()

@@ -8,6 +8,7 @@
 // renderer needs no SSH-specific terminal handling.
 
 use bytes::Bytes;
+use futures::future::{AbortHandle, Abortable};
 use russh::client::{self, AuthResult, Handle, KeyboardInteractiveAuthResponse, Msg};
 use russh::keys::{self, PrivateKeyWithHashAlg, ssh_key};
 use russh::{ChannelMsg, ChannelWriteHalf, MethodKind};
@@ -34,6 +35,21 @@ static PENDING_HOSTKEY: LazyLock<Mutex<HashMap<String, oneshot::Sender<bool>>>> 
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static PENDING_AUTH: LazyLock<Mutex<HashMap<String, oneshot::Sender<Option<String>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+// In-flight create() calls per session id. SSH creation spans multiple UI
+// round-trips (host key, password), so a duplicate mount (React StrictMode
+// double-invokes effects in dev) or a retry would otherwise race a second
+// connection and clobber the per-id pending slots above.
+static CREATING: LazyLock<Mutex<HashMap<String, AbortHandle>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+// Per-id kill counter: lets a create that is *waiting* on an in-flight create
+// notice that the pane was closed in the meantime.
+static KILL_EPOCH: LazyLock<Mutex<HashMap<String, u64>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn kill_epoch(id: &str) -> u64 {
+    KILL_EPOCH.lock().unwrap().get(id).copied().unwrap_or(0)
+}
 
 // ── Event emission ──────────────────────────────────────────────────────────
 // In unit/integration tests there is no AppHandle; emitted events are captured
@@ -320,6 +336,10 @@ pub fn resize(id: &str, cols: u16, rows: u16) {
 }
 
 pub fn kill(id: &str) {
+    *KILL_EPOCH.lock().unwrap().entry(id.to_string()).or_insert(0) += 1;
+    if let Some(abort) = CREATING.lock().unwrap().remove(id) {
+        abort.abort();
+    }
     let victim = SESSIONS.write().unwrap().remove(id);
     crate::hooks::remove_pane(id);
     PENDING_AUTH.lock().unwrap().remove(id);
@@ -345,6 +365,10 @@ fn fail(app: &Option<AppHandle>, id: &str, error: String) -> Value {
     json!({ "pid": 0, "success": false, "error": error })
 }
 
+fn create_success() -> Value {
+    json!({ "pid": std::process::id(), "success": true, "replay": Value::Null })
+}
+
 pub async fn create(
     app: Option<AppHandle>,
     id: &str,
@@ -352,9 +376,56 @@ pub async fn create(
     cols: u16,
     rows: u16,
 ) -> Value {
-    if exists(id) {
+    // A create for this id is already in flight: wait for it instead of
+    // racing a second connection. When it succeeds we attach to the same
+    // session; when it fails (or was killed) we retry ourselves — unless the
+    // pane was killed while we waited.
+    let epoch = kill_epoch(id);
+    let mut waited = false;
+    while CREATING.lock().unwrap().contains_key(id) {
+        waited = true;
+        if exists(id) {
+            return create_success();
+        }
+        if !CREATING.lock().unwrap().contains_key(id) {
+            break;
+        }
+        if kill_epoch(id) != epoch {
+            return json!({ "pid": 0, "success": false, "error": "cancelled" });
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    if kill_epoch(id) != epoch {
+        return json!({ "pid": 0, "success": false, "error": "cancelled" });
+    }
+    if waited {
+        // The in-flight create settled while we waited: its session (if any)
+        // is final — attach to it; only retry ourselves when it failed.
+        if exists(id) {
+            return create_success();
+        }
+    } else if exists(id) {
         kill(id);
     }
+
+    let (abort_handle, abort_registration) = AbortHandle::new_pair();
+    CREATING.lock().unwrap().insert(id.to_string(), abort_handle);
+    let result = Abortable::new(create_inner(app, id, target, cols, rows), abort_registration).await;
+    CREATING.lock().unwrap().remove(id);
+    match result {
+        Ok(value) => value,
+        // Aborted by kill(): the pane is gone, nobody consumes this result.
+        Err(_) => json!({ "pid": 0, "success": false, "error": "cancelled" }),
+    }
+}
+
+async fn create_inner(
+    app: Option<AppHandle>,
+    id: &str,
+    target: SshTarget,
+    cols: u16,
+    rows: u16,
+) -> Value {
 
     let host = target.host.clone();
     let port = target.port.unwrap_or(22);
@@ -458,7 +529,7 @@ pub async fn create(
         }
     });
 
-    json!({ "pid": std::process::id(), "success": true, "replay": Value::Null })
+    create_success()
 }
 
 // ── Remote metrics (exec channels multiplexed on the same connection) ───────
@@ -921,6 +992,65 @@ mod tests {
         assert_eq!(result["success"], false);
         assert!(result["error"].as_str().unwrap().contains("cancelled"));
         assert!(!exists(&env.id));
+    }
+
+    // ── StrictMode / duplicate-create serialization ───────────────────────
+
+    #[tokio::test]
+    async fn kill_during_pending_create_aborts_and_recreate_succeeds() {
+        let env = setup("strictmode").await;
+        let id = env.id.clone();
+        let target = env.target();
+        let first = tokio::spawn(async move { create(None, &id, target, 80, 24).await });
+
+        // First mount: host key prompt is pending when the "cleanup" kills.
+        wait_event("ssh:hostkey").await;
+        kill(&env.id);
+        let result1 = first.await.unwrap();
+        assert_eq!(result1["success"], false, "killed create must fail: {result1}");
+        assert!(!exists(&env.id));
+
+        // The remount creates again: exactly one connection, one prompt flow.
+        TEST_EVENTS.lock().unwrap().clear();
+        let id2 = env.id.clone();
+        let target2 = env.target();
+        let second = tokio::spawn(async move { create(None, &id2, target2, 80, 24).await });
+        wait_event("ssh:hostkey").await;
+        hostkey_respond(&env.id, true);
+        wait_event("ssh:auth").await;
+        auth_respond(&env.id, Some("secret".into()));
+        let result2 = second.await.unwrap();
+        assert_eq!(result2["success"], true, "recreate failed: {result2}");
+        assert!(exists(&env.id));
+    }
+
+    #[tokio::test]
+    async fn concurrent_create_waits_and_attaches_to_in_flight() {
+        let env = setup("dupe").await;
+        let id1 = env.id.clone();
+        let target1 = env.target();
+        let first = tokio::spawn(async move { create(None, &id1, target1, 80, 24).await });
+
+        // Second create while the first still waits for the host key answer:
+        // it must wait, not race a parallel connection.
+        wait_event("ssh:hostkey").await;
+        let id2 = env.id.clone();
+        let target2 = env.target();
+        let second = tokio::spawn(async move { create(None, &id2, target2, 80, 24).await });
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        hostkey_respond(&env.id, true);
+        wait_event("ssh:auth").await;
+        auth_respond(&env.id, Some("secret".into()));
+
+        let result1 = first.await.unwrap();
+        let result2 = second.await.unwrap();
+        assert_eq!(result1["success"], true, "first create failed: {result1}");
+        assert_eq!(result2["success"], true, "attach failed: {result2}");
+        // One prompt sequence total — the duplicate never opened a connection.
+        let events = TEST_EVENTS.lock().unwrap();
+        assert_eq!(events.iter().filter(|(e, _)| e == "ssh:hostkey").count(), 1);
+        assert_eq!(events.iter().filter(|(e, _)| e == "ssh:auth").count(), 1);
     }
 
     #[tokio::test]
