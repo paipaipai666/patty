@@ -440,7 +440,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       cleanupExitRef.current?.()
       if (perfEnabled) perfMark('terminal:create-session-ipc-start')
       window.terminalAPI
-        .createSession(session.id, session.cwd, session.shell, term.cols, term.rows)
+        .createSession(session.id, session.cwd, session.shell, term.cols, term.rows, session.ssh ?? null)
         .then((result) => {
           if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
           if (!result.success || !result.pid) {

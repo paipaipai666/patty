@@ -2,23 +2,28 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { SessionList } from './SessionList'
+import type { SshProfile } from '../../../shared/settingsTypes'
 import styles from './Sidebar.module.css'
 
 interface SidebarProps {
   onNewTerminal: () => void
   onNewTerminalPickFolder: () => void
+  onNewSsh: (profile: SshProfile) => void
   onCloseSession: (id: string) => void
   onSelectSession: (id: string) => void
   onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
 
-export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onCloseSession, onSelectSession, onCollectionContextMenu }: SidebarProps) {
+export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onNewSsh, onCloseSession, onSelectSession, onCollectionContextMenu }: SidebarProps) {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const addCollection = useSessionStore((s) => s.addCollection)
   const sidebarPosition = useSettingsStore((s) => s.settings.sidebarPosition)
+  const sshProfiles = useSettingsStore((s) => s.settings.sshProfiles)
+  const openSettings = useSettingsStore((s) => s.openSettings)
   const [searchQuery, setSearchQuery] = useState('')
   const [showMenu, setShowMenu] = useState(false)
+  const [showSshPicker, setShowSshPicker] = useState(false)
   const [isCreatingCollection, setIsCreatingCollection] = useState(false)
   const [newCollectionName, setNewCollectionName] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
@@ -66,13 +71,14 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onCloseSession
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false)
+        setShowSshPicker(false)
       }
     }
-    if (showMenu) {
+    if (showMenu || showSshPicker) {
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showMenu])
+  }, [showMenu, showSshPicker])
 
   const handleNewCollection = () => {
     setIsCreatingCollection(true)
@@ -107,6 +113,21 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onCloseSession
   const handleNewTerminalPickFolderClick = () => {
     setShowMenu(false)
     onNewTerminalPickFolder()
+  }
+
+  const handleNewSshClick = () => {
+    setShowMenu(false)
+    setShowSshPicker(true)
+  }
+
+  const handleSshProfilePick = (profile: SshProfile) => {
+    setShowSshPicker(false)
+    onNewSsh(profile)
+  }
+
+  const handleManageSsh = () => {
+    setShowSshPicker(false)
+    openSettings('ssh')
   }
 
   return (
@@ -157,6 +178,13 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onCloseSession
                 </svg>
                 New Terminal (Choose Folder)…
               </button>
+              <button type="button" className={styles.menuItem} onClick={handleNewSshClick}>
+                <svg width="12" height="12" viewBox="0 0 12 12">
+                  <circle cx="6" cy="6" r="4.5" stroke="currentColor" fill="none" strokeWidth="1" />
+                  <path d="M1.5 6H10.5M6 1.5C7.2 3 7.2 9 6 10.5C4.8 9 4.8 3 6 1.5Z" stroke="currentColor" fill="none" strokeWidth="1" />
+                </svg>
+                New SSH Connection…
+              </button>
               <button type="button" className={styles.menuItem} onClick={handleNewCollection}>
                 <svg width="12" height="12" viewBox="0 0 12 12">
                   <path
@@ -167,6 +195,29 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onCloseSession
                   />
                 </svg>
                 New Collection
+              </button>
+            </div>
+          )}
+          {showSshPicker && (
+            <div className={styles.dropdownMenu}>
+              {sshProfiles.length === 0 && (
+                <div className={styles.menuItemDisabled}>No SSH profiles</div>
+              )}
+              {sshProfiles.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={styles.menuItem}
+                  onClick={() => handleSshProfilePick(p)}
+                >
+                  <span>{p.name}</span>
+                  <span className={styles.menuItemSub}>
+                    {p.user ? `${p.user}@` : ''}{p.host}:{p.port ?? 22}
+                  </span>
+                </button>
+              ))}
+              <button type="button" className={styles.menuItem} onClick={handleManageSsh}>
+                Manage SSH Profiles…
               </button>
             </div>
           )}

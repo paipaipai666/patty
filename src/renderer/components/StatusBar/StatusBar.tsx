@@ -6,7 +6,8 @@ const SHELL_LABELS: Record<string, string> = {
   pwsh: 'PowerShell 7',
   cmd: 'CMD',
   gitbash: 'Git Bash',
-  wsl: 'WSL'
+  wsl: 'WSL',
+  ssh: 'SSH'
 }
 
 function formatCwd(cwd: string): string {
@@ -64,7 +65,13 @@ export function StatusBar({ metricsOpen = false, onToggleMetrics }: StatusBarPro
         <span className={styles.separator}>│</span>
         <span className={styles.item}>{SHELL_LABELS[activeSession.shell] || activeSession.shell}</span>
         <span className={styles.separator}>│</span>
-        <span className={styles.item}>{formatCwd(activeSession.cwd)}</span>
+        <span className={styles.item}>
+          {activeSession.shell === 'ssh' && activeSession.ssh
+            ? activeSession.ssh.user
+              ? `${activeSession.ssh.user}@${activeSession.ssh.host}`
+              : activeSession.ssh.host
+            : formatCwd(activeSession.cwd)}
+        </span>
         {activeSession.pid > 0 && (
           <>
             <span className={styles.separator}>│</span>

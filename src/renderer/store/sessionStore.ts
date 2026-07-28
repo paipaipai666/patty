@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { PersistedState, SessionColor, Collection } from '../../shared/stateTypes'
-import type { ShellType } from '../../shared/settingsTypes'
+import type { ShellType, SshTarget } from '../../shared/settingsTypes'
 import { markDirty } from './dirtyScheduler'
 
 export type { Collection }
@@ -15,6 +15,8 @@ export interface TerminalSession {
   createdAt: number
   collectionId: string | null
   aiType?: 'claude' | 'opencode' | 'codex' | 'omp' | null
+  /** Snapshot of the SSH target for shell === 'ssh' sessions. */
+  ssh?: SshTarget | null
 }
 
 export const SESSION_COLORS: SessionColor[] = ['blue', 'green', 'amber', 'coral', 'purple', 'gray']
@@ -48,7 +50,7 @@ interface SessionStore {
    *  this to show their drop-zone hints while any drag is in flight. */
   draggingSessionId: string | null
 
-  addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null }) => string
+  addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null; title?: string; ssh?: SshTarget | null }) => string
   removeSession: (id: string) => void
   setActive: (id: string) => void
   renameSession: (id: string, title: string) => void
@@ -164,13 +166,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const shellName = (opts.shell || 'powershell') as ShellType
     const newSession: TerminalSession = {
       id,
-      title: `Terminal ${sessions.length + 1}`,
+      title: opts.title ?? `Terminal ${sessions.length + 1}`,
       color: getNextColor(sessions.length),
       cwd: opts.cwd || '',
       shell: shellName,
       pid: 0,
       createdAt: Date.now(),
-      collectionId: opts.collectionId ?? null
+      collectionId: opts.collectionId ?? null,
+      ssh: opts.ssh ?? null
     }
     set((state) => ({
       sessions: [...state.sessions, newSession],

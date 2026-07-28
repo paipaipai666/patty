@@ -57,7 +57,8 @@ const DEFAULT_SETTINGS: AppSettings = {
     openCode: true,
     codex: true,
     ohMyPi: true
-  }
+  },
+  sshProfiles: []
 }
 
 import { useSettingsStore } from '../settingsStore'

@@ -8,12 +8,14 @@ import { perfMark, perfMeasure } from '../shared/perf'
 import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TerminalArea } from './components/Terminal/TerminalArea'
+import { CommandBar } from './components/CommandBar/CommandBar'
 import { StatusBar } from './components/StatusBar/StatusBar'
 import { MetricsDashboard } from './components/MetricsDashboard/MetricsDashboard'
 import { ContextMenu, type MenuItem } from './components/common/ContextMenu'
 import { PromptDialog, type PromptOptions } from './components/common/PromptDialog'
 import { SettingsModal } from './components/Settings/SettingsModal'
 import { Toasts } from './components/common/Toasts'
+import type { SshProfile } from '../shared/settingsTypes'
 import styles from './App.module.css'
 
 interface ContextMenuState {
@@ -152,6 +154,20 @@ export default function App() {
     const newId = addSession({ cwd, shell: defaultShell })
     useWorkspaceStore.getState().createWorkspace(newId)
   }, [addSession, defaultShell])
+
+  const handleNewSsh = useCallback((profile: SshProfile) => {
+    const newId = addSession({
+      shell: 'ssh',
+      title: profile.name,
+      ssh: {
+        host: profile.host,
+        port: profile.port,
+        user: profile.user,
+        identityFile: profile.identityFile
+      }
+    })
+    useWorkspaceStore.getState().createWorkspace(newId)
+  }, [addSession])
 
   const handleNewTerminalPickFolder = useCallback(async () => {
     try {
@@ -401,7 +417,7 @@ export default function App() {
       <TitleBar onOpenSettings={openSettings} sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         <div className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
-          <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
+          <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
         </div>
         <div
           className={styles.content}
@@ -412,6 +428,7 @@ export default function App() {
           if (activeId) handleContextMenu(e, activeId)
         }}>
           <TerminalArea />
+          <CommandBar />
           <StatusBar metricsOpen={metricsOpen} onToggleMetrics={() => setMetricsOpen((o) => !o)} />
           <MetricsDashboard open={metricsOpen} onClose={() => setMetricsOpen(false)} />
         </div>

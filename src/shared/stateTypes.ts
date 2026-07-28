@@ -1,4 +1,4 @@
-import type { ShellType } from './settingsTypes'
+import type { ShellType, SshTarget } from './settingsTypes'
 import type { PersistedPaneTree } from './paneTypes'
 import type { PersistedWorkspace } from './workspaceTypes'
 
@@ -20,6 +20,8 @@ export interface PersistedSession {
   shell: ShellType
   createdAt: number
   collectionId: string | null
+  /** Snapshot of the SSH target for shell === 'ssh' sessions; null/absent for local shells. */
+  ssh?: SshTarget | null
 }
 
 export interface PersistedState {

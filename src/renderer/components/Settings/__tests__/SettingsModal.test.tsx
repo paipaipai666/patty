@@ -28,9 +28,11 @@ const { mockUpdateSetting, mockCloseSettings, settingsState } = vi.hoisted(() =>
         closePane: 'Ctrl+Shift+W'
       },
       customThemes: [],
-      notifications: { claudeCode: true, openCode: true, codex: true, ohMyPi: true }
+      notifications: { claudeCode: true, openCode: true, codex: true, ohMyPi: true },
+      sshProfiles: []
     },
     settingsOpen: true,
+    settingsCategory: null,
     closeSettings: mockCloseSettings,
     updateSetting: mockUpdateSetting,
     init: vi.fn().mockResolvedValue(undefined),
@@ -138,19 +140,20 @@ describe('SettingsModal', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders modal with all 5 category nav items when open', () => {
+  it('renders modal with all 6 category nav items when open', () => {
     const { container } = render()
     expect(container.textContent).toContain('Appearance')
     expect(container.textContent).toContain('Terminal')
     expect(container.textContent).toContain('Shortcuts')
     expect(container.textContent).toContain('Layout')
     expect(container.textContent).toContain('Notifications')
+    expect(container.textContent).toContain('SSH')
   })
 
   it('category navigation switches sections', () => {
     const { container } = render()
     const navButtons = container.querySelectorAll('nav button')
-    expect(navButtons.length).toBe(5)
+    expect(navButtons.length).toBe(6)
     act(() => { (navButtons[1] as HTMLButtonElement).click() })
     expect(container.textContent).toContain('Cursor')
     act(() => { (navButtons[2] as HTMLButtonElement).click() })
@@ -159,6 +162,8 @@ describe('SettingsModal', () => {
     expect(container.textContent).toContain('Sidebar')
     act(() => { (navButtons[4] as HTMLButtonElement).click() })
     expect(container.textContent).toContain('Attention Notifications')
+    act(() => { (navButtons[5] as HTMLButtonElement).click() })
+    expect(container.textContent).toContain('SSH Profiles')
   })
 
   it('shortcut capture mode works', () => {

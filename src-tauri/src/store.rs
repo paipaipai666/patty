@@ -44,6 +44,7 @@ pub fn default_settings() -> Value {
             "closePane": "Ctrl+Shift+W"
         },
         "customThemes": [],
+        "sshProfiles": [],
         "notifications": { "claudeCode": true, "openCode": true, "codex": true, "ohMyPi": true }
     })
 }
@@ -199,6 +200,19 @@ mod tests {
         assert_eq!(merged["shortcuts"]["newTerminal"], "Ctrl+N");
         assert_eq!(merged["shortcuts"]["closeTerminal"], "Ctrl+W");
         assert_eq!(merged["theme"], "dark");
+    }
+
+    #[test]
+    fn merge_settings_backfills_ssh_profiles() {
+        // A settings.json written before the SSH feature has no sshProfiles
+        // key; loading must backfill the default instead of dropping it.
+        let parsed = json!({ "theme": "light" });
+        let merged = merge_settings(&parsed, &default_settings());
+        assert_eq!(merged["sshProfiles"], json!([]));
+        // Existing profiles survive the merge untouched.
+        let parsed = json!({ "sshProfiles": [{ "id": "p1", "name": "prod", "host": "10.0.0.5" }] });
+        let merged = merge_settings(&parsed, &default_settings());
+        assert_eq!(merged["sshProfiles"][0]["host"], "10.0.0.5");
     }
 
     #[test]

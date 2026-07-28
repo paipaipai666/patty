@@ -70,6 +70,20 @@ describe('addSession', () => {
     expect(sessions[1].color).toBe('green')
     expect(sessions[2].color).toBe('amber')
   })
+
+  it('stores ssh target and custom title for ssh sessions', () => {
+    const ssh = { host: '10.0.0.5', port: 2222, user: 'deploy' }
+    useSessionStore.getState().addSession({ shell: 'ssh', title: 'prod', ssh })
+    const s = useSessionStore.getState().sessions[0]
+    expect(s.shell).toBe('ssh')
+    expect(s.title).toBe('prod')
+    expect(s.ssh).toEqual(ssh)
+  })
+
+  it('defaults ssh to null for local sessions', () => {
+    useSessionStore.getState().addSession()
+    expect(useSessionStore.getState().sessions[0].ssh).toBeNull()
+  })
 })
 
 describe('removeSession', () => {
@@ -501,6 +515,20 @@ describe('buildSessionPersistedState', () => {
     expect(result.sessions).toHaveLength(1)
     expect(result.sessions[0]).not.toHaveProperty('pid')
     expect(result.sessions[0]).not.toHaveProperty('aiType')
+  })
+
+  it('keeps the ssh target so sessions reconnect after restart', () => {
+    const ssh = { host: '10.0.0.5', user: 'deploy' }
+    useSessionStore.setState({
+      sessions: [{
+        id: 's1', title: 'prod', color: 'blue', cwd: '', shell: 'ssh',
+        pid: 1234, createdAt: 1, collectionId: null, aiType: null, ssh
+      }],
+      activeSessionId: 's1'
+    })
+    const result = buildSessionPersistedState()
+    expect(result.sessions[0].ssh).toEqual(ssh)
+    expect(result.sessions[0]).not.toHaveProperty('pid')
     expect(result.activeSessionId).toBe('s1')
     expect(result.sidebarVisible).toBe(true)
   })

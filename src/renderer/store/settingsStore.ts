@@ -22,10 +22,12 @@ interface SettingsStore {
   settings: AppSettings
   loaded: boolean
   settingsOpen: boolean
+  /** Category the settings modal should open to, or null for the default. */
+  settingsCategory: string | null
 
   init: () => Promise<void>
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
-  openSettings: () => void
+  openSettings: (category?: string) => void
   closeSettings: () => void
 }
 
@@ -33,6 +35,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   loaded: false,
   settingsOpen: false,
+  settingsCategory: null,
 
   init: async () => {
     try {
@@ -73,6 +76,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
   },
 
-  openSettings: () => set({ settingsOpen: true }),
-  closeSettings: () => set({ settingsOpen: false })
+  openSettings: (category) => set({ settingsOpen: true, settingsCategory: category ?? null }),
+  closeSettings: () => set({ settingsOpen: false, settingsCategory: null })
 }))

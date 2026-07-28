@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import type { AppSettings, CustomTheme } from '../shared/settingsTypes'
+import type { AppSettings, CustomTheme, SshTarget, SshProfileDraft } from '../shared/settingsTypes'
 import type { MetricSample, FirstTerminalEntry, MetricsSnapshot } from '../shared/metricsTypes'
 import type { PersistedState } from '../shared/stateTypes'
 
@@ -20,10 +20,10 @@ const asyncUnsub = (registration: Promise<Unsubscribe>): Unsubscribe => {
 
 export const terminalAPI = {
   // Session management
-  createSession: (id: string, cwd?: string, shell?: string, cols?: number, rows?: number) =>
+  createSession: (id: string, cwd?: string, shell?: string, cols?: number, rows?: number, ssh?: SshTarget | null) =>
     invoke<{ pid: number; success: boolean; replay?: string | null; error?: string }>(
       'create_pty',
-      { id, cwd, shell, cols, rows }
+      { id, cwd, shell, cols, rows, ssh }
     ),
 
   write: (id: string, data: string) => {
@@ -75,6 +75,10 @@ export const terminalAPI = {
   // Shell detection
   detectShells: () =>
     invoke<Array<{ name: string; path: string; available: boolean }>>('detect_shells'),
+
+  // SSH config import
+  sshConfigImport: () =>
+    invoke<{ success: boolean; profiles: SshProfileDraft[] }>('ssh_config_import'),
 
   // System fonts
   getFonts: () => invoke<string[]>('get_fonts'),

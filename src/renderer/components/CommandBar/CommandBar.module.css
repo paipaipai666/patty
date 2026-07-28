@@ -1,0 +1,80 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  flex-shrink: 0;
+}
+
+.prompt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-dim);
+  user-select: none;
+}
+
+.inputWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
+
+.input::placeholder {
+  color: var(--fg-dim);
+}
+
+/* Ghost autocomplete overlay: mirrors the input's font/padding exactly so the
+ * invisible typed prefix aligns the visible suggestion suffix with the caret. */
+.ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 0;
+  pointer-events: none;
+  white-space: pre;
+  overflow: hidden;
+}
+
+.ghostTyped {
+  visibility: hidden;
+}
+
+.ghostSuffix {
+  color: var(--fg-dim);
+  opacity: 0.7;
+}
+
+.sendBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 4px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sendBtn:hover {
+  background: var(--bg-item-hover);
+  color: var(--text-primary);
+}

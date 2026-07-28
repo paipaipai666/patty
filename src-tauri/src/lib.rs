@@ -3,6 +3,7 @@ pub mod hooks;
 pub mod installer;
 pub mod metrics;
 pub mod pty;
+pub mod ssh;
 pub mod store;
 
 use serde_json::{json, Value};
@@ -59,8 +60,9 @@ fn create_pty(
     shell: Option<&str>,
     cols: Option<u16>,
     rows: Option<u16>,
+    ssh: Option<ssh::SshTarget>,
 ) -> Value {
-    pty::create(&app, id, cwd, shell, cols, rows)
+    pty::create(&app, id, cwd, shell, cols, rows, ssh)
 }
 
 #[tauri::command]
@@ -81,6 +83,11 @@ fn kill_pty(id: &str) -> Value {
 #[tauri::command]
 fn detect_shells() -> Value {
     pty::detect_shells()
+}
+
+#[tauri::command]
+fn ssh_config_import() -> Value {
+    ssh::import_ssh_config()
 }
 
 #[tauri::command]
@@ -259,6 +266,7 @@ pub fn run() {
             resize_pty,
             kill_pty,
             detect_shells,
+            ssh_config_import,
             get_fonts,
             get_hook_port,
             select_directory,

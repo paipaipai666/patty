@@ -382,6 +382,25 @@
   background: var(--bg-item-hover);
 }
 
+.menuItemSub {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.menuItemDisabled {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--fg-dim);
+  cursor: default;
+  white-space: nowrap;
+}
+
 .collectionGroup {
   display: flex;
   flex-direction: column;

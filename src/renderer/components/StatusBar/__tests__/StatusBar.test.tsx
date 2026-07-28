@@ -67,6 +67,28 @@ describe('StatusBar', () => {
     expect(container.textContent).toContain('zsh')
   })
 
+  it('shows SSH label and user@host for ssh sessions', () => {
+    sessionState.sessions = [{
+      id: 'sess-1', title: 'prod', shell: 'ssh', cwd: '', pid: 0, color: 'blue',
+      ssh: { host: '10.0.0.5', user: 'deploy', port: 2222 }
+    }]
+    sessionState.activeSessionId = 'sess-1'
+    const { container } = render()
+    expect(container.textContent).toContain('SSH')
+    expect(container.textContent).toContain('deploy@10.0.0.5')
+  })
+
+  it('shows bare host for ssh sessions without user', () => {
+    sessionState.sessions = [{
+      id: 'sess-1', title: 'prod', shell: 'ssh', cwd: '', pid: 0, color: 'blue',
+      ssh: { host: '10.0.0.5' }
+    }]
+    sessionState.activeSessionId = 'sess-1'
+    const { container } = render()
+    expect(container.textContent).toContain('10.0.0.5')
+    expect(container.textContent).not.toContain('@')
+  })
+
   it('metrics toggle button works', () => {
     const onToggle = vi.fn()
     const { container } = render({ onToggleMetrics: onToggle })

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
@@ -16,8 +16,10 @@ vi.mock('../../../store/settingsStore', () => {
       defaultShell: 'powershell',
       customThemes: [],
       shortcuts: {},
-      notifications: {}
-    }
+      notifications: {},
+      sshProfiles: []
+    },
+    openSettings: vi.fn()
   }
   const useSettingsStore = (sel: (s: typeof state) => unknown) => sel(state)
   return { useSettingsStore }
@@ -43,6 +45,19 @@ vi.mock('../../../store/sessionStore', () => {
 
 import { Sidebar } from '../Sidebar'
 import { useSessionStore } from '../../../store/sessionStore'
+import { useSettingsStore } from '../../../store/settingsStore'
+import type { SshProfile } from '../../../../shared/settingsTypes'
+
+// The mocked useSettingsStore is untyped (vi.mock factory); assert the slice
+// shape this suite mutates. Runtime value is the mock defined above.
+interface SettingsMockState {
+  settings: { sshProfiles: SshProfile[] }
+  openSettings: Mock
+}
+function settingsMockState(): SettingsMockState {
+  const mocked = useSettingsStore as unknown as (sel: (s: SettingsMockState) => unknown) => SettingsMockState
+  return mocked((s) => s)
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -57,6 +72,7 @@ function render(props: Partial<Parameters<typeof Sidebar>[0]> = {}) {
   const allProps = {
     onNewTerminal: vi.fn(),
     onNewTerminalPickFolder: vi.fn(),
+    onNewSsh: vi.fn(),
     onCloseSession: vi.fn(),
     onSelectSession: vi.fn(),
     ...props
@@ -100,6 +116,64 @@ describe('Sidebar', () => {
     const newTermBtn = Array.from(items).find((b) => b.textContent?.includes('New Terminal'))!
     act(() => { newTermBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(onNewTerminal).toHaveBeenCalled()
+  })
+
+  it('menu contains New SSH Connection which opens the profile picker', () => {
+    const settingsState = settingsMockState()
+    settingsState.settings.sshProfiles = [
+      { id: 'p1', name: 'prod', host: '10.0.0.5', user: 'deploy', port: 2222 }
+    ]
+    const { container } = render()
+    const btn = container.querySelector('button[aria-label="New terminal or collection"]')!
+    act(() => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const sshItem = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('New SSH Connection')
+    )!
+    act(() => { sshItem.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const profileBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('prod')
+    )
+    expect(profileBtn).not.toBeUndefined()
+    expect(profileBtn!.textContent).toContain('deploy@10.0.0.5:2222')
+    settingsState.settings.sshProfiles = []
+  })
+
+  it('clicking a profile in the picker calls onNewSsh with it', () => {
+    const settingsState = settingsMockState()
+    const profile = { id: 'p1', name: 'prod', host: '10.0.0.5', user: 'deploy' }
+    settingsState.settings.sshProfiles = [profile]
+    const onNewSsh = vi.fn()
+    const { container } = render({ onNewSsh })
+    const btn = container.querySelector('button[aria-label="New terminal or collection"]')!
+    act(() => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const sshItem = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('New SSH Connection')
+    )!
+    act(() => { sshItem.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const profileBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('prod')
+    )!
+    act(() => { profileBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(onNewSsh).toHaveBeenCalledWith(profile)
+    settingsState.settings.sshProfiles = []
+  })
+
+  it('empty picker shows hint and Manage opens settings at ssh category', () => {
+    const settingsState = settingsMockState()
+    settingsState.settings.sshProfiles = []
+    const { container } = render()
+    const btn = container.querySelector('button[aria-label="New terminal or collection"]')!
+    act(() => { btn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    const sshItem = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('New SSH Connection')
+    )!
+    act(() => { sshItem.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(container.textContent).toContain('No SSH profiles')
+    const manageBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Manage SSH Profiles')
+    )!
+    act(() => { manageBtn.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(settingsState.openSettings).toHaveBeenCalledWith('ssh')
   })
 
   it('New Terminal (Choose Folder) click calls onNewTerminalPickFolder', () => {

@@ -6,6 +6,7 @@ import { toast } from '../../store/toastStore'
 import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import type { AppSettings, CustomTheme, ShellType, ShortcutMap } from '../../../shared/settingsTypes'
 import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS, BUILTIN_THEMES } from '../../styles/themes'
+import { SshSettingsPanel } from './SshSettingsPanel'
 import styles from './SettingsModal.module.css'
 
 const FALLBACK_FONTS = [
@@ -19,14 +20,15 @@ const FALLBACK_FONTS = [
   'monospace'
 ]
 
-type Category = 'appearance' | 'terminal' | 'shortcuts' | 'layout' | 'notifications'
+type Category = 'appearance' | 'terminal' | 'shortcuts' | 'layout' | 'notifications' | 'ssh'
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: 'appearance', label: 'Appearance' },
   { key: 'terminal', label: 'Terminal' },
   { key: 'shortcuts', label: 'Shortcuts' },
   { key: 'layout', label: 'Layout' },
-  { key: 'notifications', label: 'Notifications' }
+  { key: 'notifications', label: 'Notifications' },
+  { key: 'ssh', label: 'SSH' }
 ]
 
 const SHORTCUT_KEYS: { key: keyof ShortcutMap; label: string }[] = [
@@ -56,6 +58,7 @@ export function SettingsModal() {
   const settingsOpen = useSettingsStore((s) => s.settingsOpen)
   const closeSettings = useSettingsStore((s) => s.closeSettings)
   const updateSetting = useSettingsStore((s) => s.updateSetting)
+  const settingsCategory = useSettingsStore((s) => s.settingsCategory)
   const { mounted, exiting } = useAnimatedMount(settingsOpen, 200)
   const [activeCategory, setActiveCategory] = useState<Category>('appearance')
   const [capturingShortcut, setCapturingShortcut] = useState<keyof ShortcutMap | null>(null)
@@ -67,10 +70,11 @@ export function SettingsModal() {
 
   useEffect(() => {
     if (!settingsOpen) {
-      setActiveCategory('appearance')
       setCapturingShortcut(null)
+      return
     }
-  }, [settingsOpen])
+    setActiveCategory(settingsCategory === 'ssh' ? 'ssh' : 'appearance')
+  }, [settingsOpen, settingsCategory])
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -195,6 +199,7 @@ export function SettingsModal() {
             {activeCategory === 'notifications' && (
               <NotificationsSection settings={settings} updateSetting={updateSetting} />
             )}
+            {activeCategory === 'ssh' && <SshSettingsPanel />}
           </div>
         </div>
       </div>
