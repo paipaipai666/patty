@@ -1,12 +1,9 @@
-// SSH profile support: spawn the system OpenSSH client (ssh.exe) inside the
-// existing ConPTY pipeline. No credentials are stored — password prompts are
-// handled interactively by ssh.exe itself (or ssh-agent).
+// SSH profile support: connection parameters and ~/.ssh/config import.
+// Sessions themselves run on the in-process russh stack (see sshconn.rs);
+// no credentials are stored — password prompts are handled by UI modals.
 
 use serde_json::{json, Value};
 use std::path::PathBuf;
-use std::process::Command;
-use std::os::windows::process::CommandExt;
-use std::sync::LazyLock;
 
 /// Connection parameters. The renderer sends this verbatim through `create_pty`;
 /// it is also persisted on sessions (camelCase keys) and read back by
@@ -29,51 +26,6 @@ pub struct SshProfileDraft {
     pub port: Option<u16>,
     pub user: Option<String>,
     pub identity_file: Option<String>,
-}
-
-/// Build the argv for ssh.exe. Port 22 is the default and is omitted; empty
-/// user/identity strings are treated as absent.
-pub fn ssh_args(t: &SshTarget) -> Vec<String> {
-    let mut args = Vec::new();
-    if let Some(p) = t.port {
-        if p != 22 {
-            args.push("-p".into());
-            args.push(p.to_string());
-        }
-    }
-    if let Some(idf) = t.identity_file.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        args.push("-i".into());
-        args.push(idf.to_string());
-    }
-    let dest = match t.user.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        Some(u) => format!("{u}@{}", t.host),
-        None => t.host.clone(),
-    };
-    args.push(dest);
-    args
-}
-
-/// Locate ssh.exe. Probes `where.exe` once per process (hidden console
-/// window, same flags as pty.rs find_pwsh), falls back to the well-known
-/// OpenSSH path.
-pub fn find_ssh() -> Option<PathBuf> {
-    static SSH: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
-        let out = Command::new("where.exe").arg("ssh").creation_flags(0x08000000).output().ok();
-        if let Some(out) = out {
-            if out.status.success() {
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                if let Some(first) = stdout.lines().next().map(str::trim) {
-                    let path = PathBuf::from(first);
-                    if path.exists() {
-                        return Some(path);
-                    }
-                }
-            }
-        }
-        let well_known = PathBuf::from(r"C:\Windows\System32\OpenSSH\ssh.exe");
-        well_known.exists().then_some(well_known)
-    });
-    SSH.clone()
 }
 
 /// Parse OpenSSH client config into profile drafts. Only Host / HostName /
@@ -185,42 +137,6 @@ pub fn import_ssh_config() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn target(host: &str, port: Option<u16>, user: Option<&str>, idf: Option<&str>) -> SshTarget {
-        SshTarget {
-            host: host.to_string(),
-            port,
-            user: user.map(str::to_string),
-            identity_file: idf.map(str::to_string),
-        }
-    }
-
-    #[test]
-    fn ssh_args_full() {
-        let t = target("example.com", Some(2222), Some("root"), Some("C:\\keys\\id_ed25519"));
-        assert_eq!(
-            ssh_args(&t),
-            vec!["-p", "2222", "-i", "C:\\keys\\id_ed25519", "root@example.com"]
-        );
-    }
-
-    #[test]
-    fn ssh_args_omits_default_port() {
-        let t = target("example.com", Some(22), Some("root"), None);
-        assert_eq!(ssh_args(&t), vec!["root@example.com"]);
-    }
-
-    #[test]
-    fn ssh_args_without_user() {
-        let t = target("example.com", None, None, None);
-        assert_eq!(ssh_args(&t), vec!["example.com"]);
-    }
-
-    #[test]
-    fn ssh_args_blank_user_and_identity_ignored() {
-        let t = target("example.com", None, Some("  "), Some(""));
-        assert_eq!(ssh_args(&t), vec!["example.com"]);
-    }
 
     #[test]
     fn parse_basic_block() {

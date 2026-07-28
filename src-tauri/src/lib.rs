@@ -4,6 +4,7 @@ pub mod installer;
 pub mod metrics;
 pub mod pty;
 pub mod ssh;
+pub mod sshconn;
 pub mod store;
 
 use serde_json::{json, Value};
@@ -53,31 +54,67 @@ fn state_save(state: Value) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn create_pty(
+async fn create_pty(
     app: tauri::AppHandle,
-    id: &str,
-    cwd: Option<&str>,
-    shell: Option<&str>,
+    id: String,
+    cwd: Option<String>,
+    shell: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
     ssh: Option<ssh::SshTarget>,
 ) -> Value {
-    pty::create(&app, id, cwd, shell, cols, rows, ssh)
+    if let Some(target) = ssh {
+        return sshconn::create(Some(app), &id, target, cols.unwrap_or(80), rows.unwrap_or(24))
+            .await;
+    }
+    pty::create(&app, &id, cwd.as_deref(), shell.as_deref(), cols, rows)
 }
 
 #[tauri::command]
 fn write_pty(id: &str, data: &str) {
-    pty::write(id, data)
+    if sshconn::exists(id) {
+        sshconn::write(id, data)
+    } else {
+        pty::write(id, data)
+    }
 }
 
 #[tauri::command]
 fn resize_pty(id: &str, cols: u16, rows: u16) {
-    pty::resize(id, cols, rows)
+    if sshconn::exists(id) {
+        sshconn::resize(id, cols, rows)
+    } else {
+        pty::resize(id, cols, rows)
+    }
 }
 
 #[tauri::command]
 fn kill_pty(id: &str) -> Value {
+    if sshconn::exists(id) {
+        sshconn::kill(id);
+        return json!({ "success": true });
+    }
     pty::kill(id)
+}
+
+#[tauri::command]
+fn ssh_auth_respond(id: &str, secret: Option<String>) {
+    sshconn::auth_respond(id, secret)
+}
+
+#[tauri::command]
+fn ssh_hostkey_respond(id: &str, trust: bool) {
+    sshconn::hostkey_respond(id, trust)
+}
+
+#[tauri::command]
+fn ssh_metrics_start(app: tauri::AppHandle, id: &str) {
+    sshconn::metrics_start(Some(app), id)
+}
+
+#[tauri::command]
+fn ssh_metrics_stop(id: &str) {
+    sshconn::metrics_stop(id)
 }
 
 #[tauri::command]
@@ -265,6 +302,10 @@ pub fn run() {
             write_pty,
             resize_pty,
             kill_pty,
+            ssh_auth_respond,
+            ssh_hostkey_respond,
+            ssh_metrics_start,
+            ssh_metrics_stop,
             detect_shells,
             ssh_config_import,
             get_fonts,

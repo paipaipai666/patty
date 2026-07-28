@@ -90,7 +90,8 @@ const hoisted = vi.hoisted(() => {
     mockNavigateNext, mockNavigatePrev, mockNavigateToIndex, mockLoadState,
     mockCreateWorkspace, mockRemoveSessionEverywhere, mockLoadFromPersisted,
     mockSettingsInit, mockOpenSettings,
-    sessionState, wsState, settingsState
+    sessionState, wsState, settingsState,
+    shownPrompts: {} as Record<string, any>
   }
 })
 
@@ -137,13 +138,34 @@ vi.mock('../components/MetricsDashboard/MetricsDashboard', () => ({
   MetricsDashboard: () => <div data-testid="metrics-dashboard" />
 }))
 
+vi.mock('../components/SshMonitor/SshMonitorPanel', () => ({
+  SshMonitorPanel: () => <div data-testid="ssh-monitor-panel" />
+}))
+
 vi.mock('../components/common/ContextMenu', () => ({
   ContextMenu: (props: any) => <div data-testid="context-menu" data-show={props.show} />
 }))
 
-vi.mock('../components/common/PromptDialog', () => ({
-  PromptDialog: () => <div data-testid="prompt-dialog" />
-}))
+vi.mock('../components/common/PromptDialog', async () => {
+  const { useRef } = await import('react')
+  return {
+    PromptDialog: (props: { show: boolean; options: { title?: string } }) => {
+      // Record shown dialog options keyed by title; remember this instance's
+      // title so dismissal (which renders the empty fallback options) still
+      // clears the right entry.
+      const lastTitle = useRef<string | null>(null)
+      const title = props.options?.title
+      if (props.show && title) {
+        lastTitle.current = title
+        hoisted.shownPrompts[title] = props.options
+      } else if (!props.show && lastTitle.current) {
+        delete hoisted.shownPrompts[lastTitle.current]
+        lastTitle.current = null
+      }
+      return <div data-testid="prompt-dialog" />
+    }
+  }
+})
 
 vi.mock('../components/Settings/SettingsModal', () => ({
   SettingsModal: () => <div data-testid="settings-modal" />
@@ -167,6 +189,7 @@ beforeEach(() => {
   }
   ;(window as any).terminalAPI = terminalAPI
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
+  hoisted.shownPrompts = {}
   roots.forEach(r => r.unmount())
   roots.length = 0
   document.body.innerHTML = ''
@@ -298,5 +321,69 @@ describe('App', () => {
     document.body.appendChild(splash)
     render()
     expect(splash.classList.contains('patty-splash-hide')).toBe(true)
+  })
+
+  it('shows the ssh auth dialog on ssh:auth and responds on submit', () => {
+    let authCb: ((id: string, info: unknown) => void) | null = null
+    terminalAPI.onSshAuth = vi.fn((cb: typeof authCb) => { authCb = cb; return vi.fn() })
+    terminalAPI.sshAuthRespond = vi.fn()
+    render()
+    expect(terminalAPI.onSshAuth).toHaveBeenCalled()
+    act(() => {
+      authCb!('sess-1', { kind: 'password', prompt: "deploy@10.0.0.5's password:", attempt: 1 })
+    })
+    const options = hoisted.shownPrompts["deploy@10.0.0.5's password:"]
+    expect(options).toBeTruthy()
+    expect(options.secret).toBe(true)
+    act(() => { options.onSubmit('hunter2') })
+    expect(terminalAPI.sshAuthRespond).toHaveBeenCalledWith('sess-1', 'hunter2')
+    expect(hoisted.shownPrompts["deploy@10.0.0.5's password:"]).toBeUndefined()
+  })
+
+  it('cancelling the ssh auth dialog responds with null', () => {
+    let authCb: ((id: string, info: unknown) => void) | null = null
+    terminalAPI.onSshAuth = vi.fn((cb: typeof authCb) => { authCb = cb; return vi.fn() })
+    terminalAPI.sshAuthRespond = vi.fn()
+    render()
+    act(() => {
+      authCb!('sess-1', { kind: 'password', prompt: 'pw?', attempt: 1 })
+    })
+    act(() => { hoisted.shownPrompts['pw?'].onCancel() })
+    expect(terminalAPI.sshAuthRespond).toHaveBeenCalledWith('sess-1', null)
+  })
+
+  it('shows the hostkey dialog on ssh:hostkey and trusts on submit', () => {
+    let hostkeyCb: ((id: string, info: unknown) => void) | null = null
+    terminalAPI.onSshHostkey = vi.fn((cb: typeof hostkeyCb) => { hostkeyCb = cb; return vi.fn() })
+    terminalAPI.sshHostkeyRespond = vi.fn()
+    render()
+    act(() => {
+      hostkeyCb!('sess-2', { host: '10.0.0.5', port: 22, fingerprint: 'SHA256:abc', keyType: 'ssh-ed25519' })
+    })
+    const options = hoisted.shownPrompts['Unknown host key']
+    expect(options).toBeTruthy()
+    expect(options.hideInput).toBe(true)
+    expect(options.body).toContain('SHA256:abc')
+    act(() => { options.onSubmit('') })
+    expect(terminalAPI.sshHostkeyRespond).toHaveBeenCalledWith('sess-2', true)
+    expect(hoisted.shownPrompts['Unknown host key']).toBeUndefined()
+  })
+
+  it('queues concurrent ssh auth requests and answers them FIFO', () => {
+    let authCb: ((id: string, info: unknown) => void) | null = null
+    terminalAPI.onSshAuth = vi.fn((cb: typeof authCb) => { authCb = cb; return vi.fn() })
+    terminalAPI.sshAuthRespond = vi.fn()
+    render()
+    act(() => {
+      authCb!('sess-1', { kind: 'password', prompt: 'first?', attempt: 1 })
+      authCb!('sess-2', { kind: 'password', prompt: 'second?', attempt: 1 })
+    })
+    expect(hoisted.shownPrompts['first?']).toBeTruthy()
+    expect(hoisted.shownPrompts['second?']).toBeUndefined()
+    act(() => { hoisted.shownPrompts['first?'].onSubmit('a') })
+    expect(terminalAPI.sshAuthRespond).toHaveBeenCalledWith('sess-1', 'a')
+    expect(hoisted.shownPrompts['second?']).toBeTruthy()
+    act(() => { hoisted.shownPrompts['second?'].onSubmit('b') })
+    expect(terminalAPI.sshAuthRespond).toHaveBeenCalledWith('sess-2', 'b')
   })
 })

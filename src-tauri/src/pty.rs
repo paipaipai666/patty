@@ -28,7 +28,6 @@ pub struct Session {
     pid: u32,
     cwd: Option<String>,
     shell: Option<String>,
-    ssh: Option<crate::ssh::SshTarget>,
     writer: Mutex<Box<dyn Write + Send>>,
     master: Mutex<Box<dyn MasterPty + Send>>,
     child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
@@ -71,7 +70,7 @@ fn begin_spawn(id: &str) -> SpawnGuard {
     }
 }
 
-fn emit(app: &Option<AppHandle>, event: &str, payload: impl serde::Serialize + Clone) {
+pub(crate) fn emit(app: &Option<AppHandle>, event: &str, payload: impl serde::Serialize + Clone) {
     if let Some(app) = app {
         if let Err(e) = app.emit(event, payload) {
             eprintln!("[pty] emit {event} failed: {e}");
@@ -345,19 +344,8 @@ fn spawn_inner(
     cols: Option<u16>,
     rows: Option<u16>,
     attached: bool,
-    ssh: Option<crate::ssh::SshTarget>,
 ) -> Result<u32, String> {
-    // SSH sessions spawn the system OpenSSH client directly as the session
-    // process; argv comes from the persisted target, not shell integration.
-    let (shell_path, extra_args) = if shell == Some("ssh") {
-        let path = crate::ssh::find_ssh()
-            .ok_or("ssh.exe not found — install Windows OpenSSH Client (Settings > Apps > Optional features)")?
-            .to_string_lossy()
-            .into_owned();
-        (path, ssh.as_ref().map(crate::ssh::ssh_args).unwrap_or_default())
-    } else {
-        (shell_path(shell), Vec::new())
-    };
+    let shell_path = shell_path(shell);
     let working_dir = cwd
         .map(String::from)
         .or_else(|| std::env::var("USERPROFILE").ok())
@@ -374,7 +362,6 @@ fn spawn_inner(
 
     let mut cmd = CommandBuilder::new(&shell_path);
     cmd.args(shell_spawn_args(&shell_path));
-    cmd.args(extra_args);
     cmd.cwd(&working_dir);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
@@ -405,7 +392,6 @@ fn spawn_inner(
         pid,
         cwd: cwd.map(String::from),
         shell: shell.map(String::from),
-        ssh,
         writer: Mutex::new(writer),
         master: Mutex::new(pair.master),
         child: child.clone(),
@@ -441,15 +427,13 @@ pub fn create(
     shell: Option<&str>,
     cols: Option<u16>,
     rows: Option<u16>,
-    ssh: Option<crate::ssh::SshTarget>,
 ) -> Value {
     let _spawn_guard = begin_spawn(id);
     // Reattach to a preheated session when cwd/shell match.
     let mut map = SESSIONS.write().unwrap();
     if let Some(existing) = map.get(id) {
         let matches = existing.cwd.as_deref() == cwd
-            && existing.shell.as_deref() == shell
-            && existing.ssh == ssh;
+            && existing.shell.as_deref() == shell;
         if !existing.shared.attached.load(Ordering::Relaxed) && matches {
             existing.shared.attached.store(true, Ordering::Relaxed);
             let replay = take_buffer(&existing.shared);
@@ -468,7 +452,7 @@ pub fn create(
     }
     drop(map);
 
-    match spawn_inner(Some(app), id, cwd, shell, cols, rows, true, ssh) {
+    match spawn_inner(Some(app), id, cwd, shell, cols, rows, true) {
         Ok(pid) => json!({ "pid": pid, "success": true, "replay": Value::Null }),
         Err(e) => {
             eprintln!("[pty] create failed for {id}: {e}");
@@ -479,7 +463,7 @@ pub fn create(
 
 /// Pre-spawn a PTY for a session expected to mount soon; early output is
 /// buffered and replayed on attach.
-pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>, ssh: Option<crate::ssh::SshTarget>) {
+pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>) {
     // A spawn for this id is already in flight — this warm is redundant.
     let Some(_spawn_guard) = try_begin_spawn(id) else {
         return;
@@ -487,7 +471,7 @@ pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>, s
     if SESSIONS.read().unwrap().contains_key(id) {
         return;
     }
-    if let Err(e) = spawn_inner(Some(app), id, cwd, shell, None, None, false, ssh) {
+    if let Err(e) = spawn_inner(Some(app), id, cwd, shell, None, None, false) {
         eprintln!("[pty] failed to warm {id}: {e}");
     }
 }
@@ -515,11 +499,7 @@ pub fn warm_startup(app: &AppHandle) {
             .find(|s| s.get("id").and_then(Value::as_str) == Some(leaf_id.as_str()));
         let cwd = found.and_then(|s| s.get("cwd")).and_then(Value::as_str);
         let shell = found.and_then(|s| s.get("shell")).and_then(Value::as_str);
-        let ssh = found
-            .and_then(|s| s.get("ssh"))
-            .cloned()
-            .and_then(|v| serde_json::from_value(v).ok());
-        warm(app, &leaf_id, cwd, shell, ssh);
+        warm(app, &leaf_id, cwd, shell);
     }
 }
 
@@ -762,7 +742,7 @@ mod tests {
         // Real ConPTY round-trip: unattached session buffers output; exit
         // removes the session from the registry.
         let id = format!("test-{}", std::process::id());
-        let pid = spawn_inner(None, &id, None, Some("cmd"), None, None, false, None)
+        let pid = spawn_inner(None, &id, None, Some("cmd"), None, None, false)
             .expect("spawn cmd");
         assert!(pid > 0);
         thread::sleep(Duration::from_millis(500));
@@ -784,42 +764,5 @@ mod tests {
             thread::sleep(Duration::from_millis(100));
         }
         assert!(gone, "session should be removed after shell exit");
-    }
-
-    #[test]
-    fn spawn_ssh_client_with_target_args() {
-        // Real ConPTY round-trip through the ssh branch: ssh.exe spawns with
-        // argv built from the target and fails fast against a closed port —
-        // the error text must appear in the pre-attach buffer.
-        let id = format!("test-ssh-{}", std::process::id());
-        let target = crate::ssh::SshTarget {
-            host: "127.0.0.1".into(),
-            port: Some(1),
-            user: Some("nobody".into()),
-            identity_file: None,
-        };
-        let pid = spawn_inner(None, &id, None, Some("ssh"), None, None, false, Some(target))
-            .expect("spawn ssh");
-        assert!(pid > 0);
-        let mut saw_error = false;
-        for _ in 0..50 {
-            {
-                let map = SESSIONS.read().unwrap();
-                if let Some(session) = map.get(&id) {
-                    let buffered = session.shared.buffer.lock().unwrap().join("");
-                    if buffered.contains("connect to host") || buffered.contains("Connection") {
-                        saw_error = true;
-                        break;
-                    }
-                } else {
-                    // ssh already exited and the wait loop evicted the session.
-                    saw_error = true;
-                    break;
-                }
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
-        kill(&id);
-        assert!(saw_error, "ssh.exe should report the refused connection");
     }
 }

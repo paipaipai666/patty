@@ -22,9 +22,11 @@ function formatCwd(cwd: string): string {
 interface StatusBarProps {
   metricsOpen?: boolean
   onToggleMetrics?: () => void
+  sshMonitorOpen?: boolean
+  onToggleSshMonitor?: () => void
 }
 
-export function StatusBar({ metricsOpen = false, onToggleMetrics }: StatusBarProps) {
+export function StatusBar({ metricsOpen = false, onToggleMetrics, sshMonitorOpen = false, onToggleSshMonitor }: StatusBarProps) {
   const activeSession = useSessionStore((s) =>
     s.sessions.find((x) => x.id === s.activeSessionId) ?? null
   )
@@ -39,11 +41,22 @@ export function StatusBar({ metricsOpen = false, onToggleMetrics }: StatusBarPro
     </button>
   )
 
+  const sshMonitorButton = activeSession?.shell === 'ssh' && onToggleSshMonitor ? (
+    <button
+      className={`${styles.item} ${styles.toggleBtn} ${sshMonitorOpen ? styles.active : ''}`}
+      onClick={onToggleSshMonitor}
+      aria-pressed={sshMonitorOpen}
+    >
+      Monitor
+    </button>
+  ) : null
+
   if (!activeSession) {
     return (
       <div className={styles.statusbar}>
         <span className={styles.item}>No active session</span>
         <span className={styles.spacer} />
+        {sshMonitorButton}
         {metricsButton}
       </div>
     )
@@ -80,6 +93,7 @@ export function StatusBar({ metricsOpen = false, onToggleMetrics }: StatusBarPro
         )}
       </span>
       <span className={styles.spacer} />
+      {sshMonitorButton}
       {metricsButton}
     </div>
   )

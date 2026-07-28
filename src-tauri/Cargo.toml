@@ -3,7 +3,7 @@ name = "patty"
 version = "2.0.3"
 description = "Patty"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.85"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -20,6 +20,13 @@ rfd = "0.17.2"
 sysinfo = "0.36.1"
 encoding_rs = "0.8.35"
 tauri-plugin-single-instance = "2.0.0-rc.5"
+russh = { version = "=0.62.4", default-features = false, features = ["ring", "flate2", "rsa"] }
+tokio = { version = "1", features = ["sync", "time"] }
+bytes = "1"
+
+[dev-dependencies]
+rand = "0.10"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [profile.release]
 panic = "abort"

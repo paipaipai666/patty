@@ -21,12 +21,19 @@ beforeEach(() => {
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
 })
 
-function render(props: { metricsOpen?: boolean; onToggleMetrics?: () => void } = {}) {
+function render(props: { metricsOpen?: boolean; onToggleMetrics?: () => void; sshMonitorOpen?: boolean; onToggleSshMonitor?: () => void } = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
-    root.render(<StatusBar metricsOpen={props.metricsOpen} onToggleMetrics={props.onToggleMetrics} />)
+    root.render(
+      <StatusBar
+        metricsOpen={props.metricsOpen}
+        onToggleMetrics={props.onToggleMetrics}
+        sshMonitorOpen={props.sshMonitorOpen}
+        onToggleSshMonitor={props.onToggleSshMonitor}
+      />
+    )
   })
   return { container, root }
 }
@@ -102,5 +109,32 @@ describe('StatusBar', () => {
     const { container } = render({ metricsOpen: true, onToggleMetrics: vi.fn() })
     const btn = container.querySelector('button')
     expect(btn?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('shows Monitor button only for ssh sessions', () => {
+    sessionState.sessions = [
+      { id: 's1', title: 'prod', shell: 'ssh', cwd: '', pid: 1, color: 'blue', ssh: { host: '10.0.0.5', user: 'deploy' } }
+    ]
+    sessionState.activeSessionId = 's1'
+    const onToggle = vi.fn()
+    const { container } = render({ onToggleSshMonitor: onToggle })
+    const monitorBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Monitor'
+    )
+    expect(monitorBtn).toBeTruthy()
+    act(() => { monitorBtn!.click() })
+    expect(onToggle).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides Monitor button for non-ssh sessions', () => {
+    sessionState.sessions = [
+      { id: 's1', title: 'local', shell: 'powershell', cwd: 'C:\\', pid: 1, color: 'blue' }
+    ]
+    sessionState.activeSessionId = 's1'
+    const { container } = render({ onToggleSshMonitor: vi.fn() })
+    const monitorBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Monitor'
+    )
+    expect(monitorBtn).toBeUndefined()
   })
 })

@@ -21,7 +21,7 @@ function formatAxisValue(n: number, unit: string): string {
   return `${n.toFixed(n >= 100 ? 0 : 1)}${unit}`
 }
 
-const HistoryChart = memo(function HistoryChart({
+export const HistoryChart = memo(function HistoryChart({
   series,
   width = 720,
   height = 120,

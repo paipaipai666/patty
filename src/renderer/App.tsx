@@ -11,11 +11,12 @@ import { TerminalArea } from './components/Terminal/TerminalArea'
 import { CommandBar } from './components/CommandBar/CommandBar'
 import { StatusBar } from './components/StatusBar/StatusBar'
 import { MetricsDashboard } from './components/MetricsDashboard/MetricsDashboard'
+import { SshMonitorPanel } from './components/SshMonitor/SshMonitorPanel'
 import { ContextMenu, type MenuItem } from './components/common/ContextMenu'
 import { PromptDialog, type PromptOptions } from './components/common/PromptDialog'
 import { SettingsModal } from './components/Settings/SettingsModal'
 import { Toasts } from './components/common/Toasts'
-import type { SshProfile } from '../shared/settingsTypes'
+import type { SshProfile, SshAuthRequest, SshHostkeyRequest } from '../shared/settingsTypes'
 import styles from './App.module.css'
 
 interface ContextMenuState {
@@ -59,6 +60,21 @@ export default function App() {
   const [collectionContextMenu, setCollectionContextMenu] = useState<CollectionContextMenuState | null>(null)
   const [promptOptions, setPromptOptions] = useState<PromptOptions | null>(null)
   const [metricsOpen, setMetricsOpen] = useState(false)
+  const [sshMonitorOpen, setSshMonitorOpen] = useState(false)
+  // Queued SSH modal requests: several sessions may prompt concurrently (e.g.
+  // reconnect after an app restart) — answer them one at a time, FIFO.
+  const [sshAuthQueue, setSshAuthQueue] = useState<Array<{ id: string; info: SshAuthRequest }>>([])
+  const [sshHostkeyQueue, setSshHostkeyQueue] = useState<Array<{ id: string; info: SshHostkeyRequest }>>([])
+
+  useEffect(() => {
+    const api = window.terminalAPI
+    const unAuth = api.onSshAuth?.((id, info) => setSshAuthQueue((q) => [...q, { id, info }]))
+    const unHostkey = api.onSshHostkey?.((id, info) => setSshHostkeyQueue((q) => [...q, { id, info }]))
+    return () => {
+      unAuth?.()
+      unHostkey?.()
+    }
+  }, [])
 
   const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
 
@@ -429,8 +445,14 @@ export default function App() {
         }}>
           <TerminalArea />
           <CommandBar />
-          <StatusBar metricsOpen={metricsOpen} onToggleMetrics={() => setMetricsOpen((o) => !o)} />
+          <StatusBar
+            metricsOpen={metricsOpen}
+            onToggleMetrics={() => setMetricsOpen((o) => !o)}
+            sshMonitorOpen={sshMonitorOpen}
+            onToggleSshMonitor={() => setSshMonitorOpen((o) => !o)}
+          />
           <MetricsDashboard open={metricsOpen} onClose={() => setMetricsOpen(false)} />
+          <SshMonitorPanel open={sshMonitorOpen} onClose={() => setSshMonitorOpen(false)} />
         </div>
       </div>
       <ContextMenu
@@ -448,6 +470,47 @@ export default function App() {
         onClose={() => setCollectionContextMenu(null)}
       />
       <PromptDialog show={!!promptOptions} options={promptOptions ?? { title: '', defaultValue: '', onSubmit: () => {}, onCancel: () => {}}} />
+      <PromptDialog
+        show={sshAuthQueue.length > 0}
+        options={
+          sshAuthQueue[0]
+            ? {
+                title: sshAuthQueue[0].info.prompt,
+                secret: true,
+                okLabel: 'Connect',
+                onSubmit: (value) => {
+                  window.terminalAPI.sshAuthRespond(sshAuthQueue[0].id, value)
+                  setSshAuthQueue((q) => q.slice(1))
+                },
+                onCancel: () => {
+                  window.terminalAPI.sshAuthRespond(sshAuthQueue[0].id, null)
+                  setSshAuthQueue((q) => q.slice(1))
+                }
+              }
+            : { title: '', onSubmit: () => {}, onCancel: () => {} }
+        }
+      />
+      <PromptDialog
+        show={sshHostkeyQueue.length > 0}
+        options={
+          sshHostkeyQueue[0]
+            ? {
+                title: 'Unknown host key',
+                body: `${sshHostkeyQueue[0].info.keyType} key fingerprint ${sshHostkeyQueue[0].info.fingerprint} for ${sshHostkeyQueue[0].info.host}:${sshHostkeyQueue[0].info.port}. Trust and continue connecting?`,
+                okLabel: 'Trust & Connect',
+                hideInput: true,
+                onSubmit: () => {
+                  window.terminalAPI.sshHostkeyRespond(sshHostkeyQueue[0].id, true)
+                  setSshHostkeyQueue((q) => q.slice(1))
+                },
+                onCancel: () => {
+                  window.terminalAPI.sshHostkeyRespond(sshHostkeyQueue[0].id, false)
+                  setSshHostkeyQueue((q) => q.slice(1))
+                }
+              }
+            : { title: '', onSubmit: () => {}, onCancel: () => {} }
+        }
+      />
       <SettingsModal />
       <Toasts />
     </div>

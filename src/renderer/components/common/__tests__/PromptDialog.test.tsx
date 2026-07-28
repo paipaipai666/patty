@@ -84,4 +84,47 @@ describe('PromptDialog', () => {
     act(() => { okBtn.click() })
     expect(onSubmit).toHaveBeenCalledWith('ok-value')
   })
+
+  it('secret option renders a password input', () => {
+    const { container } = render({
+      show: true,
+      options: { title: 'Password', secret: true, onSubmit: vi.fn(), onCancel: vi.fn() }
+    })
+    const input = container.querySelector('input') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.type).toBe('password')
+  })
+
+  it('hideInput renders no input and okLabel overrides the OK label', () => {
+    const onSubmit = vi.fn()
+    const { container } = render({
+      show: true,
+      options: {
+        title: 'Unknown host key',
+        body: 'SHA256:abc for host:22',
+        okLabel: 'Trust & Connect',
+        hideInput: true,
+        onSubmit,
+        onCancel: vi.fn()
+      }
+    })
+    expect(container.querySelector('input')).toBeNull()
+    expect(container.textContent).toContain('SHA256:abc for host:22')
+    const okBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Trust & Connect'
+    )!
+    act(() => { okBtn.click() })
+    expect(onSubmit).toHaveBeenCalledWith('')
+  })
+
+  it('hideInput still submits on Enter', () => {
+    const onSubmit = vi.fn()
+    const { container } = render({
+      show: true,
+      options: { title: 'Confirm', hideInput: true, onSubmit, onCancel: vi.fn() }
+    })
+    const dialog = container.querySelector('[role="dialog"]')!
+    act(() => { dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+    expect(onSubmit).toHaveBeenCalledWith('')
+  })
 })

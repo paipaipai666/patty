@@ -17,6 +17,34 @@ export interface SshProfile extends SshTarget {
 /** Returned by the ssh_config_import command: a profile without id yet. */
 export type SshProfileDraft = SshTarget & { name: string }
 
+/** One collection round of remote /proc + df stats (emitted as `ssh:metrics:<id>`). */
+export interface RawStats {
+  cpuJiffies: [number, number, number, number, number, number, number, number]
+  memTotalKb: number
+  memAvailKb: number
+  swapTotalKb: number
+  swapFreeKb: number
+  rxBytes: number
+  txBytes: number
+  diskTotalKb: number
+  diskUsedKb: number
+}
+
+/** Payload of the global `ssh:auth` event: the backend wants a secret. */
+export interface SshAuthRequest {
+  kind: 'password' | 'passphrase'
+  prompt: string
+  attempt: number
+}
+
+/** Payload of the global `ssh:hostkey` event: unknown host key confirmation. */
+export interface SshHostkeyRequest {
+  host: string
+  port: number
+  fingerprint: string
+  keyType: string
+}
+
 export interface ShortcutMap {
   newTerminal: string
   closeTerminal: string

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import type { AppSettings, CustomTheme, SshTarget, SshProfileDraft } from '../shared/settingsTypes'
+import type { AppSettings, CustomTheme, SshTarget, SshProfileDraft, RawStats, SshAuthRequest, SshHostkeyRequest } from '../shared/settingsTypes'
 import type { MetricSample, FirstTerminalEntry, MetricsSnapshot } from '../shared/metricsTypes'
 import type { PersistedState } from '../shared/stateTypes'
 
@@ -79,6 +79,38 @@ export const terminalAPI = {
   // SSH config import
   sshConfigImport: () =>
     invoke<{ success: boolean; profiles: SshProfileDraft[] }>('ssh_config_import'),
+
+  // SSH auth / host-key dialogs (russh backend, global events keyed by session id)
+  sshAuthRespond: (id: string, secret: string | null) => {
+    void invoke('ssh_auth_respond', { id, secret })
+  },
+  sshHostkeyRespond: (id: string, trust: boolean) => {
+    void invoke('ssh_hostkey_respond', { id, trust })
+  },
+  onSshAuth: (callback: (id: string, info: SshAuthRequest) => void): Unsubscribe =>
+    asyncUnsub(
+      listen<[string, SshAuthRequest]>('ssh:auth', (event) =>
+        callback(event.payload[0], event.payload[1])
+      )
+    ),
+  onSshHostkey: (callback: (id: string, info: SshHostkeyRequest) => void): Unsubscribe =>
+    asyncUnsub(
+      listen<[string, SshHostkeyRequest]>('ssh:hostkey', (event) =>
+        callback(event.payload[0], event.payload[1])
+      )
+    ),
+
+  // SSH remote metrics (exec channels on the same connection)
+  sshMetricsStart: (id: string) => {
+    void invoke('ssh_metrics_start', { id })
+  },
+  sshMetricsStop: (id: string) => {
+    void invoke('ssh_metrics_stop', { id })
+  },
+  onSshMetrics: (id: string, callback: (raw: RawStats | { stale: true }) => void): Unsubscribe =>
+    asyncUnsub(
+      listen<RawStats | { stale: true }>(`ssh:metrics:${id}`, (event) => callback(event.payload))
+    ),
 
   // System fonts
   getFonts: () => invoke<string[]>('get_fonts'),
