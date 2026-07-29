@@ -450,7 +450,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
           if (effectDisposed) return
           if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
           if (!result.success || !result.pid) {
-            toast(`Failed to start terminal: ${result.error ?? 'unknown error'}`)
+            const message = result.error ?? 'unknown error'
+            toast(`Failed to start terminal: ${message}`)
+            // The backend's failure text (pty:data) fired before this pane
+            // subscribed, so it never lands — write it here instead, or a
+            // failed SSH connection leaves a blank terminal.
+            term.write(`\r\n\x1b[31m[Connection failed: ${message}]\x1b[0m\r\n`)
+            setHasData(true)
+            useWorkspaceStore.getState().tryMarkActiveWorkspaceReady(session.id)
             return
           }
           {

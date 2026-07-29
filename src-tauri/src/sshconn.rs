@@ -358,11 +358,16 @@ pub fn kill(id: &str) {
     }
 }
 
-fn fail(app: &Option<AppHandle>, id: &str, error: String) -> Value {
+/// Terminal-bound and backend-console failure report. `stage` identifies the
+/// phase (connect / auth / channel) so a bare transport error like
+/// "Connection closed by the remote side" stays attributable.
+fn fail(app: &Option<AppHandle>, id: &str, stage: &str, error: String) -> Value {
+    eprintln!("[ssh] {stage} failed for {id}: {error}");
     PENDING_AUTH.lock().unwrap().remove(id);
     PENDING_HOSTKEY.lock().unwrap().remove(id);
-    emit(app, &format!("pty:data:{id}"), format!("Connection failed: {error}\r\n"));
-    json!({ "pid": 0, "success": false, "error": error })
+    let message = format!("{stage}: {error}");
+    emit(app, &format!("pty:data:{id}"), format!("Connection failed: {message}\r\n"));
+    json!({ "pid": 0, "success": false, "error": message })
 }
 
 fn create_success() -> Value {
@@ -451,28 +456,28 @@ async fn create_inner(
 
     let mut handle = match client::connect(config, (host.as_str(), port), handler).await {
         Ok(h) => h,
-        Err(e) => return fail(&app, id, e.to_string()),
+        Err(e) => return fail(&app, id, "connect", e.to_string()),
     };
 
     if let Err(e) = authenticate(&mut handle, &app, id, &target, &user).await {
         let _ = handle
             .disconnect(russh::Disconnect::ByApplication, "", "")
             .await;
-        return fail(&app, id, e);
+        return fail(&app, id, "auth", e);
     }
 
     let channel = match handle.channel_open_session().await {
         Ok(c) => c,
-        Err(e) => return fail(&app, id, e.to_string()),
+        Err(e) => return fail(&app, id, "channel", e.to_string()),
     };
     if let Err(e) = channel
         .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
         .await
     {
-        return fail(&app, id, e.to_string());
+        return fail(&app, id, "channel", e.to_string());
     }
     if let Err(e) = channel.request_shell(false).await {
-        return fail(&app, id, e.to_string());
+        return fail(&app, id, "channel", e.to_string());
     }
     let (mut read_half, write_half) = channel.split();
 
@@ -914,6 +919,7 @@ mod tests {
         let result = task.await.unwrap();
         assert_eq!(result["success"], false);
         let error = result["error"].as_str().unwrap();
+        assert!(error.starts_with("auth: "), "missing stage prefix: {error}");
         assert!(error.contains("Authentication failed"), "unexpected error: {error}");
         assert!(!exists(&env.id));
         // The failure text went to the terminal data stream.

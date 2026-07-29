@@ -8,12 +8,16 @@ import { act } from 'react-dom/test-utils'
 // the C5 bug, not just the orphaned-PTY half.
 vi.mock('@xterm/xterm', () => {
   class MockTerminal {
+    static instances: MockTerminal[] = []
     options: Record<string, unknown> = {}
     cols = 80
     rows = 24
     unicode = { activeVersion: '11' }
     _disposed = false
     writes: string[] = []
+    constructor() {
+      MockTerminal.instances.push(this)
+    }
     open() {}
     loadAddon() {}
     onData() { return { dispose() {} } }
@@ -185,6 +189,26 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
     expect(useSessionStore.getState().updatePid).not.toHaveBeenCalled()
     expect(terminalAPI.onData).not.toHaveBeenCalled()
     expect(terminalAPI.onExit).not.toHaveBeenCalled()
+  })
+
+  it('writes the backend error into the terminal on create failure', async () => {
+    const { Terminal } = await import('@xterm/xterm')
+    const instances = (Terminal as unknown as { instances: Array<{ writes: string[] }> }).instances
+    const before = instances.length
+    const { useToastStore } = await import('../../../store/toastStore')
+    useToastStore.setState({ toasts: [] })
+    terminalAPI.createSession.mockResolvedValueOnce({
+      success: false,
+      pid: 0,
+      error: 'auth: Authentication failed'
+    })
+    render()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const term = instances[before]
+    expect(term.writes.some((w) => w.includes('auth: Authentication failed'))).toBe(true)
+    expect(useToastStore.getState().toasts.length).toBeGreaterThan(0)
   })
 })
 
