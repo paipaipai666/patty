@@ -158,4 +158,37 @@ describe('SshMonitorPanel', () => {
     act(() => { captured!({ stale: true }) })
     expect(useRemoteMetricsStore.getState().byId.s1.stale).toBe(true)
   })
+
+  // ── BUG: closing the panel / switching focus leaves the backend metrics
+  // loop running on the old session. The effect cleanup only unsubscribes the
+  // event listener — it must also call ssh_metrics_stop for the session it was
+  // bound to.
+
+  it('stops remote metrics when the panel is closed while running', () => {
+    setSessions([sshSession])
+    useRemoteMetricsStore.getState().setRunning('s1', true)
+    const { root } = render(true)
+    act(() => { root.render(<SshMonitorPanel open={false} onClose={() => {}} />) })
+    expect(mockSshMetricsStop).toHaveBeenCalledWith('s1')
+  })
+
+  it('stops remote metrics when focus switches to another ssh session', () => {
+    const s2 = { ...sshSession, id: 's2' }
+    setSessions([sshSession, s2])
+    useRemoteMetricsStore.getState().setRunning('s1', true)
+    workspaceState.focusedSessionId = 's1'
+    const { root } = render(true)
+    workspaceState.focusedSessionId = 's2'
+    act(() => { root.render(<SshMonitorPanel open={true} onClose={() => {}} />) })
+    expect(mockSshMetricsStop).toHaveBeenCalledWith('s1')
+  })
+
+  it('stops remote metrics when the focused session becomes non-ssh', () => {
+    setSessions([sshSession])
+    useRemoteMetricsStore.getState().setRunning('s1', true)
+    const { root } = render(true)
+    setSessions([localSession])
+    act(() => { root.render(<SshMonitorPanel open={true} onClose={() => {}} />) })
+    expect(mockSshMetricsStop).toHaveBeenCalledWith('s1')
+  })
 })

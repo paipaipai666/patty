@@ -38,18 +38,26 @@ export function SshMonitorPanel({ open, onClose }: SshMonitorPanelProps) {
   const isSsh = !!session && session.shell === 'ssh'
   const running = entry?.running ?? false
 
-  // Live metrics subscription, bound to the focused ssh session.
+  // Live metrics subscription, bound to the focused ssh session. Cleanup stops
+  // the backend collection loop: closing the panel, switching focus, or the
+  // session turning non-ssh must not leave a 2s exec loop running on the
+  // remote connection.
   useEffect(() => {
     if (!open || !isSsh || !sessionId) return
-    const un = window.terminalAPI.onSshMetrics(sessionId, (raw) => {
+    const boundId = sessionId
+    const un = window.terminalAPI.onSshMetrics(boundId, (raw) => {
       if ('stale' in raw) {
-        setStale(sessionId)
+        setStale(boundId)
       } else {
-        ingest(sessionId, raw)
+        ingest(boundId, raw)
       }
     })
-    return un
-  }, [open, isSsh, sessionId, ingest, setStale])
+    return () => {
+      un?.()
+      window.terminalAPI.sshMetricsStop(boundId)
+      setRunning(boundId, false)
+    }
+  }, [open, isSsh, sessionId, ingest, setStale, setRunning])
 
   const samples = entry?.samples ?? []
 

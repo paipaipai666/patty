@@ -476,30 +476,48 @@ pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>) {
     }
 }
 
-/// Warm the active workspace's pane-tree leaves at startup (mirrors the
-/// Electron boot sequence).
-pub fn warm_startup(app: &AppHandle) {
-    let state = crate::store::load_state();
+/// The (leaf_id, cwd, shell) candidates startup pre-warming should spawn local
+/// shells for. Pure and exported so the ssh-exclusion rule is unit-testable
+/// without an AppHandle.
+pub fn warm_startup_targets(state: &Value) -> Vec<(String, Option<String>, Option<String>)> {
     let Some(active_id) = state.get("activeWorkspaceId").and_then(Value::as_str) else {
-        return;
+        return Vec::new();
     };
     let Some(workspace) = state
         .get("workspaces")
         .and_then(Value::as_array)
         .and_then(|arr| arr.iter().find(|w| w.get("id").and_then(Value::as_str) == Some(active_id)))
     else {
-        return;
+        return Vec::new();
     };
-    let Some(tree) = workspace.get("paneTree") else { return };
+    let Some(tree) = workspace.get("paneTree") else { return Vec::new() };
     let empty = Vec::new();
     let sessions = state.get("sessions").and_then(Value::as_array).unwrap_or(&empty);
-    for leaf_id in leaf_session_ids(tree) {
-        let found = sessions
-            .iter()
-            .find(|s| s.get("id").and_then(Value::as_str) == Some(leaf_id.as_str()));
-        let cwd = found.and_then(|s| s.get("cwd")).and_then(Value::as_str);
-        let shell = found.and_then(|s| s.get("shell")).and_then(Value::as_str);
-        warm(app, &leaf_id, cwd, shell);
+    leaf_session_ids(tree)
+        .into_iter()
+        .filter_map(|leaf_id| {
+            let found = sessions
+                .iter()
+                .find(|s| s.get("id").and_then(Value::as_str) == Some(leaf_id.as_str()))?;
+            let shell = found.get("shell").and_then(Value::as_str).map(String::from);
+            // SSH sessions run on a remote russh connection (sshconn.rs), not a
+            // local PTY — pre-warming one here would spawn a leaked local shell
+            // that kill_pty (which routes to sshconn) never reaps.
+            if shell.as_deref() == Some("ssh") {
+                return None;
+            }
+            let cwd = found.get("cwd").and_then(Value::as_str).map(String::from);
+            Some((leaf_id, cwd, shell))
+        })
+        .collect()
+}
+
+/// Warm the active workspace's pane-tree leaves at startup (mirrors the
+/// Electron boot sequence).
+pub fn warm_startup(app: &AppHandle) {
+    let state = crate::store::load_state();
+    for (leaf_id, cwd, shell) in warm_startup_targets(&state) {
+        warm(app, &leaf_id, cwd.as_deref(), shell.as_deref());
     }
 }
 

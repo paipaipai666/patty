@@ -198,3 +198,44 @@ fn leaf_session_ids_mixed_missing_session() {
     let ids = patty::pty::leaf_session_ids(&tree);
     assert_eq!(ids, vec!["s1"]);
 }
+
+#[test]
+fn warm_startup_targets_skips_ssh_sessions() {
+    // BUG: warm_startup pre-spawns a local PTY for every leaf in the active
+    // workspace. An SSH session persists `shell: "ssh"`, which shell_path()
+    // cannot resolve, so it falls back to the default shell (pwsh) — spawning a
+    // leaked local pwsh process that kill_pty never reaps (kill routes to
+    // sshconn). The warm targets must exclude ssh leaves entirely.
+    let state = serde_json::json!({
+        "activeWorkspaceId": "w1",
+        "workspaces": [{
+            "id": "w1",
+            "paneTree": {"type": "leaf", "sessionId": "ssh-leaf"}
+        }],
+        "sessions": [
+            {"id": "ssh-leaf", "cwd": "", "shell": "ssh", "ssh": {"host": "10.0.0.5", "user": "deploy"}},
+            {"id": "local-leaf", "cwd": "C:\\", "shell": "powershell"}
+        ]
+    });
+    let targets = patty::pty::warm_startup_targets(&state);
+    assert!(
+        !targets.iter().any(|(id, _, _)| id == "ssh-leaf"),
+        "ssh session must not be pre-warmed as a local pty, got targets: {targets:?}"
+    );
+}
+
+#[test]
+fn warm_startup_targets_keeps_local_leaves() {
+    let state = serde_json::json!({
+        "activeWorkspaceId": "w1",
+        "workspaces": [{
+            "id": "w1",
+            "paneTree": {"type": "leaf", "sessionId": "local-leaf"}
+        }],
+        "sessions": [
+            {"id": "local-leaf", "cwd": "C:\\", "shell": "powershell"}
+        ]
+    });
+    let targets = patty::pty::warm_startup_targets(&state);
+    assert_eq!(targets, vec![("local-leaf".to_string(), Some("C:\\".to_string()), Some("powershell".to_string()))]);
+}
