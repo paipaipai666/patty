@@ -119,6 +119,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Guard against duplicate registration (e.g. React StrictMode remount)
       if (ipcCleanup) ipcCleanup()
       const offAttention = window.terminalAPI.onAttentionChange((sessionId, eventType, aiType) => {
+        console.log(`[flame] attn received session=${sessionId} attention=${String(eventType)} aiType=${String(aiType)}`)
         get().setAttention(sessionId, eventType)
         if (aiType !== undefined) {
           get().setAiType(sessionId, (aiType ?? null) as 'claude' | 'opencode' | 'codex' | 'omp' | null)
@@ -416,6 +417,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | 'omp' | null) => {
+    const target = get().sessions.find((s) => s.id === id)
+    if (!target) {
+      console.warn(`[flame] command for UNKNOWN session=${id} aiType=${String(aiType)} — no matching sidebar session, dropped`)
+    } else if ((target.aiType ?? null) !== aiType) {
+      console.log(`[flame] ${aiType ? `LIGHT ai=${aiType}` : 'EXTINGUISH'} session=${id} (was ${target.aiType ?? 'none'})`)
+    }
     set((state) => ({
       sessions: state.sessions.map((s) =>
         s.id === id ? { ...s, aiType } : s

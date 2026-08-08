@@ -59,6 +59,7 @@ export const terminalAPI = {
 
   // Hook port
   getHookPort: () => invoke<number>('get_hook_port'),
+  hooksClearPane: (paneId: string) => invoke<void>('hooks_clear_pane', { paneId }),
 
   // Window controls
   windowMinimize: () => void appWindow.minimize(),

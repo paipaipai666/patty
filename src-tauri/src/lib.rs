@@ -138,6 +138,15 @@ fn get_hook_port() -> u16 {
 }
 
 #[tauri::command]
+fn hooks_clear_pane(pane_id: &str) {
+    // shell 提示符重绘（OSC 7）= 前台 TUI 已退出。opencode 1.18 退出 TUI 后
+    // 其服务器进程会存活一段时间并持续心跳，退出事件和看门狗都无法及时
+    // 熄灭火焰；prompt 返回时由前端调用此命令立即清除租约。
+    hooks::remove_pane(pane_id);
+    eprintln!("[flame] lease CLEAR pane={pane_id} (shell prompt returned)");
+}
+
+#[tauri::command]
 async fn select_directory() -> Value {
     let folder = rfd::AsyncFileDialog::new()
         .set_title("Select project directory")
@@ -310,6 +319,7 @@ pub fn run() {
             ssh_config_import,
             get_fonts,
             get_hook_port,
+            hooks_clear_pane,
             select_directory,
             theme_export,
             theme_import,

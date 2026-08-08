@@ -420,6 +420,17 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     // OSC 7 — shell cwd reporting injected by pwsh.ps1 / cmd-prompt.cmd
     const osc7Disposable = registerOsc7Handler(term, session.id, (id, cwd) => {
       updateCwd(id, cwd)
+      // 提示符重绘 = 前台 TUI（opencode 等）已退出。opencode 1.18 退出 TUI 后
+      // 其服务器进程会存活一段时间并持续发心跳，退出事件与看门狗都无法及时
+      // 熄灭火焰；prompt 返回是"工具已退出前台"的可靠信号，立即清除火焰与
+      // 注意态，并通知后端清除租约（纯心跳不会重建它）。
+      const store = useSessionStore.getState()
+      if (store.sessions.find((s) => s.id === id)?.aiType) {
+        console.log(`[flame] prompt returned → EXTINGUISH session=${id}`)
+        store.setAiType(id, null)
+        store.resetAttention(id)
+        void window.terminalAPI.hooksClearPane(id)
+      }
     })
 
     // Keyboard input → PTY + mark used

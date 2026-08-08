@@ -43,14 +43,37 @@ pub fn note_event_with_now(pane_id: &str, event: &str, source: &str, now: u64) {
     let mut active = ACTIVE.lock().unwrap();
     match event {
         "session_start" | "session_created" => {
+            eprintln!("[flame] lease OPEN pane={pane_id} source={source} event={event}");
             active.insert(pane_id.to_string(), ActiveEntry { source: source.to_string(), last_seen: now });
         }
         "session_end" | "session_deleted" => {
-            active.remove(pane_id);
+            let existed = active.remove(pane_id).is_some();
+            eprintln!("[flame] lease CLOSE pane={pane_id} source={source} event={event} existed={existed}");
         }
-        _ => {
+        // 纯心跳只刷新已存在的租约，绝不重建：opencode 1.18 退出 TUI 后其服务
+        // 进程还会存活一段时间并持续发 alive，若心跳能重建租约，火焰在工具
+        // 退出后永远无法熄灭。
+        "alive" => {
             if let Some(entry) = active.get_mut(pane_id) {
                 entry.last_seen = now;
+                entry.source = source.to_string();
+            }
+        }
+        _ => {
+            // 任何来自已知 source 的事件都是存活证据：租约被 session_deleted /
+            // 看门狗清除后，迟到的事件（退出时 session_deleted 与 idle 的投递
+            // 竞态、claude/codex 超长回复间隙）必须重新打开租约。否则前端火焰
+            // 会被 attention 事件重新点亮，看门狗却永远扫不到这个 pane →
+            // 火焰永久卡死。
+            match active.get_mut(pane_id) {
+                Some(entry) => {
+                    entry.last_seen = now;
+                    entry.source = source.to_string();
+                }
+                None => {
+                    eprintln!("[flame] lease REOPEN pane={pane_id} source={source} event={event} (late event after lease removal)");
+                    active.insert(pane_id.to_string(), ActiveEntry { source: source.to_string(), last_seen: now });
+                }
             }
         }
     }
@@ -75,20 +98,39 @@ fn collect_expired_with_now(active: &HashMap<String, ActiveEntry>, now: u64) -> 
 }
 
 pub fn start_heartbeat_watchdog(app: AppHandle) {
-    thread::spawn(move || loop {
-        thread::sleep(Duration::from_secs(5));
-        let expired = {
-            let mut active = ACTIVE.lock().unwrap();
-            let now = now_ms();
-            let expired = collect_expired_with_now(&active, now);
-            for id in &expired {
-                active.remove(id);
-            }
-            expired
-        };
-        for id in expired {
-            if let Err(e) = app.emit("pty:attn", (id, Value::Null, Value::Null)) {
-                eprintln!("[hooks] emit pty:attn failed: {e}");
+    thread::spawn(move || {
+        eprintln!("[flame] heartbeat watchdog started (5s tick)");
+        loop {
+            thread::sleep(Duration::from_secs(5));
+            let expired = {
+                let mut active = ACTIVE.lock().unwrap();
+                let now = now_ms();
+                for (id, e) in active.iter() {
+                    let timeout = heartbeat_timeout_ms(&e.source).unwrap_or(0);
+                    eprintln!(
+                        "[flame] watchdog tick pane={id} source={} age={}s/{}s",
+                        e.source,
+                        now.saturating_sub(e.last_seen) / 1000,
+                        timeout / 1000
+                    );
+                }
+                let expired = collect_expired_with_now(&active, now);
+                let mut rows = Vec::with_capacity(expired.len());
+                for id in expired {
+                    if let Some(e) = active.remove(&id) {
+                        rows.push((id, e.source, now.saturating_sub(e.last_seen)));
+                    }
+                }
+                rows
+            };
+            for (id, source, silent_ms) in expired {
+                eprintln!(
+                    "[flame] EXTINGUISH flame pane={id} source={source} (lease expired: no events for {}s)",
+                    silent_ms / 1000
+                );
+                if let Err(e) = app.emit("pty:attn", (id, Value::Null, Value::Null)) {
+                    eprintln!("[hooks] emit pty:attn failed: {e}");
+                }
             }
         }
     });
@@ -126,7 +168,21 @@ fn map_source_to_ai_type(source: &str) -> Option<&'static str> {
     }
 }
 
+/// Human-readable flame effect of a pty:attn payload: (pane, attention|null,
+/// aiType|null) — attention 事件带 aiType 会顺带重新点亮火焰。
+fn describe_emit(payload: &Value) -> String {
+    let attn = payload.get(1).and_then(Value::as_str);
+    let ai = payload.get(2).and_then(Value::as_str);
+    match (attn, ai) {
+        (Some(kind), Some(ai)) => format!("GLOW {kind} + LIGHT flame ai={ai}"),
+        (Some(kind), None) => format!("GLOW {kind}"),
+        (None, Some(ai)) => format!("LIGHT flame ai={ai}"),
+        (None, None) => "EXTINGUISH flame".to_string(),
+    }
+}
+
 pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str) {
+    eprintln!("[flame] hook pane={pane_id} source={source} event={event}");
     note_event(pane_id, event, source);
 
     let settings = crate::store::load_settings();
@@ -137,7 +193,17 @@ pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str
         "omp" => settings["notifications"]["ohMyPi"].as_bool().unwrap_or(true),
         _ => true,
     };
-    for (evt, payload) in compute_hook_events(pane_id, event, source, enabled) {
+    let events = compute_hook_events(pane_id, event, source, enabled);
+    if events.is_empty() && !enabled {
+        let would_emit = event == "session_start"
+            || event == "session_created"
+            || map_event_to_attention_type(event).is_some();
+        if would_emit {
+            eprintln!("[flame] suppressed pane={pane_id} source={source} event={event} reason=notifications disabled for this tool");
+        }
+    }
+    for (evt, payload) in events {
+        eprintln!("[flame] {} pane={} (trigger event={})", describe_emit(&payload), pane_id, event);
         if let Err(e) = app.emit(evt, payload) {
             eprintln!("[hooks] emit {evt} failed: {e}");
         }
@@ -250,6 +316,12 @@ fn handle_request(
     }
     if let Some((pane_id, event, source)) = forward {
         on_hook_request(app, &pane_id, &event, &source);
+    } else if payload.get("ignored").and_then(Value::as_bool) == Some(true) {
+        let pane = serde_json::from_str::<Value>(&body)
+            .ok()
+            .and_then(|v| v.get("paneId").and_then(Value::as_str).map(str::to_string))
+            .unwrap_or_default();
+        eprintln!("[flame] ignored hook pane={pane} reason=no live PTY session for this pane id");
     }
     json_response(status, payload)
 }
@@ -298,6 +370,55 @@ mod tests {
         note_event_with_now(&pane, "post_tool_use", "opencode", 2000);
         note_event_with_now(&pane, "session_end", "opencode", 3000);
         assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
+    }
+
+    #[test]
+    fn heartbeat_lease_reopens_on_late_event() {
+        // 退出竞态：session_deleted（detached curl）先于最后的 idle（普通 fetch）
+        // 到达。idle 会经 pty:attn 重新点亮前端火焰，租约必须随之重新打开，
+        // 否则看门狗扫不到该 pane → 火焰永久卡死。
+        let pane = format!("hb-reopen-{}", std::process::id());
+        note_event_with_now(&pane, "session_created", "opencode", 1000);
+        note_event_with_now(&pane, "session_deleted", "opencode", 2000);
+        assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
+
+        note_event_with_now(&pane, "idle", "opencode", 3000);
+        assert!(
+            ACTIVE.lock().unwrap().contains_key(&pane),
+            "late event after session_deleted must reopen the lease"
+        );
+
+        // 进程已死、无后续事件：8s 租约到期后看门狗必须能扫到并清除。
+        let expired = {
+            let active = ACTIVE.lock().unwrap();
+            collect_expired_with_now(&active, 3000 + 8_001)
+        };
+        assert!(expired.contains(&pane));
+        ACTIVE.lock().unwrap().remove(&pane);
+    }
+
+    #[test]
+    fn heartbeat_alive_does_not_reopen_lease() {
+        // opencode 1.18 退出 TUI 后服务器进程仍存活并持续发 alive；
+        // 纯心跳不得重建已被清除的租约，否则火焰永不熄灭。
+        let pane = format!("hb-alive-{}", std::process::id());
+        note_event_with_now(&pane, "session_created", "opencode", 1000);
+        note_event_with_now(&pane, "session_deleted", "opencode", 2000);
+        note_event_with_now(&pane, "alive", "opencode", 3000);
+        assert!(
+            !ACTIVE.lock().unwrap().contains_key(&pane),
+            "alive must not reopen a cleared lease"
+        );
+
+        // 但已有租约必须被 alive 正常续期。
+        note_event_with_now(&pane, "session_created", "opencode", 4000);
+        note_event_with_now(&pane, "alive", "opencode", 5000);
+        let expired = {
+            let active = ACTIVE.lock().unwrap();
+            collect_expired_with_now(&active, 13_000)
+        };
+        assert!(!expired.contains(&pane), "alive must refresh an existing lease");
+        ACTIVE.lock().unwrap().remove(&pane);
     }
 
     #[test]
