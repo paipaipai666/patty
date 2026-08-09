@@ -131,24 +131,6 @@ pub fn shell_path(shell_name: Option<&str>) -> String {
     detect_default_shell()
 }
 
-pub fn detect_shells() -> Value {
-    let pwsh = find_pwsh();
-    let mut shells = vec![json!({
-        "name": "pwsh",
-        "path": pwsh.as_ref().map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| "pwsh (not found)".to_string()),
-        "available": pwsh.is_some()
-    })];
-    for name in ["powershell", "cmd", "gitbash", "wsl"] {
-        let path = shell_paths(name).unwrap();
-        shells.push(json!({
-            "name": name,
-            "path": path,
-            "available": Path::new(path).exists()
-        }));
-    }
-    Value::Array(shells)
-}
-
 fn script_path(file_name: &str) -> PathBuf {
     let dev = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")

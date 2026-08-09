@@ -118,11 +118,6 @@ fn ssh_metrics_stop(id: &str) {
 }
 
 #[tauri::command]
-fn detect_shells() -> Value {
-    pty::detect_shells()
-}
-
-#[tauri::command]
 fn ssh_config_import() -> Value {
     ssh::import_ssh_config()
 }
@@ -130,11 +125,6 @@ fn ssh_config_import() -> Value {
 #[tauri::command]
 fn get_fonts() -> Result<Vec<String>, String> {
     fonts::get_fonts()
-}
-
-#[tauri::command]
-fn get_hook_port() -> u16 {
-    hooks::hook_port()
 }
 
 #[tauri::command]
@@ -208,11 +198,6 @@ async fn theme_import() -> Value {
         Ok(theme) => json!({ "success": true, "theme": theme }),
         Err(e) => json!({ "success": false, "error": e }),
     }
-}
-
-#[tauri::command]
-fn perf_dump() -> Value {
-    json!({ "success": true })
 }
 
 #[tauri::command]
@@ -315,15 +300,12 @@ pub fn run() {
             ssh_hostkey_respond,
             ssh_metrics_start,
             ssh_metrics_stop,
-            detect_shells,
             ssh_config_import,
             get_fonts,
-            get_hook_port,
             hooks_clear_pane,
             select_directory,
             theme_export,
             theme_import,
-            perf_dump,
             metrics_history,
             metrics_set_sampling,
             metrics_record_first_terminal,
