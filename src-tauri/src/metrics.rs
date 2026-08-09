@@ -75,10 +75,7 @@ pub fn persist() {
         "firstTerminal": data.first_terminal[first..],
         "samples": data.samples[samp..],
     });
-    if let Some(dir) = history_path().parent() {
-        let _ = fs::create_dir_all(dir);
-    }
-    let _ = fs::write(history_path(), history.to_string());
+    let _ = crate::store::save_atomic_to(&history_path(), &history);
 }
 
 pub fn snapshot() -> Value {

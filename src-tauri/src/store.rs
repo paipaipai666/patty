@@ -5,12 +5,18 @@ use std::sync::{LazyLock, Mutex};
 
 // Same directory the Electron build used for userData (%APPDATA%\Patty), so
 // existing installs keep their settings.json / state.json after the switch.
+// Windows-only crate: %APPDATA% is exactly what dirs::config_dir() returns here.
 pub fn data_dir() -> PathBuf {
     TEST_DATA_DIR
         .lock()
         .unwrap()
         .clone()
-        .unwrap_or_else(|| dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("Patty"))
+        .unwrap_or_else(|| {
+            std::env::var_os("APPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("Patty")
+        })
 }
 
 #[doc(hidden)]
@@ -73,7 +79,10 @@ fn deep_merge_subobject(defaults: &Value, parsed: &Value, target: &mut Value, ke
     target[key] = Value::Object(merged);
 }
 
-fn merge_settings(parsed: &Value, defaults: &Value) -> Value {
+// Shallow-merge persisted keys over defaults, then fix up: deep_keys get a
+// per-key merge (so a partial "shortcuts" object keeps unspecified defaults),
+// force_arrays are reset to [] when the persisted value isn't an array.
+fn merge_json(parsed: &Value, defaults: &Value, deep_keys: &[&str], force_arrays: &[&str]) -> Value {
     let mut merged = defaults.clone();
     let obj = merged.as_object_mut().expect("defaults is an object");
     if let Some(p) = parsed.as_object() {
@@ -81,26 +90,23 @@ fn merge_settings(parsed: &Value, defaults: &Value) -> Value {
             obj.insert(k.clone(), v.clone());
         }
     }
-    deep_merge_subobject(defaults, parsed, &mut merged, "shortcuts");
-    deep_merge_subobject(defaults, parsed, &mut merged, "notifications");
+    for key in deep_keys {
+        deep_merge_subobject(defaults, parsed, &mut merged, key);
+    }
+    for key in force_arrays {
+        if !merged.get(key).is_some_and(Value::is_array) {
+            merged[*key] = json!([]);
+        }
+    }
     merged
 }
 
+fn merge_settings(parsed: &Value, defaults: &Value) -> Value {
+    merge_json(parsed, defaults, &["shortcuts", "notifications"], &[])
+}
+
 fn merge_state(parsed: &Value, defaults: &Value) -> Value {
-    let mut merged = defaults.clone();
-    let obj = merged.as_object_mut().expect("defaults is an object");
-    if let Some(p) = parsed.as_object() {
-        for (k, v) in p {
-            obj.insert(k.clone(), v.clone());
-        }
-    }
-    if !merged.get("sessions").is_some_and(Value::is_array) {
-        merged["sessions"] = json!([]);
-    }
-    if !merged.get("collections").is_some_and(Value::is_array) {
-        merged["collections"] = json!([]);
-    }
-    merged
+    merge_json(parsed, defaults, &[], &["sessions", "collections"])
 }
 
 fn load_json_from(path: &Path, defaults: &Value, merge: fn(&Value, &Value) -> Value) -> Value {
@@ -113,7 +119,7 @@ fn load_json_from(path: &Path, defaults: &Value, merge: fn(&Value, &Value) -> Va
     }
 }
 
-fn save_atomic_to(path: &Path, data: &Value) -> Result<(), String> {
+pub(crate) fn save_atomic_to(path: &Path, data: &Value) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
