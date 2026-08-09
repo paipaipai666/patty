@@ -20,7 +20,8 @@ const hoisted = vi.hoisted(() => {
   const sessionState = {
     sessions: [],
     collections: [],
-    activeSessionId: null,
+    // widened from the null literal so tests can assign a session id
+    activeSessionId: null as string | null,
     sidebarVisible: true,
     sidebarWidth: 220,
     addSession: mockAddSession,

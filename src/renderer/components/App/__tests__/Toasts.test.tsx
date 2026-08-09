@@ -54,7 +54,7 @@ describe('Toasts', () => {
     })
     const dismissSpy = vi.spyOn(useToastStore.getState(), 'dismiss')
     const { container } = render()
-    const alert = container.querySelector('[role="alert"]')!
+    const alert = container.querySelector<HTMLElement>('[role="alert"]')!
     act(() => { alert.click() })
     expect(dismissSpy).toHaveBeenCalledWith(42)
     dismissSpy.mockRestore()

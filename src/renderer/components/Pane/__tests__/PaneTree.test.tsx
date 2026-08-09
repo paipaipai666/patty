@@ -42,7 +42,7 @@ beforeEach(() => {
   ws.workspaces = []
   ws.activeWorkspaceId = null
   ws.activeWorkspaceReady = true
-  ws.focusPane.mockClear()
+  vi.mocked(ws.focusPane).mockClear()
   const ss = useSessionStore.getState()
   ss.sessions = []
   document.body.innerHTML = ''

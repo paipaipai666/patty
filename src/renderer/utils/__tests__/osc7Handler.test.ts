@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 
 vi.mock('../shellReadiness', () => ({
   markShellReady: vi.fn()
@@ -21,11 +21,11 @@ function createMockTerminal() {
  */
 describe('registerOsc7Handler', () => {
   let term: ReturnType<typeof createMockTerminal>
-  let onCwd: ReturnType<typeof vi.fn>
+  let onCwd: Mock<(sessionId: string, cwd: string) => void>
 
   beforeEach(() => {
     term = createMockTerminal()
-    onCwd = vi.fn()
+    onCwd = vi.fn<(sessionId: string, cwd: string) => void>()
   })
 
   function triggerOsc7(term: any, data: string) {

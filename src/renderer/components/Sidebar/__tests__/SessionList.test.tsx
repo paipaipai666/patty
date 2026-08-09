@@ -109,6 +109,7 @@ describe('SessionList', () => {
         id: 'split',
         type: 'split',
         direction: 'horizontal',
+        ratio: 0.5,
         first: { id: 'p1', type: 'leaf' as const, sessionId: 's1' },
         second: { id: 'p2', type: 'leaf' as const, sessionId: 's2' }
       },

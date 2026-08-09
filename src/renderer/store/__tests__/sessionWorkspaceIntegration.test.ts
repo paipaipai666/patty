@@ -54,10 +54,6 @@ function wirePersistence() {
   })
 }
 
-function makeSession(sid: string, title: string, overrides: Record<string, unknown> = {}) {
-  return { id: sid, title, color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: null, ...overrides }
-}
-
 beforeEach(() => {
   configureDirtyScheduler(() => null)
   flushNow()
@@ -373,7 +369,7 @@ describe('startup restore flow', () => {
   const persistedState: PersistedState = {
     sessions: [
       { id: 's1', title: 'Terminal 1', color: 'blue', cwd: '', shell: 'powershell', collectionId: null, createdAt: 100 },
-      { id: 's2', title: 'Terminal 2', color: 'green', cwd: '/home', shell: 'bash', collectionId: null, createdAt: 200 },
+      { id: 's2', title: 'Terminal 2', color: 'green', cwd: '/home', shell: 'wsl', collectionId: null, createdAt: 200 },
     ],
     collections: [],
     activeSessionId: 's1',
@@ -474,7 +470,7 @@ describe('startup restore flow', () => {
     const multiWs: PersistedState = {
       sessions: [
         { id: 's1', title: 'T1', color: 'blue', cwd: '', shell: 'powershell', collectionId: null, createdAt: 100 },
-        { id: 's2', title: 'T2', color: 'green', cwd: '', shell: 'bash', collectionId: null, createdAt: 200 },
+        { id: 's2', title: 'T2', color: 'green', cwd: '', shell: 'wsl', collectionId: null, createdAt: 200 },
       ],
       collections: [],
       activeSessionId: 's1',

@@ -4,7 +4,7 @@ import { act } from 'react-dom/test-utils'
 
 import { ErrorBoundary } from '../ErrorBoundary'
 
-function ThrowingChild({ message }: { message: string }) {
+function ThrowingChild({ message }: { message: string }): never {
   throw new Error(message)
 }
 

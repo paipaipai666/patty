@@ -22,7 +22,7 @@ vi.mock('../../Terminal/TerminalPane', () => ({
 }))
 
 import { PaneView } from '../PaneView'
-import { useSessionStore } from '../../../store/sessionStore'
+import { useSessionStore, type TerminalSession } from '../../../store/sessionStore'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -31,7 +31,7 @@ beforeEach(() => {
 
 function renderPaneView(overrides: Partial<Parameters<typeof PaneView>[0]> = {}) {
   const props = {
-    session: { id: 's1', title: 'Terminal 1', color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: null },
+    session: { id: 's1', title: 'Terminal 1', color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: null } satisfies TerminalSession,
     focused: false,
     onFocus: vi.fn(),
     paneId: 'p1',

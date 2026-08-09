@@ -47,7 +47,7 @@ describe('TitleBar', () => {
   it('sidebar toggle button calls onToggleSidebar', () => {
     const onToggle = vi.fn()
     const { container } = render({ onToggleSidebar: onToggle })
-    const btn = container.querySelector('[aria-label="Hide sidebar"]')
+    const btn = container.querySelector<HTMLElement>('[aria-label="Hide sidebar"]')
     expect(btn).toBeTruthy()
     act(() => { btn!.click() })
     expect(onToggle).toHaveBeenCalledTimes(1)
@@ -56,7 +56,7 @@ describe('TitleBar', () => {
   it('settings button calls onOpenSettings', () => {
     const onOpen = vi.fn()
     const { container } = render({ onOpenSettings: onOpen })
-    const btn = container.querySelector('[aria-label="Settings"]')
+    const btn = container.querySelector<HTMLElement>('[aria-label="Settings"]')
     expect(btn).toBeTruthy()
     act(() => { btn!.click() })
     expect(onOpen).toHaveBeenCalledTimes(1)
@@ -64,7 +64,7 @@ describe('TitleBar', () => {
 
   it('settings button is hidden when onOpenSettings is not provided', () => {
     // Pass explicit null to skip the default in render()
-    const { container } = render({ onOpenSettings: null })
+    render({ onOpenSettings: null })
     // Also call the test via a different approach: mount with undefined explicitly
     document.body.innerHTML = ''
     const altContainer = document.createElement('div')

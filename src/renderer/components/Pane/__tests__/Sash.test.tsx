@@ -17,7 +17,7 @@ let releasePointerCapture: any
 
 beforeEach(() => {
   vi.useFakeTimers()
-  useWorkspaceStore.getState().setSplitRatio.mockClear()
+  vi.mocked(useWorkspaceStore.getState().setSplitRatio).mockClear()
   setPointerCapture = vi.fn()
   releasePointerCapture = vi.fn()
   Element.prototype.setPointerCapture = setPointerCapture

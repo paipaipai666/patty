@@ -8,38 +8,13 @@ describe('themeRipple', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
     triggerFinish = () => {}
-    Element.prototype.animate = function (
-      _keyframes: Keyframe[] | PropertyIndexedKeyframes | null,
-      _options?: number | KeyframeAnimationOptions
-    ): Animation {
-      const anim = {
-        onfinish: null as (() => void) | null,
-        cancel: vi.fn(),
-        finish: vi.fn(),
-        play: vi.fn(),
-        pause: vi.fn(),
-        reverse: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        playState: 'running' as AnimationPlayState,
-        currentTime: 0,
-        effect: null as any,
-        id: '',
-        pending: false,
-        finished: Promise.resolve(this),
-        startTime: 0,
-        timeline: null as any,
-        playbackRate: 1,
-        ready: Promise.resolve(this),
-        oncancel: null,
-        onremove: null,
-        persist: vi.fn(),
-        commitStyles: vi.fn(),
-        updatePlaybackRate: vi.fn()
-      }
+    // themeRipple only assigns .onfinish on the returned Animation; the rest
+    // of the WAAPI surface is unused here, hence the narrow double cast.
+    Element.prototype.animate = function (): Animation {
+      const anim = { onfinish: null as (() => void) | null }
       triggerFinish = () => { anim.onfinish?.() }
-      return anim
-    } as any
+      return anim as unknown as Animation
+    }
   })
 
   afterEach(() => {

@@ -56,7 +56,7 @@ describe('ContextMenu', () => {
     const action = vi.fn()
     const items: MenuItem[] = [{ label: 'DoThing', action }]
     const { container } = render({ show: true, items, onClose })
-    const btn = container.querySelector('button[role="menuitem"]')!
+    const btn = container.querySelector<HTMLElement>('button[role="menuitem"]')!
     act(() => { btn.click() })
     expect(action).toHaveBeenCalledTimes(1)
     expect(onClose).toHaveBeenCalledTimes(1)
