@@ -4,6 +4,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { SessionList } from './SessionList'
 import type { SshProfile } from '../../../shared/settingsTypes'
 import styles from './Sidebar.module.css'
+import { MarqueeText } from '../common/MarqueeText'
 
 interface SidebarProps {
   onNewTerminal: () => void
@@ -165,7 +166,7 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onNewSsh, onCl
                   <rect x="1" y="2" width="10" height="8" rx="1" stroke="currentColor" fill="none" strokeWidth="1" />
                   <path d="M4 6L5.5 7.5L8 5" stroke="currentColor" strokeWidth="1" fill="none" />
                 </svg>
-                New Terminal
+                <MarqueeText text="New Terminal" />
               </button>
               <button type="button" className={styles.menuItem} onClick={handleNewTerminalPickFolderClick}>
                 <svg width="12" height="12" viewBox="0 0 12 12">
@@ -176,14 +177,14 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onNewSsh, onCl
                     strokeWidth="1"
                   />
                 </svg>
-                New Terminal (Choose Folder)…
+                <MarqueeText text="New Terminal (Choose Folder)…" />
               </button>
               <button type="button" className={styles.menuItem} onClick={handleNewSshClick}>
                 <svg width="12" height="12" viewBox="0 0 12 12">
                   <circle cx="6" cy="6" r="4.5" stroke="currentColor" fill="none" strokeWidth="1" />
                   <path d="M1.5 6H10.5M6 1.5C7.2 3 7.2 9 6 10.5C4.8 9 4.8 3 6 1.5Z" stroke="currentColor" fill="none" strokeWidth="1" />
                 </svg>
-                New SSH Connection…
+                <MarqueeText text="New SSH Connection…" />
               </button>
               <button type="button" className={styles.menuItem} onClick={handleNewCollection}>
                 <svg width="12" height="12" viewBox="0 0 12 12">
@@ -194,7 +195,7 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onNewSsh, onCl
                     strokeWidth="1"
                   />
                 </svg>
-                New Collection
+                <MarqueeText text="New Collection" />
               </button>
             </div>
           )}
@@ -210,14 +211,15 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onNewSsh, onCl
                   className={styles.menuItem}
                   onClick={() => handleSshProfilePick(p)}
                 >
-                  <span>{p.name}</span>
-                  <span className={styles.menuItemSub}>
-                    {p.user ? `${p.user}@` : ''}{p.host}:{p.port ?? 22}
-                  </span>
+                  <MarqueeText text={p.name} />
+                  <MarqueeText
+                    className={styles.menuItemSub}
+                    text={`${p.user ? `${p.user}@` : ''}${p.host}:${p.port ?? 22}`}
+                  />
                 </button>
               ))}
               <button type="button" className={styles.menuItem} onClick={handleManageSsh}>
-                Manage SSH Profiles…
+                <MarqueeText text="Manage SSH Profiles…" />
               </button>
             </div>
           )}

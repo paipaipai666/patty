@@ -1,0 +1,29 @@
+.outer {
+  overflow: hidden;
+  white-space: nowrap;
+  /* Flex-item safety: allow shrinking below content width so clipping works */
+  min-width: 0;
+}
+
+.inner {
+  display: inline-flex;
+  white-space: nowrap;
+}
+
+/* MUST match LOOP_GAP_PX in MarqueeText.tsx */
+.copy + .copy {
+  margin-left: 48px;
+}
+
+/* 25ms per px => 40px/s scroll speed; --pitch is a unitless px number set inline */
+@media (prefers-reduced-motion: no-preference) {
+  .overflowing:hover .inner {
+    animation: marquee calc(var(--pitch, 0) * 25ms) linear infinite;
+  }
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(calc(var(--pitch, 0) * -1px));
+  }
+}
