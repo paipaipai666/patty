@@ -58,6 +58,25 @@ try {
                         "sessionstart" { $eventType = "session_start" }
                         "permissionrequest" { $eventType = "permission_prompt" }
                         "stop" { $eventType = "stop" }
+                        "notification" {
+                            # Claude Code 2.x 的 Notification 载荷同时带 hook_event_name
+                            # 和 notification_type（permission_prompt / idle_prompt /
+                            # elicitation_dialog）。必须先读子字段——否则事件退化成无
+                            # 意义的 "notification"，权限/提问的蓝灯永远不亮。
+                            if ($inputData.notification_type) {
+                                $eventType = $inputData.notification_type.ToString()
+                            } elseif ($inputData.message -match 'permission') {
+                                $eventType = "permission_prompt"
+                            } else {
+                                $eventType = "notification"
+                            }
+                        }
+                        "stopfailure" {
+                            # 同理：2.x StopFailure 的错误类型在 type / error_type 子字段。
+                            if ($inputData.type) { $eventType = "error_$($inputData.type)" }
+                            elseif ($inputData.error_type) { $eventType = "error_$($inputData.error_type)" }
+                            else { $eventType = "error" }
+                        }
                         default { $eventType = $hookName }
                     }
                 } elseif ($inputData.notification_type) {
