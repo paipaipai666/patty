@@ -2,7 +2,7 @@ import './api'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import { ErrorBoundary } from './components/common/ErrorBoundary'
+import { ErrorBoundary } from './ErrorBoundary'
 import './styles/global.css'
 
 // Apply cached theme synchronously before React renders to prevent dark flash.

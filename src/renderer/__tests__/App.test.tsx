@@ -142,11 +142,11 @@ vi.mock('../components/SshMonitor/SshMonitorPanel', () => ({
   SshMonitorPanel: () => <div data-testid="ssh-monitor-panel" />
 }))
 
-vi.mock('../components/common/ContextMenu', () => ({
+vi.mock('../components/App/ContextMenu', () => ({
   ContextMenu: (props: any) => <div data-testid="context-menu" data-show={props.show} />
 }))
 
-vi.mock('../components/common/PromptDialog', async () => {
+vi.mock('../components/App/PromptDialog', async () => {
   const { useRef } = await import('react')
   return {
     PromptDialog: (props: { show: boolean; options: { title?: string } }) => {
@@ -171,7 +171,7 @@ vi.mock('../components/Settings/SettingsModal', () => ({
   SettingsModal: () => <div data-testid="settings-modal" />
 }))
 
-vi.mock('../components/common/Toasts', () => ({
+vi.mock('../components/App/Toasts', () => ({
   Toasts: () => <div data-testid="toasts" />
 }))
 

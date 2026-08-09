@@ -4,7 +4,7 @@ import { useSettingsStore } from '../../store/settingsStore'
 import { SessionList } from './SessionList'
 import type { SshProfile } from '../../../shared/settingsTypes'
 import styles from './Sidebar.module.css'
-import { MarqueeText } from '../common/MarqueeText'
+import { MarqueeText } from './MarqueeText'
 
 interface SidebarProps {
   onNewTerminal: () => void
