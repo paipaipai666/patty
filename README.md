@@ -6,6 +6,8 @@
 
 A modern, minimal terminal manager for Windows with a sidebar layout.
 
+> **Platform: Windows-only by design.** The backend deliberately uses Windows APIs (ConPTY, registry, WMI via PowerShell); do not add cross-platform abstraction layers.
+
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 ![Tauri](https://img.shields.io/badge/tauri-2-24C8D8.svg)

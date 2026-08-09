@@ -38,8 +38,8 @@ export default defineConfig({
     // Tauri requires a fixed devUrl port.
     port: 1420,
     strictPort: true,
-    // Pin IPv4 — see the note in the old electron.vite.config.ts; localhost
-    // resolves to ::1 on Windows while the webview tries 127.0.0.1.
+    // Pin IPv4: localhost resolves to ::1 on Windows while the webview tries
+    // 127.0.0.1.
     host: '127.0.0.1'
   },
   clearScreen: false,
