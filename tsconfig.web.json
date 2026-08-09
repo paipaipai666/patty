@@ -18,5 +18,5 @@
       "@/*": ["src/renderer/*"]
     }
   },
-  "include": ["src/renderer/**/*", "src/shared/**/*", "src/renderer/themes/*.json"]
+  "include": ["src/renderer/**/*", "src/shared/**/*", "src/renderer/themes/*.json", "resources/**/*.ts"]
 }

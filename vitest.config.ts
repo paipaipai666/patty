@@ -11,7 +11,7 @@ export default defineConfig({
       {
         test: {
           name: 'node',
-          include: ['src/**/*.test.ts'],
+          include: ['src/**/*.test.ts', 'resources/**/*.test.ts'],
           environment: 'node'
         }
       },
