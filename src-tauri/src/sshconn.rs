@@ -505,7 +505,7 @@ async fn create_inner(
                         emit(&loop_app, &format!("pty:data:{loop_id}"), text);
                     }
                 }
-                ChannelMsg::ExtendedData { data, ext } if ext == 1 => {
+                ChannelMsg::ExtendedData { data, ext: 1 } => {
                     let text = crate::pty::decode(&mut carry, &data);
                     if !text.is_empty() {
                         emit(&loop_app, &format!("pty:data:{loop_id}"), text);
@@ -847,13 +847,15 @@ mod tests {
     }
 
     async fn setup(name: &str) -> TestEnv {
+        // Start the server before taking the integration lock: binding port 0
+        // is race-free, and this keeps the std MutexGuard off the await point.
+        let port = start_test_server().await;
         let guard = INTEGRATION_LOCK.lock().unwrap();
         TEST_EVENTS.lock().unwrap().clear();
         let id = format!("sshconn-test-{name}-{}", std::process::id());
         let dir = std::env::temp_dir().join(format!("patty-sshconn-test-{}", std::process::id()));
         let known_hosts = dir.join(format!("known_hosts-{name}"));
         *KNOWN_HOSTS_OVERRIDE.lock().unwrap() = Some(known_hosts.clone());
-        let port = start_test_server().await;
         TestEnv { _guard: guard, id, port, known_hosts }
     }
 
