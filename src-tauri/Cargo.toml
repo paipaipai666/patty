@@ -1,6 +1,6 @@
 [package]
 name = "patty"
-version = "2.0.6"
+version = "2.0.7"
 description = "Patty"
 edition = "2021"
 rust-version = "1.85"
@@ -33,3 +33,9 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 panic = "abort"
 lto = true
 codegen-units = 1
+
+# 开发构建仅保留行号级调试信息，大幅缩小 debug 符号（.pdb）体积
+# 断点/单步仍可用，仅丢失局部变量类型细节；如需完整调试改回 debug = true
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
