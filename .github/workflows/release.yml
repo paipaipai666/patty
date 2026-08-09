@@ -49,6 +49,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Gate the release on the real binary actually booting a terminal.
+      - name: E2E smoke
+        run: npm run test:e2e
+        env:
+          PATTY_EXE: src-tauri/target/release/patty.exe
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
