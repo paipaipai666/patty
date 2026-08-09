@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
 import { useWorkspaceStore, getFocusedSessionId } from '../../store/workspaceStore'
 import { useRemoteMetricsStore } from '../../store/remoteMetricsStore'
-import { HistoryChart } from '../MetricsDashboard/MetricsDashboard'
+import { HistoryChart, formatPercent } from '../MetricsDashboard/MetricsDashboard'
 import styles from './SshMonitorPanel.module.css'
 
 // SSH monitor: CPU/mem/swap/net/disk sampled over exec channels multiplexed
@@ -12,10 +12,6 @@ import styles from './SshMonitorPanel.module.css'
 interface SshMonitorPanelProps {
   open: boolean
   onClose: () => void
-}
-
-function formatPercent(n: number): string {
-  return `${n.toFixed(1)}%`
 }
 
 function formatKB(kb: number): string {

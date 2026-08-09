@@ -5,15 +5,19 @@ import {
   removeLeavesBySession,
   replaceLeafSession,
   setRatio,
-  insertNeighbor,
-  collectLeafIds,
-  nextLeafId,
-  prevLeafId
+  insertNeighbor
 } from '../paneTreeOps'
 import { singleLeafTree, firstLeafId, collectTreeSessionIds, findLeaf } from '../../../shared/paneTreeNormalize'
-
-const collectSessionIds = (tree: any): string[] => [...collectTreeSessionIds(tree)]
 import type { PaneTree } from '../../../shared/paneTypes'
+
+const collectSessionIds = (tree: PaneTree | null): string[] => [...collectTreeSessionIds(tree)]
+
+/** All leaf pane ids in document order. Test-local helper. */
+const collectLeafIds = (tree: PaneTree | null): string[] => {
+  if (!tree) return []
+  if (tree.type === 'leaf') return [tree.id]
+  return [...collectLeafIds(tree.first), ...collectLeafIds(tree.second)]
+}
 
 describe('splitLeaf', () => {
   it('turns a leaf into a split holding the original and new session', () => {
@@ -246,19 +250,6 @@ describe('navigation helpers', () => {
     return t
   }
 
-  it('collectLeafIds returns ids in document order', () => {
-    expect(collectLeafIds(buildTree()).length).toBe(3)
-  })
-
-  it('collectLeafIds returns empty array for null tree', () => {
-    expect(collectLeafIds(null)).toEqual([])
-  })
-
-  it('collectLeafIds returns id of a single leaf', () => {
-    const ids = collectLeafIds(singleLeafTree('s1', 'p1'))
-    expect(ids).toEqual(['p1'])
-  })
-
   it('collectSessionIds returns sessions in document order', () => {
     expect(collectSessionIds(buildTree())).toEqual(['s1', 's2', 's3'])
   })
@@ -270,49 +261,5 @@ describe('navigation helpers', () => {
   it('firstLeafId returns the top-left-most leaf', () => {
     const t = buildTree()
     expect(findLeaf(t, firstLeafId(t)!)?.sessionId).toBe('s1')
-  })
-
-  it('nextLeafId wraps around the document order', () => {
-    const t = buildTree()
-    const ids = collectLeafIds(t)
-    expect(nextLeafId(t, ids[0])).toBe(ids[1])
-    expect(nextLeafId(t, ids[2])).toBe(ids[0]) // wrap
-    expect(nextLeafId(t, null)).toBe(ids[0])
-  })
-
-  it('nextLeafId returns null for empty tree', () => {
-    const t = singleLeafTree('s1', 'p1')
-    const { tree: empty } = removeLeaf(t, 'p1')
-    expect(nextLeafId(empty as any, null)).toBeNull()
-  })
-
-  it('nextLeafId defaults to first id when currentId is not in tree', () => {
-    const t = buildTree()
-    expect(nextLeafId(t, 'nonexistent')).toBe(collectLeafIds(t)[0])
-  })
-
-  it('prevLeafId wraps around the document order', () => {
-    const t = buildTree()
-    const ids = collectLeafIds(t)
-    expect(prevLeafId(t, ids[1])).toBe(ids[0])
-    expect(prevLeafId(t, ids[0])).toBe(ids[2]) // wrap
-  })
-
-  it('prevLeafId returns null for empty tree', () => {
-    const t = singleLeafTree('s1', 'p1')
-    const { tree: empty } = removeLeaf(t, 'p1')
-    expect(prevLeafId(empty as any, null)).toBeNull()
-  })
-
-  it('prevLeafId defaults to last id when currentId is null', () => {
-    const t = buildTree()
-    const ids = collectLeafIds(t)
-    expect(prevLeafId(t, null)).toBe(ids[ids.length - 1])
-  })
-
-  it('prevLeafId defaults to last id when currentId is not in tree', () => {
-    const t = buildTree()
-    const ids = collectLeafIds(t)
-    expect(prevLeafId(t, 'nonexistent')).toBe(ids[ids.length - 1])
   })
 })

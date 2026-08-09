@@ -9,7 +9,7 @@ interface MetricsDashboardProps {
   onClose: () => void
 }
 
-function formatPercent(n: number): string {
+export function formatPercent(n: number): string {
   return `${n.toFixed(1)}%`
 }
 

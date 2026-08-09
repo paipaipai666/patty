@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, type RefObject } from 'react'
 import { Terminal, type ITerminalOptions } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -59,6 +59,45 @@ function webglUsable(): boolean {
     }
   }
   return webglSupported
+}
+
+// ── 规避 @xterm/addon-webgl@0.18.0 atlas 合并 Bug ─────────────────────
+// addon-webgl 的 TextureAtlas 在页数 >= max(4, maxAtlasPages)（NVIDIA 通常
+// 16）时合并 4 页→1 页。合并会把 _requestClearModel 置 true 且永不复位，
+// 此后每帧全屏重建；合并瞬态会把 glyph→纹理页映射写错，表现为整窗字符
+// 重影/RGB 分离/上一帧残留。需要长时间高吞吐才填满，故仅长时运行后出现。
+//
+// 规避：高频探测 atlas 页数，到软上限（< 16，留余量）就 clearTextureAtlas，
+// 让页数永远到不了 16 → 合并永不触发。检查只读 _pages.length，极廉价；
+// 只有真到阈值才花成本清（一帧全量重光栅化）。
+//
+// 硬约束：阈值必须 < 16 且留足余量，间隔必须短到“两次检查间页数涨不到
+// (16 - 阈值) 页”，否则第 1 次合并会在两次检查间漏网。只读 internal，
+// 升级后字段改名最多让防护静默失效（退回不防护），不写坏状态。
+const ATLAS_PAGE_SOFT_LIMIT = 12 // < 16，留 4 页余量
+const ATLAS_CHECK_INTERVAL_MS = 2000 // 2s：远短于涨 4 页所需时间
+
+// _renderer/_charAtlas 为 addon 私有字段，无公开类型（升级后字段改名最多
+// 让防护静默失效，不写坏状态）。
+interface WebglAtlasInternals {
+  _renderer?: { _charAtlas?: { _pages?: unknown[] } }
+}
+
+/** setInterval handle; aliased because DOM/node libs disagree on the type. */
+type IntervalHandle = ReturnType<typeof setInterval>
+
+function startAtlasGuard(addonRef: RefObject<WebglAddon | null>): IntervalHandle {
+  return setInterval(() => {
+    const atlas = (addonRef.current as unknown as WebglAtlasInternals | null)?._renderer?._charAtlas
+    const pageCount = atlas?._pages?.length ?? 0
+    if (pageCount >= ATLAS_PAGE_SOFT_LIMIT) {
+      try {
+        addonRef.current?.clearTextureAtlas()
+      } catch {
+        // addon 可能已 dispose，忽略
+      }
+    }
+  }, ATLAS_CHECK_INTERVAL_MS)
 }
 
 export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
@@ -306,33 +345,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
     if (perfEnabled) perfMeasure('terminal:webgl-init', 'terminal:webgl-init')
 
-    // ── 规避 @xterm/addon-webgl@0.18.0 atlas 合并 Bug ─────────────────────
-    // addon-webgl 的 TextureAtlas 在页数 >= max(4, maxAtlasPages)（NVIDIA 通常
-    // 16）时合并 4 页→1 页。合并会把 _requestClearModel 置 true 且永不复位，
-    // 此后每帧全屏重建；合并瞬态会把 glyph→纹理页映射写错，表现为整窗字符
-    // 重影/RGB 分离/上一帧残留。需要长时间高吞吐才填满，故仅长时运行后出现。
-    //
-    // 规避：高频探测 atlas 页数，到软上限（< 16，留余量）就 clearTextureAtlas，
-    // 让页数永远到不了 16 → 合并永不触发。检查只读 _pages.length，极廉价；
-    // 只有真到阈值才花成本清（一帧全量重光栅化）。
-    //
-    // 硬约束：阈值必须 < 16 且留足余量，间隔必须短到“两次检查间页数涨不到
-    // (16 - 阈值) 页”，否则第 1 次合并会在两次检查间漏网。只读 internal，
-    // 升级后字段改名最多让防护静默失效（退回不防护），不写坏状态。
     if (webglAddon) {
-      const ATLAS_PAGE_SOFT_LIMIT = 12 // < 16，留 4 页余量
-      const ATLAS_CHECK_INTERVAL_MS = 2000 // 2s：远短于涨 4 页所需时间
-      atlasClearTimerRef.current = setInterval(() => {
-        const atlas = (webglAddonRef.current as any)?._renderer?._charAtlas
-        const pageCount = atlas?._pages?.length ?? 0
-        if (pageCount >= ATLAS_PAGE_SOFT_LIMIT) {
-          try {
-            webglAddonRef.current?.clearTextureAtlas()
-          } catch {
-            // addon 可能已 dispose，忽略
-          }
-        }
-      }, ATLAS_CHECK_INTERVAL_MS)
+      atlasClearTimerRef.current = startAtlasGuard(webglAddonRef)
     }
 
     // Sixel / inline images
@@ -402,14 +416,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         const wgl = new WebglAddon()
         term.loadAddon(wgl)
         webglAddonRef.current = wgl
-        if (atlasClearTimerRef.current) clearInterval(atlasClearTimerRef.current)
-        atlasClearTimerRef.current = setInterval(() => {
-          const atlas = (webglAddonRef.current as any)?._renderer?._charAtlas
-          const pageCount = atlas?._pages?.length ?? 0
-          if (pageCount >= 12) {
-            try { webglAddonRef.current?.clearTextureAtlas() } catch { /* disposed in race */ }
-          }
-        }, 2000)
+        clearInterval(atlasClearTimerRef.current ?? undefined)
+        atlasClearTimerRef.current = startAtlasGuard(webglAddonRef)
       } catch {
         // WebGL unavailable — canvas fallback works fine
       }
@@ -562,13 +570,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
             const wgl = new WebglAddon()
             term.loadAddon(wgl)
             webglAddonRef.current = wgl
-            atlasClearTimerRef.current = setInterval(() => {
-              const atlas = (wgl as any)?._renderer?._charAtlas
-              const pageCount = atlas?._pages?.length ?? 0
-              if (pageCount >= 12) {
-                try { wgl.clearTextureAtlas() } catch { /* disposed in race */ }
-              }
-            }, 2000)
+            atlasClearTimerRef.current = startAtlasGuard(webglAddonRef)
           } else {
             const fallback = new CanvasAddon()
             term.loadAddon(fallback)

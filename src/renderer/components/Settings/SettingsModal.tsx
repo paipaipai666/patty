@@ -4,7 +4,8 @@ import { getThemeColors } from '../../styles/themes'
 import { useSettingsStore } from '../../store/settingsStore'
 import { toast } from '../../store/toastStore'
 import { useAnimatedMount } from '../../hooks/useAnimatedMount'
-import type { AppSettings, CustomTheme, ShellType, ShortcutMap } from '../../../shared/settingsTypes'
+import type { AppSettings, CustomTheme, NotificationSettings, ShellType, ShortcutMap } from '../../../shared/settingsTypes'
+import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import { createDefaultCustomTheme, UI_COLOR_LABELS, XTERM_COLOR_LABELS, BUILTIN_THEMES } from '../../styles/themes'
 import { SshSettingsPanel } from './SshSettingsPanel'
 import styles from './SettingsModal.module.css'
@@ -349,6 +350,14 @@ function FontPicker({ value, onChange }: { value: string; onChange: (font: strin
   )
 }
 
+// Default-shell picker excludes 'ssh' — SSH sessions are created from hosts,
+// not chosen as a local default. Object.entries loses the key type; restored here.
+const SHELL_OPTIONS: { value: ShellType; label: string }[] = (
+  Object.entries(SHELL_LABELS) as [ShellType, string][]
+)
+  .filter(([value]) => value !== 'ssh')
+  .map(([value, label]) => ({ value, label }))
+
 function ShellPicker({
   value,
   onChange
@@ -367,14 +376,6 @@ function ShellPicker({
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
-
-  const SHELL_OPTIONS: { value: ShellType; label: string }[] = [
-    { value: 'powershell', label: 'Windows PowerShell' },
-    { value: 'pwsh', label: 'PowerShell 7' },
-    { value: 'cmd', label: 'CMD' },
-    { value: 'gitbash', label: 'Git Bash' },
-    { value: 'wsl', label: 'WSL' }
-  ]
 
   const currentLabel = SHELL_OPTIONS.find((s) => s.value === value)?.label ?? value
 
@@ -801,6 +802,17 @@ function LayoutSection({
   )
 }
 
+const NOTIFICATION_TOGGLES: Array<{
+  key: keyof NotificationSettings
+  label: string
+  desc: string
+}> = [
+  { key: 'claudeCode', label: 'Claude Code', desc: 'Show indicators for permission requests, questions, and errors' },
+  { key: 'openCode', label: 'OpenCode', desc: 'Show indicators for permission requests, questions, and errors' },
+  { key: 'codex', label: 'Codex CLI', desc: 'Show indicators when Codex CLI needs your attention' },
+  { key: 'ohMyPi', label: 'Oh My Pi', desc: 'Show indicators when Oh My Pi needs your attention' }
+]
+
 function NotificationsSection({
   settings,
   updateSetting
@@ -808,34 +820,6 @@ function NotificationsSection({
   settings: AppSettings
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
 }) {
-  const toggleClaudeCode = () => {
-    updateSetting('notifications', {
-      ...settings.notifications,
-      claudeCode: !settings.notifications?.claudeCode
-    })
-  }
-
-  const toggleOpenCode = () => {
-    updateSetting('notifications', {
-      ...settings.notifications,
-      openCode: !settings.notifications?.openCode
-    })
-  }
-
-  const toggleCodex = () => {
-    updateSetting('notifications', {
-      ...settings.notifications,
-      codex: !settings.notifications?.codex
-    })
-  }
-
-  const toggleOhMyPi = () => {
-    updateSetting('notifications', {
-      ...settings.notifications,
-      ohMyPi: !settings.notifications?.ohMyPi
-    })
-  }
-
   return (
     <div className={styles.section}>
       <div className={styles.sectionTitle}>Attention Notifications</div>
@@ -843,77 +827,28 @@ function NotificationsSection({
         Show attention indicators when AI tools need your input.
       </div>
 
-      <div className={styles.settingRow}>
-        <div>
-          <span className={styles.settingLabel}>Claude Code</span>
-          <div className={styles.settingDesc}>
-            Show indicators for permission requests, questions, and errors
+      {NOTIFICATION_TOGGLES.map(({ key, label, desc }) => (
+        <div className={styles.settingRow} key={key}>
+          <div>
+            <span className={styles.settingLabel}>{label}</span>
+            <div className={styles.settingDesc}>{desc}</div>
           </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.notifications[key]}
+            className={`${styles.toggle} ${settings.notifications[key] ? styles.toggleOn : ''}`}
+            onClick={() =>
+              updateSetting('notifications', {
+                ...settings.notifications,
+                [key]: !settings.notifications?.[key]
+              })
+            }
+          >
+            <div className={styles.toggleKnob} />
+          </button>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={settings.notifications.claudeCode}
-          className={`${styles.toggle} ${settings.notifications.claudeCode ? styles.toggleOn : ''}`}
-          onClick={toggleClaudeCode}
-        >
-          <div className={styles.toggleKnob} />
-        </button>
-      </div>
-
-      <div className={styles.settingRow}>
-        <div>
-          <span className={styles.settingLabel}>OpenCode</span>
-          <div className={styles.settingDesc}>
-            Show indicators for permission requests, questions, and errors
-          </div>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={settings.notifications.openCode}
-          className={`${styles.toggle} ${settings.notifications.openCode ? styles.toggleOn : ''}`}
-          onClick={toggleOpenCode}
-        >
-          <div className={styles.toggleKnob} />
-        </button>
-      </div>
-
-      <div className={styles.settingRow}>
-        <div>
-          <span className={styles.settingLabel}>Codex CLI</span>
-          <div className={styles.settingDesc}>
-            Show indicators when Codex CLI needs your attention
-          </div>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={settings.notifications.codex}
-          className={`${styles.toggle} ${settings.notifications.codex ? styles.toggleOn : ''}`}
-          onClick={toggleCodex}
-        >
-          <div className={styles.toggleKnob} />
-        </button>
-      </div>
-
-      <div className={styles.settingRow}>
-        <div>
-          <span className={styles.settingLabel}>Oh My Pi</span>
-          <div className={styles.settingDesc}>
-            Show indicators when Oh My Pi needs your attention
-          </div>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={settings.notifications.ohMyPi}
-          className={`${styles.toggle} ${settings.notifications.ohMyPi ? styles.toggleOn : ''}`}
-          onClick={toggleOhMyPi}
-        >
-          <div className={styles.toggleKnob} />
-        </button>
-      </div>
+      ))}
 
       <div className={styles.settingDesc} style={{ marginTop: '16px' }}>
         ℹ️ When disabled, external config files (Claude Code settings.json, OpenCode plugin, Codex hooks.json, Oh My Pi extensions) will not be modified.

@@ -183,30 +183,3 @@ export function insertNeighbor(
     return split
   })
 }
-
-/** All leaf pane ids in document order. */
-export function collectLeafIds(tree: PaneTree | null): string[] {
-  if (!tree) return []
-  if (tree.type === 'leaf') return [tree.id]
-  return [...collectLeafIds(tree.first), ...collectLeafIds(tree.second)]
-}
-
-/** Nearest leaf id following `currentId` in document order, wrapping around. */
-export function nextLeafId(tree: PaneTree, currentId: string | null): string | null {
-  const ids = collectLeafIds(tree)
-  if (ids.length === 0) return null
-  if (currentId === null) return ids[0]
-  const idx = ids.indexOf(currentId)
-  if (idx === -1) return ids[0]
-  return ids[(idx + 1) % ids.length]
-}
-
-/** Nearest leaf id preceding `currentId` in document order, wrapping around. */
-export function prevLeafId(tree: PaneTree, currentId: string | null): string | null {
-  const ids = collectLeafIds(tree)
-  if (ids.length === 0) return null
-  if (currentId === null) return ids[ids.length - 1]
-  const idx = ids.indexOf(currentId)
-  if (idx === -1) return ids[ids.length - 1]
-  return ids[(idx - 1 + ids.length) % ids.length]
-}

@@ -57,8 +57,7 @@ export const terminalAPI = {
       listen<[string, number]>('pty:exit', (event) => callback(event.payload[0], event.payload[1]))
     ),
 
-  // Hook port
-  getHookPort: () => invoke<number>('get_hook_port'),
+  // Hooks
   hooksClearPane: (paneId: string) => invoke<void>('hooks_clear_pane', { paneId }),
 
   // Window controls
@@ -72,10 +71,6 @@ export const terminalAPI = {
         void appWindow.isMaximized().then(callback)
       })
     ),
-
-  // Shell detection
-  detectShells: () =>
-    invoke<Array<{ name: string; path: string; available: boolean }>>('detect_shells'),
 
   // SSH config import
   sshConfigImport: () =>
@@ -140,7 +135,6 @@ export const terminalAPI = {
 
   // Perf
   perfEnabled: import.meta.env.VITE_PATTY_PERF === '1',
-  perfDump: () => invoke<{ success: boolean }>('perf_dump'),
 
   // Metrics dashboard
   metricsHistory: () => invoke<MetricsSnapshot>('metrics_history'),

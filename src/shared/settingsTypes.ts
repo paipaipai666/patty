@@ -1,5 +1,16 @@
 export type ShellType = 'powershell' | 'pwsh' | 'cmd' | 'gitbash' | 'wsl' | 'ssh'
 
+/** Display label per shell. Keyed on ShellType so a new variant without a
+ *  label is a compile error. */
+export const SHELL_LABELS: Record<ShellType, string> = {
+  powershell: 'Windows PowerShell',
+  pwsh: 'PowerShell 7',
+  cmd: 'CMD',
+  gitbash: 'Git Bash',
+  wsl: 'WSL',
+  ssh: 'SSH'
+}
+
 /** SSH connection parameters. Carried on profiles (with id/name) and snapshotted
  *  onto sessions (without them) so editing a profile never mutates live sessions. */
 export interface SshTarget {

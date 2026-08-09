@@ -221,28 +221,6 @@ describe('splitFocused', () => {
   })
 })
 
-describe('replaceFocusedLeaf', () => {
-  it('replaces the session in the focused leaf', () => {
-    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
-    useWorkspaceStore.getState().replaceFocusedLeaf('sX')
-    expect((useWorkspaceStore.getState().workspaces[0].paneTree as any).sessionId).toBe('sX')
-  })
-
-  it('creates a new workspace when none exists', () => {
-    useWorkspaceStore.getState().replaceFocusedLeaf('s1')
-    expect(useWorkspaceStore.getState().workspaces).toHaveLength(1)
-    expect((useWorkspaceStore.getState().workspaces[0].paneTree as any).sessionId).toBe('s1')
-  })
-
-  it('creates a new workspace when active workspace has no focused pane', () => {
-    const ws = makeWorkspace({ id: 'w1' })
-    ws.focusedPaneId = null
-    useWorkspaceStore.getState().loadFromPersisted([ws], 'w1')
-    useWorkspaceStore.getState().replaceFocusedLeaf('s1')
-    expect(useWorkspaceStore.getState().workspaces).toHaveLength(2)
-  })
-})
-
 describe('closeFocused', () => {
   it('removes the focused leaf and removes the workspace when last leaf', () => {
     useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
@@ -272,12 +250,7 @@ describe('closeFocused', () => {
   })
 })
 
-describe('insertNeighborFocused / insertNeighborAt / replaceLeafAt', () => {
-  it('insertNeighborFocused creates workspace when none exists', () => {
-    useWorkspaceStore.getState().insertNeighborFocused('s1', 'horizontal', 'second')
-    expect(useWorkspaceStore.getState().workspaces).toHaveLength(1)
-  })
-
+describe('insertNeighborAt / replaceLeafAt', () => {
   it('insertNeighborAt creates workspace when none exists', () => {
     useWorkspaceStore.getState().insertNeighborAt('p1', 's1', 'horizontal', 'second')
     expect(useWorkspaceStore.getState().workspaces).toHaveLength(1)
@@ -298,22 +271,6 @@ describe('insertNeighborFocused / insertNeighborAt / replaceLeafAt', () => {
     useWorkspaceStore.getState().replaceLeafAt('b', 's3')
     const tree2 = useWorkspaceStore.getState().workspaces[0].paneTree as any
     expect(tree2.second.sessionId).toBe('s3')
-  })
-
-  it('insertNeighborFocused splits focused leaf when workspace exists', () => {
-    useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
-    useWorkspaceStore.getState().insertNeighborFocused('s2', 'horizontal', 'second')
-    const tree = useWorkspaceStore.getState().workspaces[0].paneTree
-    expect(tree.type).toBe('split')
-    expect((tree as any).second.sessionId).toBe('s2')
-  })
-
-  it('insertNeighborFocused creates workspace when active workspace has no focused pane', () => {
-    const ws = makeWorkspace({ id: 'w1' })
-    ws.focusedPaneId = null
-    useWorkspaceStore.getState().loadFromPersisted([ws], 'w1')
-    useWorkspaceStore.getState().insertNeighborFocused('s2', 'horizontal', 'second')
-    expect(useWorkspaceStore.getState().workspaces).toHaveLength(2)
   })
 
   it('insertNeighborAt splits at a specific pane when workspace exists', () => {
@@ -451,28 +408,6 @@ describe('focusPane / focusNext / focusPrev', () => {
     useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
     useWorkspaceStore.getState().focusPane('nonexistent')
     expect(useWorkspaceStore.getState().workspaces[0].focusedPaneId).toBe('leaf1')
-  })
-
-  it('focusNext and focusPrev navigate within a multi-pane tree', () => {
-    const tree: any = {
-      id: 'sp',
-      type: 'split',
-      direction: 'horizontal',
-      ratio: 0.5,
-      first: { id: 'a', type: 'leaf', sessionId: 's1' },
-      second: { id: 'b', type: 'leaf', sessionId: 's2' }
-    }
-    const ws = makeWorkspace({ id: 'w1', paneTree: tree, focusedPaneId: 'a' })
-    useWorkspaceStore.getState().loadFromPersisted([ws], 'w1')
-    useWorkspaceStore.getState().focusNext()
-    expect(useWorkspaceStore.getState().workspaces[0].focusedPaneId).toBe('b')
-    useWorkspaceStore.getState().focusPrev()
-    expect(useWorkspaceStore.getState().workspaces[0].focusedPaneId).toBe('a')
-  })
-
-  it('is a no-op when there is no active workspace', () => {
-    useWorkspaceStore.getState().focusNext()
-    useWorkspaceStore.getState().focusPrev()
   })
 })
 

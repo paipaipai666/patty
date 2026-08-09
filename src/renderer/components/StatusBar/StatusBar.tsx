@@ -1,14 +1,6 @@
 import { useSessionStore } from '../../store/sessionStore'
+import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import styles from './StatusBar.module.css'
-
-const SHELL_LABELS: Record<string, string> = {
-  powershell: 'Windows PowerShell',
-  pwsh: 'PowerShell 7',
-  cmd: 'CMD',
-  gitbash: 'Git Bash',
-  wsl: 'WSL',
-  ssh: 'SSH'
-}
 
 function formatCwd(cwd: string): string {
   if (!cwd) return '~'

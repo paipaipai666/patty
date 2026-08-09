@@ -15,9 +15,7 @@ import {
   removeLeavesBySession,
   replaceLeafSession,
   setRatio,
-  insertNeighbor,
-  nextLeafId,
-  prevLeafId
+  insertNeighbor
 } from './paneTreeOps'
 import { markDirty } from './dirtyScheduler'
 
@@ -42,16 +40,12 @@ interface WorkspaceStore {
   // ── Tree ops (scoped to active workspace) ───────────────────────────
 
   splitFocused: (newSessionId: string, direction: SplitDirection, side?: 'first' | 'second') => void
-  replaceFocusedLeaf: (sessionId: string) => void
-  insertNeighborFocused: (sessionId: string, direction: SplitDirection, side: 'first' | 'second') => void
   insertNeighborAt: (paneId: string, sessionId: string, direction: SplitDirection, side: 'first' | 'second') => void
   replaceLeafAt: (paneId: string, sessionId: string) => void
   closeFocused: () => void
   removeSessionEverywhere: (sessionId: string) => void
   setSplitRatio: (splitId: string, ratio: number) => void
   focusPane: (paneId: string) => void
-  focusNext: () => void
-  focusPrev: () => void
   ensureVisible: (sessionId: string) => boolean
 
   // ── Persistence ─────────────────────────────────────────────────────
@@ -213,20 +207,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     markDirty()
   },
 
-  replaceFocusedLeaf: (sessionId) => {
-    const r = getActiveWsOrCreate(sessionId)
-    if (!r) return
-    if (!r.ws.focusedPaneId) { get().createWorkspace(sessionId); return }
-    get().replaceLeafAt(r.ws.focusedPaneId, sessionId)
-  },
-
-  insertNeighborFocused: (sessionId, direction, side) => {
-    const r = getActiveWsOrCreate(sessionId)
-    if (!r) return
-    if (!r.ws.focusedPaneId) { get().createWorkspace(sessionId); return }
-    get().insertNeighborAt(r.ws.focusedPaneId, sessionId, direction, side)
-  },
-
   insertNeighborAt: (paneId, sessionId, direction, side) => {
     const r = getActiveWsOrCreate(sessionId)
     if (!r) return
@@ -303,18 +283,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
 
   removeSessionEverywhere: (sessionId) => {
     const { workspaces, activeWorkspaceId } = get()
-    const nextWorkspaces = workspaces
-      .map((w) => {
-        const { tree, removedCount } = removeLeavesBySession(w.paneTree, sessionId)
-        if (removedCount === 0) return w
-        if (!tree) return null
-        let focused = w.focusedPaneId
-        if (focused && !findLeaf(tree, focused)) {
-          focused = firstLeafId(tree)
-        }
-        return { ...w, paneTree: tree, focusedPaneId: focused }
-      })
-      .filter(Boolean) as Workspace[]
+    const nextWorkspaces = pruneSessionFromTrees(workspaces, sessionId)
 
     const nextActiveId =
       activeWorkspaceId && nextWorkspaces.some((w) => w.id === activeWorkspaceId)
@@ -348,34 +317,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       workspaces: patchWorkspace(workspaces, activeWorkspaceId, { focusedPaneId: paneId })
     })
     markDirty()
-  },
-
-  focusNext: () => {
-    const { workspaces, activeWorkspaceId } = get()
-    if (!activeWorkspaceId) return
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!ws) return
-    const next = nextLeafId(ws.paneTree, ws.focusedPaneId)
-    if (next && next !== ws.focusedPaneId) {
-      set({
-        workspaces: patchWorkspace(workspaces, activeWorkspaceId, { focusedPaneId: next })
-      })
-      markDirty()
-    }
-  },
-
-  focusPrev: () => {
-    const { workspaces, activeWorkspaceId } = get()
-    if (!activeWorkspaceId) return
-    const ws = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!ws) return
-    const prev = prevLeafId(ws.paneTree, ws.focusedPaneId)
-    if (prev && prev !== ws.focusedPaneId) {
-      set({
-        workspaces: patchWorkspace(workspaces, activeWorkspaceId, { focusedPaneId: prev })
-      })
-      markDirty()
-    }
   },
 
   ensureVisible: (sessionId) => {
