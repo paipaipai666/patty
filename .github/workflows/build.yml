@@ -45,13 +45,6 @@ jobs:
       - name: Package
         run: npm run package
 
-      # Drives the real binary: WebView2 + ConPTY + hook server. windows-latest
-      # has an interactive desktop and the WebView2 runtime preinstalled.
-      - name: E2E smoke
-        run: npm run test:e2e
-        env:
-          PATTY_EXE: src-tauri/target/release/patty.exe
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

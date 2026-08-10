@@ -69,19 +69,33 @@ export async function launchApp() {
   let appExited = null
   app.on('exit', (code) => { appExited = code })
 
-  const page = await waitForPageTarget(debugPort)
-  const cdp = await Cdp.connect(page.webSocketDebuggerUrl)
-  // Ride out WebView2's early navigation (about:blank → tauri.localhost):
-  // waitFor retries through the transient context errors.
-  await cdp.waitFor(`document.readyState === 'complete' && document.querySelector('#root')?.children.length > 0`)
+  // If attach fails, the spawned GUI app would otherwise outlive this script
+  // and its ChildProcess handle keeps node's event loop alive forever (this
+  // is what hung the CI job for an hour).
+  const killApp = async () => {
+    if (appExited !== null) return
+    app.kill('SIGTERM')
+    await sleep(500)
+    if (appExited === null) app.kill('SIGKILL')
+  }
+
+  let page
+  let cdp
+  try {
+    page = await waitForPageTarget(debugPort)
+    cdp = await Cdp.connect(page.webSocketDebuggerUrl)
+    // Ride out WebView2's early navigation (about:blank → tauri.localhost):
+    // waitFor retries through the transient context errors.
+    await cdp.waitFor(`document.readyState === 'complete' && document.querySelector('#root')?.children.length > 0`)
+  } catch (e) {
+    await killApp()
+    rmSync(appData, { recursive: true, force: true })
+    throw e
+  }
 
   const close = async () => {
     cdp.close()
-    if (appExited === null) {
-      app.kill('SIGTERM')
-      await sleep(500)
-      if (appExited === null) app.kill('SIGKILL')
-    }
+    await killApp()
     rmSync(appData, { recursive: true, force: true })
   }
 
