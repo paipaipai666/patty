@@ -7,6 +7,10 @@
  * - question.asked: 询问问题
  * - session.idle: 会话空闲（agent 完成回答）
  * - session.error: 执行出错
+ *
+ * 线格式 v2：每个事件携带 role（main|subagent）。插件本地仍按 parentID
+ * 过滤 subagent 的 idle/deleted（省 HTTP 噪音），上报 role 是让入口层的
+ * subagent 零-emit 不变量有兜底输入。
  */
 
 import { spawn } from 'node:child_process'
@@ -28,6 +32,8 @@ interface PattyEvent {
 interface PattyHook {
   event: (payload: { event: PattyEvent }) => Promise<void>
 }
+
+type SessionRole = 'main' | 'subagent'
 
 export const PattyNotifier = async ({
   project: _project,
@@ -57,15 +63,15 @@ export const PattyNotifier = async ({
   const mainSessions = new Set<string>()
   let aliveInterval: ReturnType<typeof setInterval> | null = null
 
-  const notifyPatty = async (event: string) => {
-    log(`→ patty: ${event}`)
+  const notifyPatty = async (event: string, role: SessionRole = 'main') => {
+    log(`→ patty: ${event} role=${role}`)
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 1500)
     try {
       await fetch(`http://127.0.0.1:${PATTY_PORT}/hook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: hookBody(event),
+        body: hookBody(event, role),
         signal: controller.signal
       })
     } catch {
@@ -75,11 +81,12 @@ export const PattyNotifier = async ({
     }
   }
 
-  const hookBody = (event: string) =>
+  const hookBody = (event: string, role: SessionRole) =>
     JSON.stringify({
       paneId: PANE_ID,
       event,
       source: 'opencode',
+      role,
       // The hook server rejects unauthenticated callers (401); the secret
       // is injected into the terminal env by Patty's pty layer.
       secret: process.env.PATTY_HOOK_SECRET
@@ -88,12 +95,12 @@ export const PattyNotifier = async ({
   // opencode 的 event dispatch 不 await 插件 handler，进程退出时 fire-and-forget
   // 的 fetch 来不及完成。用 detached 子进程投递 session_deleted，使其脱离本
   // 进程生命周期；spawn 失败时回退到普通 fetch（看门狗兜底）。
-  const notifyPattyDetached = (event: string) => {
-    log(`→ patty (detached): ${event}`)
+  const notifyPattyDetached = (event: string, role: SessionRole = 'main') => {
+    log(`→ patty (detached): ${event} role=${role}`)
     try {
       const child = spawn(
         'curl',
-        ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '-d', hookBody(event)],
+        ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '-d', hookBody(event, role)],
         { detached: true, stdio: 'ignore' }
       )
       child.on('error', () => {})
@@ -121,10 +128,13 @@ export const PattyNotifier = async ({
       switch (event.type) {
         case 'session.created': {
           const info = (event as any)?.properties?.info
+          const role: SessionRole = info?.parentID ? 'subagent' : 'main'
           if (info?.id && !info.parentID) {
             mainSessions.add(info.id)
           }
-          await notifyPatty('session_created')
+          // 子 agent session 也照常转发，入口层按 role 把它降为纯租约证据
+          // （零 emit），火焰不会被误点亮。
+          await notifyPatty('session_created', role)
           if (aliveInterval) clearInterval(aliveInterval)
           aliveInterval = setInterval(() => notifyPatty('alive'), 5000)
           if (aliveInterval && typeof aliveInterval === 'object' && 'unref' in aliveInterval) {

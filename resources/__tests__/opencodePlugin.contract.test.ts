@@ -24,7 +24,7 @@ import { isCanonicalEvent } from './hookProtocol'
 
 interface CapturedPost {
   url: string
-  body: { paneId?: string; event?: string; source?: string; secret?: string }
+  body: { paneId?: string; event?: string; source?: string; secret?: string; role?: string }
 }
 
 const captured: CapturedPost[] = []
@@ -83,8 +83,18 @@ describe('PattyNotifier (opencode plugin)', () => {
       paneId: 'pane-1',
       event: 'session_created',
       source: 'opencode',
-      secret: 'secret-1'
+      secret: 'secret-1',
+      role: 'main'
     })
+  })
+
+  it('subagent session.created 仍转发，但携带 role: subagent', async () => {
+    // 子 agent 创建不代表顶层任务开始/结束：插件上报角色，入口层据此把它
+    // 降为纯租约证据（不点火、零 emit）。
+    await drive({ type: 'session.created', properties: mainSession })
+    captured.length = 0
+    await drive({ type: 'session.created', properties: subSession })
+    expect(captured.map((p) => [p.body.event, p.body.role])).toEqual([['session_created', 'subagent']])
   })
 
   it('permission.asked and question.asked → permission_prompt', async () => {
@@ -134,7 +144,7 @@ describe('PattyNotifier (opencode plugin)', () => {
     expect(spawnCalls).toHaveLength(1)
     expect(spawnCalls[0].cmd).toBe('curl')
     const body = JSON.parse(spawnCalls[0].args[spawnCalls[0].args.length - 1])
-    expect(body).toEqual({ paneId: 'pane-1', event: 'session_deleted', source: 'opencode', secret: 'secret-1' })
+    expect(body).toEqual({ paneId: 'pane-1', event: 'session_deleted', source: 'opencode', secret: 'secret-1', role: 'main' })
   })
 
   it('subagent session.deleted does not notify Patty', async () => {
