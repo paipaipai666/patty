@@ -176,7 +176,7 @@ vi.mock('../components/App/Toasts', () => ({
   Toasts: () => <div data-testid="toasts" />
 }))
 
-import App from '../App'
+import App, { createTerminalInCollection } from '../App'
 
 let terminalAPI: Record<string, any>
 const roots: ReturnType<typeof createRoot>[] = []
@@ -242,6 +242,34 @@ describe('App', () => {
     })
     expect(hoisted.mockAddSession).toHaveBeenCalledWith({ cwd: undefined, shell: 'powershell' })
     expect(hoisted.mockCreateWorkspace).toHaveBeenCalledWith('sess-new')
+  })
+
+  it('New Terminal Here creates session + workspace eagerly (consistent with Ctrl+T)', async () => {
+    const selectDirectory = vi.fn().mockResolvedValue({ canceled: false, directory: 'D:\\work' })
+    const addSession = vi.fn().mockReturnValue('sess-coll')
+    const createWorkspace = vi.fn()
+    await createTerminalInCollection('col-1', {
+      selectDirectory,
+      addSession,
+      createWorkspace,
+      defaultShell: 'powershell'
+    })
+    expect(addSession).toHaveBeenCalledWith({ cwd: 'D:\\work', collectionId: 'col-1', shell: 'powershell' })
+    expect(createWorkspace).toHaveBeenCalledWith('sess-coll', 'col-1')
+  })
+
+  it('New Terminal Here is a no-op when the folder picker is canceled', async () => {
+    const selectDirectory = vi.fn().mockResolvedValue({ canceled: true, directory: null })
+    const addSession = vi.fn()
+    const createWorkspace = vi.fn()
+    await createTerminalInCollection('col-1', {
+      selectDirectory,
+      addSession,
+      createWorkspace,
+      defaultShell: 'powershell'
+    })
+    expect(addSession).not.toHaveBeenCalled()
+    expect(createWorkspace).not.toHaveBeenCalled()
   })
 
   it('Ctrl+W calls handleCloseSession when active session exists', () => {

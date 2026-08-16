@@ -22,7 +22,6 @@ import { markDirty } from './dirtyScheduler'
 interface WorkspaceStore {
   workspaces: Workspace[]
   activeWorkspaceId: string | null
-  activeWorkspaceReady: boolean
 
   /** Restore workspaces from normalized data (called by App after loadState). */
   loadFromPersisted: (workspaces: Workspace[], activeId: string | null) => void
@@ -34,8 +33,6 @@ interface WorkspaceStore {
   deleteWorkspace: (id: string) => void
   renameWorkspace: (id: string, name: string) => void
   moveWorkspaceToCollection: (id: string, collectionId: string | null) => void
-  setActiveWorkspaceReady: () => void
-  tryMarkActiveWorkspaceReady: (sessionId: string) => void
 
   // ── Tree ops (scoped to active workspace) ───────────────────────────
 
@@ -110,11 +107,9 @@ function pruneSessionFromTrees(workspaces: Workspace[], sessionId: string): Work
 export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   workspaces: [],
   activeWorkspaceId: null,
-  activeWorkspaceReady: false,
 
   loadFromPersisted: (workspaces, activeId) => {
-    const ready = activeId === null || workspaces.length <= 1
-    set({ workspaces, activeWorkspaceId: activeId, activeWorkspaceReady: ready })
+    set({ workspaces, activeWorkspaceId: activeId })
   },
 
   // ── Workspace management ────────────────────────────────────────────
@@ -131,8 +126,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }
     set((state) => ({
       workspaces: [...state.workspaces, workspace],
-      activeWorkspaceId: id,
-      activeWorkspaceReady: true
+      activeWorkspaceId: id
     }))
     markDirty()
     return id
@@ -142,7 +136,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const { workspaces, activeWorkspaceId } = get()
     if (id === activeWorkspaceId) return
     if (!workspaces.some((w) => w.id === id)) return
-    set({ activeWorkspaceId: id, activeWorkspaceReady: true })
+    set({ activeWorkspaceId: id })
     markDirty()
   },
 
@@ -154,7 +148,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (nextActive === id) {
       nextActive = filtered[0]?.id ?? null
     }
-    set({ workspaces: filtered, activeWorkspaceId: nextActive, activeWorkspaceReady: true })
+    set({ workspaces: filtered, activeWorkspaceId: nextActive })
     markDirty()
   },
 
@@ -170,23 +164,6 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       workspaces: patchWorkspace(state.workspaces, id, { collectionId })
     }))
     markDirty()
-  },
-
-  setActiveWorkspaceReady: () => {
-    set({ activeWorkspaceReady: true })
-  },
-
-  tryMarkActiveWorkspaceReady: (sessionId) => {
-    const { workspaces, activeWorkspaceId, activeWorkspaceReady } = get()
-    if (activeWorkspaceReady) return
-    if (!activeWorkspaceId) {
-      set({ activeWorkspaceReady: true })
-      return
-    }
-    const activeWs = workspaces.find((w) => w.id === activeWorkspaceId)
-    if (!activeWs || treeHasSession(activeWs.paneTree, sessionId)) {
-      set({ activeWorkspaceReady: true })
-    }
   },
 
   // ── Tree ops ────────────────────────────────────────────────────────
@@ -290,7 +267,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         ? activeWorkspaceId
         : nextWorkspaces[0]?.id ?? null
 
-    set({ workspaces: nextWorkspaces, activeWorkspaceId: nextActiveId, activeWorkspaceReady: true })
+    set({ workspaces: nextWorkspaces, activeWorkspaceId: nextActiveId })
     markDirty()
   },
 

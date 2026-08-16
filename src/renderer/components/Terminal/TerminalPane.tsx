@@ -9,7 +9,6 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
 import { toast } from '../../store/toastStore'
-import { useWorkspaceStore } from '../../store/workspaceStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getThemeColors } from '../../styles/themes'
 import { perfMark, perfMeasure } from '../../../shared/perf'
@@ -476,7 +475,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
             // failed SSH connection leaves a blank terminal.
             term.write(`\r\n\x1b[31m[Connection failed: ${message}]\x1b[0m\r\n`)
             setHasData(true)
-            useWorkspaceStore.getState().tryMarkActiveWorkspaceReady(session.id)
             return
           }
           {
@@ -488,7 +486,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
               // prompt) before we attached — write it before subscribing to
               // live data so ordering is preserved.
               term.write(iipPatcherRef.current!(result.replay))
-              useWorkspaceStore.getState().tryMarkActiveWorkspaceReady(session.id)
               setHasData(true)
             }
             cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
@@ -496,7 +493,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
                 firstDataReceivedRef.current = true
                 setHasData(true)
                 if (perfEnabled) perfMeasure('terminal:first-data', 'terminal:create-session-ipc-start')
-                useWorkspaceStore.getState().tryMarkActiveWorkspaceReady(session.id)
               }
               term.write(iipPatcherRef.current!(data))
             })

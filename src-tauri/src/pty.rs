@@ -280,7 +280,7 @@ fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Sen
                 if shared.attached.load(Ordering::Relaxed) {
                     emit(&shared.app, &format!("pty:data:{id}"), text);
                 } else {
-                    shared.buffer.lock().unwrap().push(text);
+                    buffer_push(&shared, text);
                 }
             }
             Err(_) => break,
@@ -397,6 +397,23 @@ fn take_buffer(shared: &Shared) -> Option<String> {
         None
     } else {
         Some(chunks.join(""))
+    }
+}
+
+/// Cap on total bytes buffered while a preheated session is unattached.
+/// Output past the cap drops oldest-chunks-first: the replay only needs the
+/// tail, and a chatty preheat must not grow without bound.
+const PREHEAT_BUFFER_CAP: usize = 256 * 1024;
+
+/// Buffer pre-attach output for replay, dropping oldest chunks once the cap
+/// is exceeded. At least one chunk is always kept (a single oversized read
+/// still replays).
+fn buffer_push(shared: &Shared, text: String) {
+    let mut buf = shared.buffer.lock().unwrap();
+    buf.push(text);
+    let mut total: usize = buf.iter().map(String::len).sum();
+    while total > PREHEAT_BUFFER_CAP && buf.len() > 1 {
+        total -= buf.remove(0).len();
     }
 }
 
@@ -735,6 +752,49 @@ mod tests {
     fn kill_unknown_session_returns_success() {
         let result = kill("no-such-session");
         assert_eq!(result["success"], true);
+    }
+
+    #[test]
+    fn buffer_push_preserves_order_under_cap() {
+        let shared = Arc::new(Shared {
+            attached: AtomicBool::new(false),
+            buffer: Mutex::new(Vec::new()),
+            app: None,
+        });
+        buffer_push(&shared, "a".to_string());
+        buffer_push(&shared, "b".to_string());
+        buffer_push(&shared, "c".to_string());
+        assert_eq!(shared.buffer.lock().unwrap().join(""), "abc");
+    }
+
+    #[test]
+    fn buffer_push_drops_oldest_chunks_over_cap() {
+        let shared = Arc::new(Shared {
+            attached: AtomicBool::new(false),
+            buffer: Mutex::new(Vec::new()),
+            app: None,
+        });
+        let chunk = "x".repeat(PREHEAT_BUFFER_CAP / 2);
+        buffer_push(&shared, chunk.clone());
+        buffer_push(&shared, chunk.clone());
+        buffer_push(&shared, "tail".to_string());
+        let kept = shared.buffer.lock().unwrap().join("");
+        assert_eq!(kept, format!("{chunk}tail"));
+        let total: usize = shared.buffer.lock().unwrap().iter().map(String::len).sum();
+        assert!(total <= PREHEAT_BUFFER_CAP, "buffer must stay under cap");
+    }
+
+    #[test]
+    fn take_buffer_clears_and_returns_joined() {
+        let shared = Arc::new(Shared {
+            attached: AtomicBool::new(false),
+            buffer: Mutex::new(Vec::new()),
+            app: None,
+        });
+        buffer_push(&shared, "hello".to_string());
+        buffer_push(&shared, " world".to_string());
+        assert_eq!(take_buffer(&shared).as_deref(), Some("hello world"));
+        assert!(shared.buffer.lock().unwrap().is_empty());
     }
 
     #[test]

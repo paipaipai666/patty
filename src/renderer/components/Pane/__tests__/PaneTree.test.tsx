@@ -6,7 +6,6 @@ vi.mock('../../../store/workspaceStore', () => {
   const state: any = {
     workspaces: [],
     activeWorkspaceId: null,
-    activeWorkspaceReady: true,
     focusPane: vi.fn(),
     getState: () => state
   }
@@ -35,13 +34,13 @@ vi.mock('../Sash', () => ({
 
 import { PaneTreeRoot } from '../PaneTree'
 import { useWorkspaceStore } from '../../../store/workspaceStore'
-import { useSessionStore } from '../../../store/sessionStore'
+import { useSessionStore, type TerminalSession } from '../../../store/sessionStore'
+import type { Workspace } from '../../../../shared/workspaceTypes'
 
 beforeEach(() => {
   const ws = useWorkspaceStore.getState()
   ws.workspaces = []
   ws.activeWorkspaceId = null
-  ws.activeWorkspaceReady = true
   vi.mocked(ws.focusPane).mockClear()
   const ss = useSessionStore.getState()
   ss.sessions = []
@@ -96,5 +95,73 @@ describe('PaneTreeRoot', () => {
     const root = createRoot(container)
     act(() => { root.render(<PaneTreeRoot />) })
     expect(container.textContent).toContain('session missing')
+  })
+
+  function makeWs(id: string, sessionId: string): Workspace {
+    return {
+      id,
+      name: `Workspace ${id}`,
+      collectionId: null,
+      paneTree: { id: `leaf-${id}`, type: 'leaf', sessionId },
+      focusedPaneId: `leaf-${id}`
+    }
+  }
+
+  function makeSession(id: string): TerminalSession {
+    return { id, title: `T-${id}`, color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: null }
+  }
+
+  it('mounts only the active workspace at startup (lazy restore of the other 99)', () => {
+    const ws = useWorkspaceStore.getState()
+    ws.workspaces = [makeWs('w1', 's1'), makeWs('w2', 's2')]
+    ws.activeWorkspaceId = 'w1'
+    const ss = useSessionStore.getState()
+    ss.sessions = [makeSession('s1'), makeSession('s2')]
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => { root.render(<PaneTreeRoot />) })
+    const paneViews = container.querySelectorAll('[data-testid="pane-view"]')
+    expect(paneViews.length).toBe(1)
+    expect(container.textContent).toBe('s1')
+  })
+
+  it('keeps a visited workspace mounted (hidden) after switching away', () => {
+    const ws = useWorkspaceStore.getState()
+    ws.workspaces = [makeWs('w1', 's1'), makeWs('w2', 's2')]
+    ws.activeWorkspaceId = 'w1'
+    const ss = useSessionStore.getState()
+    ss.sessions = [makeSession('s1'), makeSession('s2')]
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => { root.render(<PaneTreeRoot />) })
+    expect(container.querySelectorAll('[data-testid="pane-view"]')).toHaveLength(1)
+
+    ws.activeWorkspaceId = 'w2'
+    act(() => { root.render(<PaneTreeRoot />) })
+    // w1 stays mounted (display:none, PTY + scrollback preserved), w2 mounts.
+    expect(container.querySelectorAll('[data-testid="pane-view"]')).toHaveLength(2)
+  })
+
+  it('never mounts a workspace that was never visited', () => {
+    const ws = useWorkspaceStore.getState()
+    ws.workspaces = [makeWs('w1', 's1'), makeWs('w2', 's2'), makeWs('w3', 's3')]
+    ws.activeWorkspaceId = 'w1'
+    const ss = useSessionStore.getState()
+    ss.sessions = [makeSession('s1'), makeSession('s2'), makeSession('s3')]
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => { root.render(<PaneTreeRoot />) })
+    expect(container.querySelectorAll('[data-testid="pane-view"]')).toHaveLength(1)
+
+    ws.activeWorkspaceId = 'w2'
+    act(() => { root.render(<PaneTreeRoot />) })
+    // w1 (visited) + w2 (active) mount; w3 (never visited) renders nothing.
+    expect(container.querySelectorAll('[data-testid="pane-view"]')).toHaveLength(2)
   })
 })

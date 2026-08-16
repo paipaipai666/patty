@@ -33,6 +33,36 @@ interface CollectionContextMenuState {
 
 const LAST_CWD_KEY = 'patty-last-cwd'
 
+/**
+ * "New Terminal Here" (collection context menu): create a session in the
+ * collection AND mount it eagerly — identical to Ctrl+T / sidebar +. Before
+ * this, the collection path only called addSession, leaving a background
+ * record with no workspace, no pane and no PTY until the user clicked it.
+ * Deps are injected so the behavior is unit-testable without rendering App.
+ */
+export async function createTerminalInCollection(
+  collectionId: string,
+  deps: {
+    selectDirectory: () => Promise<{ canceled: boolean; directory: string | null }>
+    addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null }) => string
+    createWorkspace: (sessionId: string, collectionId?: string | null) => string
+    defaultShell: string
+  }
+): Promise<void> {
+  try {
+    const result = await deps.selectDirectory()
+    if (result.canceled) return
+    const newId = deps.addSession({
+      cwd: result.directory || undefined,
+      collectionId,
+      shell: deps.defaultShell
+    })
+    deps.createWorkspace(newId, collectionId)
+  } catch (err) {
+    console.error('Failed to create terminal:', err)
+  }
+}
+
 export default function App() {
   const addSession = useSessionStore((s) => s.addSession)
   const removeSession = useSessionStore((s) => s.removeSession)
@@ -412,16 +442,12 @@ export default function App() {
       },
       {
         label: 'New Terminal Here',
-        action: async () => {
-          try {
-            const result = await window.terminalAPI.selectDirectory()
-            if (!result.canceled) {
-              addSession({ cwd: result.directory || undefined, collectionId, shell: defaultShell })
-            }
-          } catch (err) {
-            console.error('Failed to create terminal:', err)
-          }
-        }
+        action: () => void createTerminalInCollection(collectionId, {
+          selectDirectory: () => window.terminalAPI.selectDirectory(),
+          addSession,
+          createWorkspace: (id, cid) => useWorkspaceStore.getState().createWorkspace(id, cid),
+          defaultShell
+        })
       }
     ]
   }

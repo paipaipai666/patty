@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { useSessionStore } from '../../store/sessionStore'
 import type { PaneTree as PaneTreeNode, PaneSplit } from '../../../shared/paneTypes'
@@ -9,19 +9,20 @@ import styles from './PaneTree.module.css'
 /**
  * Recursively render the pane split trees of all workspaces.
  *
- * The active workspace renders immediately. Non-active workspaces are not
- * mounted until the active workspace is ready (first PTY data received), so
- * their PTY spawn doesn't compete with the active workspace during startup.
- * After ready, non-active workspaces render with display:none — their xterm
- * instances stay mounted (preserving PTY and scrollback) but don't paint or
- * consume WebGL contexts.
+ * Only the active workspace mounts. Once a workspace has been visited it
+ * stays mounted (display:none while inactive) so its PTY, running commands
+ * and scrollback survive switching. Workspaces restored from disk but never
+ * opened render nothing — their PTY spawns lazily on first visit, so
+ * restarting with 100 restored workspaces boots one shell, not 100.
  */
 export function PaneTreeRoot() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const activeWorkspaceReady = useWorkspaceStore((s) => s.activeWorkspaceReady)
   const focusPane = useWorkspaceStore((s) => s.focusPane)
   const sessions = useSessionStore((s) => s.sessions)
+
+  // Workspaces that have been mounted at least once (active at some point).
+  const mountedRef = useRef<Set<string>>(new Set())
 
   const sessionById = useMemo(() => {
     const m = new Map<string, (typeof sessions)[number]>()
@@ -41,13 +42,14 @@ export function PaneTreeRoot() {
     <>
       {list.map((ws) => {
         const active = ws.id === activeId
-        const renderChildren = active || activeWorkspaceReady
+        if (active) mountedRef.current.add(ws.id)
+        if (!active && !mountedRef.current.has(ws.id)) return null
         return (
           <div
             key={ws.id}
             className={active ? styles.workspaceActive : styles.workspaceHidden}
           >
-            {renderChildren && ws.tree && renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
+            {ws.tree && renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
           </div>
         )
       })}

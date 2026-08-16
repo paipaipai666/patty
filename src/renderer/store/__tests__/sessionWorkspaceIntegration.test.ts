@@ -41,7 +41,6 @@ function initStores() {
   useWorkspaceStore.setState({
     workspaces: [],
     activeWorkspaceId: null,
-    activeWorkspaceReady: false,
   })
 }
 
@@ -441,58 +440,6 @@ describe('startup restore flow', () => {
       expect(s.pid).toBe(0)
       expect(s.aiType).toBeNull()
     }
-  })
-
-  it('loadFromPersisted ready state: single workspace is ready immediately', async () => {
-    const singleWs: PersistedState = {
-      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', collectionId: null, createdAt: 100 }],
-      collections: [],
-      activeSessionId: 's1',
-      sidebarVisible: true,
-      sidebarWidth: 220,
-      workspaces: [{ id: 'w1', name: 'W', collectionId: null, paneTree: { id: 'p1', type: 'leaf', sessionId: 's1' }, focusedPaneId: 'p1' }],
-      activeWorkspaceId: 'w1',
-    }
-    mockStateLoad.mockResolvedValue(singleWs)
-
-    const loaded = await useSessionStore.getState().loadState()
-    const sessions = useSessionStore.getState().sessions
-    const knownIds = new Set(sessions.map((s) => s.id))
-    const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
-      loaded!.workspaces, loaded!.activeWorkspaceId, knownIds,
-    )
-    useWorkspaceStore.getState().loadFromPersisted(workspaces, activeWorkspaceId)
-
-    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(true)
-  })
-
-  it('loadFromPersisted ready state: multiple workspaces is NOT ready', async () => {
-    const multiWs: PersistedState = {
-      sessions: [
-        { id: 's1', title: 'T1', color: 'blue', cwd: '', shell: 'powershell', collectionId: null, createdAt: 100 },
-        { id: 's2', title: 'T2', color: 'green', cwd: '', shell: 'wsl', collectionId: null, createdAt: 200 },
-      ],
-      collections: [],
-      activeSessionId: 's1',
-      sidebarVisible: true,
-      sidebarWidth: 220,
-      workspaces: [
-        { id: 'w1', name: 'W1', collectionId: null, paneTree: { id: 'p1', type: 'leaf', sessionId: 's1' }, focusedPaneId: 'p1' },
-        { id: 'w2', name: 'W2', collectionId: null, paneTree: { id: 'p2', type: 'leaf', sessionId: 's2' }, focusedPaneId: 'p2' },
-      ],
-      activeWorkspaceId: 'w1',
-    }
-    mockStateLoad.mockResolvedValue(multiWs)
-
-    const loaded = await useSessionStore.getState().loadState()
-    const sessions = useSessionStore.getState().sessions
-    const knownIds = new Set(sessions.map((s) => s.id))
-    const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
-      loaded!.workspaces, loaded!.activeWorkspaceId, knownIds,
-    )
-    useWorkspaceStore.getState().loadFromPersisted(workspaces, activeWorkspaceId)
-
-    expect(useWorkspaceStore.getState().activeWorkspaceReady).toBe(false)
   })
 })
 
