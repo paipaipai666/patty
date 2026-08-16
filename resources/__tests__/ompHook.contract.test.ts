@@ -18,6 +18,7 @@ vi.mock('node:child_process', () => ({
 }))
 
 import PattyNotifier from '../omp-patty-hook'
+import { isCanonicalEvent } from './hookProtocol'
 
 const posted: Array<{ paneId?: string; event?: string; source?: string; secret?: string }> = []
 
@@ -129,5 +130,22 @@ describe('PattyNotifier (omp extension)', () => {
     expect(spawnCalls[0].cmd).toBe('curl')
     const body = JSON.parse(spawnCalls[0].args[spawnCalls[0].args.length - 1])
     expect(body).toEqual({ paneId: 'pane-1', event: 'session_deleted', source: 'omp', secret: 'secret-1' })
+  })
+
+  it('every emitted event stays within the canonical hook vocabulary', async () => {
+    // 覆盖全部六条 handler + 心跳 + detached 投递路径；任何 omp 升级导致的
+    // 改名/新增都会越过 fetch/curl 边界前在这里撞上词汇表。
+    PattyNotifier(pi)
+    for (const name of ['session_start', 'session_stop', 'tool_call', 'tool_approval_requested', 'auto_retry_start']) {
+      await handlers.get(name)?.({}, ctx)
+    }
+    intervalCallbacks[0]?.fn()
+    await handlers.get('session_shutdown')?.({}, ctx)
+    await vi.waitFor(() => expect(posted.length).toBeGreaterThanOrEqual(5))
+    for (const p of posted) {
+      expect(isCanonicalEvent(p.event), p.event).toBe(true)
+    }
+    const detached = JSON.parse(spawnCalls[0].args[spawnCalls[0].args.length - 1])
+    expect(isCanonicalEvent(detached.event), detached.event).toBe(true)
   })
 })

@@ -15,6 +15,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import { spawn } from 'node:child_process'
 import { resolve } from 'node:path'
+import { isCanonicalEvent } from './hookProtocol'
 
 const SCRIPT = resolve(__dirname, '..', 'patty-hook.ps1')
 
@@ -88,6 +89,9 @@ async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<
     setTimeout(() => reject(new Error(`no POST received for payload: ${stdinPayload}`)), 10_000)
   })
   await Promise.race([posted, timeout])
+  // 每个用例的载荷都越过真实 powershell 进程：在这里统一钉词汇表，
+  // 任何 stdin 形状产出的 envelope 都必须落在共享规范内。
+  expect(isCanonicalEvent(inbox[0]?.event), inbox[0]?.event).toBe(true)
   return inbox[0]
 }
 

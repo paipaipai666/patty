@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "description": "Patty hook 线协议：各 AI CLI 适配器（patty-hook.ps1 / opencode-patty-plugin.ts / omp-patty-hook.ts）把原生事件翻译为本文件定义的规范事件，POST 到 127.0.0.1:$PATTY_PORT/hook，载荷 {paneId, event, source, secret}。本文件是事件词汇的单一事实源：src-tauri/src/hooks.rs 的一致性测试与 resources/__tests__/ 的适配器契约测试都消费它——任何一侧漂移（新增、改名、映射变化）都会让测试失败，而不是让指示灯静默熄灭。它只喂测试，不驱动运行时。",
+  "sources": ["claude-code", "codex", "opencode", "omp"],
+  "events": {
+    "session_start": null,
+    "session_created": null,
+    "session_end": null,
+    "session_deleted": null,
+    "alive": null,
+    "idle": "complete",
+    "stop": "complete",
+    "permission_prompt": "permission",
+    "elicitation_dialog": "permission",
+    "idle_prompt": "permission",
+    "notification": null,
+    "pre_tool_use": null,
+    "post_tool_use": null,
+    "user_prompt_submit": null,
+    "error": "error",
+    "error_retry": "error"
+  },
+  "patterns": [
+    { "prefix": "error_", "attention": "error" },
+    { "contains": "permission", "attention": "permission" },
+    { "contains": "question", "attention": "permission" }
+  ],
+  "notes": [
+    "events 是闭集：值为该事件映射到的 attention 类型（null = 不亮灯，仅作心跳租约证据）。",
+    "patterns 是开放家族：Claude StopFailure 的错误类型是动态的（error_rate_limit、error_overloaded……），适配器可以发出任何 error_* 变体。",
+    "闭集事件若同时命中某条 pattern，两处 attention 必须一致（如 error_retry）。",
+    "subagent 防护在适配器层：opencode 插件按 parentID 过滤，omp 依赖核心 session_stop 不给 subagent 发事件的契约，Claude 侧不注册 SubagentStop。"
+  ]
+}

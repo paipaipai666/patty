@@ -533,6 +533,47 @@ mod tests {
     }
 
     #[test]
+    fn event_vocabulary_matches_shared_protocol() {
+        // resources/hook-protocol.json 是所有 AI CLI 适配器与后端共享的事件
+        // 词汇单一事实源；适配器侧由 resources/__tests__ 的契约测试消费。
+        // 任何一侧漂移（新增/改名/映射变化）都必须红测试，而不是让指示灯
+        // 静默熄灭。
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../resources/hook-protocol.json");
+        let raw = std::fs::read_to_string(path).expect("hook-protocol.json must be readable");
+        let protocol: Value = serde_json::from_str(&raw).expect("hook-protocol.json must parse");
+
+        let events = protocol["events"].as_object().expect("events object");
+        assert!(events.len() >= 10, "sanity: vocabulary is non-trivial");
+        for (name, expected) in events {
+            assert_eq!(
+                map_event_to_attention_type(name),
+                expected.as_str(),
+                "event \"{name}\" mapping drifted from hook-protocol.json"
+            );
+        }
+
+        for pattern in protocol["patterns"].as_array().expect("patterns array") {
+            let expected = pattern["attention"].as_str();
+            if let Some(prefix) = pattern["prefix"].as_str() {
+                let sample = format!("{prefix}sample");
+                assert_eq!(map_event_to_attention_type(&sample), expected, "prefix \"{prefix}\"");
+            }
+            if let Some(contains) = pattern["contains"].as_str() {
+                let sample = format!("x{contains}x");
+                assert_eq!(map_event_to_attention_type(&sample), expected, "contains \"{contains}\"");
+            }
+        }
+
+        for source in protocol["sources"].as_array().expect("sources array") {
+            let source = source.as_str().unwrap();
+            assert!(
+                map_source_to_ai_type(source).is_some() && heartbeat_timeout_ms(source).is_some(),
+                "source \"{source}\" must map to an aiType and carry a heartbeat lease"
+            );
+        }
+    }
+
+    #[test]
     fn source_to_ai_type_mapping() {
         assert_eq!(map_source_to_ai_type("opencode"), Some("opencode"));
         assert_eq!(map_source_to_ai_type("codex"), Some("codex"));

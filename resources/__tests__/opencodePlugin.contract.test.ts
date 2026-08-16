@@ -20,6 +20,7 @@ vi.mock('node:child_process', () => ({
 }))
 
 import { PattyNotifier } from '../opencode-patty-plugin'
+import { isCanonicalEvent } from './hookProtocol'
 
 interface CapturedPost {
   url: string
@@ -146,5 +147,25 @@ describe('PattyNotifier (opencode plugin)', () => {
     await drive({ type: 'session.deleted', properties: subSession })
     expect(captured).toHaveLength(0)
     expect(spawnCalls).toHaveLength(0)
+  })
+
+  it('every emitted event stays within the canonical hook vocabulary', async () => {
+    // 驱动插件会发通知的全部路径（含子 agent 触发的 session.created 透传与
+    // main session.deleted 的 detached 投递），事件名必须落在共享词汇表内。
+    await drive({ type: 'session.created', properties: mainSession })
+    await drive({ type: 'session.created', properties: subSession })
+    await drive({ type: 'permission.asked', properties: {} })
+    await drive({ type: 'question.asked', properties: {} })
+    await drive({ type: 'session.idle', properties: { sessionID: 's1' } })
+    await drive({ type: 'session.status', properties: { sessionID: 's1', status: { type: 'idle' } } })
+    await drive({ type: 'session.error', properties: {} })
+    await drive({ type: 'session.deleted', properties: mainSession })
+    expect(captured.length).toBeGreaterThan(0)
+    for (const p of captured) {
+      expect(isCanonicalEvent(p.body.event), p.body.event).toBe(true)
+    }
+    expect(spawnCalls).toHaveLength(1)
+    const detached = JSON.parse(spawnCalls[0].args[spawnCalls[0].args.length - 1])
+    expect(isCanonicalEvent(detached.event), detached.event).toBe(true)
   })
 })
