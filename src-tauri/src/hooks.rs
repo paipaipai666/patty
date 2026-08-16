@@ -142,6 +142,7 @@ fn map_event_to_attention_type(event: &str) -> Option<&'static str> {
     // 权限请求/询问问题 → 蓝色
     if event == "permission_prompt"
         || event == "elicitation_dialog"
+        || event == "idle_prompt"
         || event.contains("permission")
         || event.contains("question")
     {
@@ -493,6 +494,14 @@ mod tests {
     }
 
     #[test]
+    fn compute_events_idle_prompt_maps_to_permission() {
+        let events = compute_hook_events("p1", "idle_prompt", "claude-code", true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1[1], "permission");
+        assert_eq!(events[0].1[2], "claude");
+    }
+
+    #[test]
     fn compute_events_unknown_source_sets_null_ai_type() {
         let events = compute_hook_events("p1", "idle", "unknown-tool", true);
         assert_eq!(events.len(), 1);
@@ -516,6 +525,8 @@ mod tests {
     fn attention_type_mapping() {
         assert_eq!(map_event_to_attention_type("permission_prompt"), Some("permission"));
         assert_eq!(map_event_to_attention_type("elicitation_dialog"), Some("permission"));
+        // Claude 空闲等待输入 >60s 的 idle_prompt 与权限请求同属"需要用户介入"。
+        assert_eq!(map_event_to_attention_type("idle_prompt"), Some("permission"));
         assert_eq!(map_event_to_attention_type("idle"), Some("complete"));
         assert_eq!(map_event_to_attention_type("error_rate_limit"), Some("error"));
         assert_eq!(map_event_to_attention_type("post_tool_use"), None);
