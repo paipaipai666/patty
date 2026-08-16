@@ -35,12 +35,22 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-pub fn note_event_with_now(pane_id: &str, event: &str, source: &str, now: u64) {
+pub fn note_event_with_now(pane_id: &str, event: &str, source: &str, role: &str, now: u64) {
     if heartbeat_timeout_ms(source).is_none() {
         eprintln!("[heartbeat] unknown source \"{source}\", ignoring event \"{event}\"");
         return;
     }
     let mut active = ACTIVE.lock().unwrap();
+    if role == "subagent" {
+        // 子 agent 事件只是存活证据：续期已存在的租约，绝不开/关/重建——
+        // subagent 的生命周期不代表顶层会话（opencode 子 session 的
+        // session.deleted 不得在主卧约上关火）。
+        if let Some(entry) = active.get_mut(pane_id) {
+            entry.last_seen = now;
+            entry.source = source.to_string();
+        }
+        return;
+    }
     match event {
         "session_start" | "session_created" => {
             eprintln!("[flame] lease OPEN pane={pane_id} source={source} event={event}");
@@ -79,8 +89,8 @@ pub fn note_event_with_now(pane_id: &str, event: &str, source: &str, now: u64) {
     }
 }
 
-pub fn note_event(pane_id: &str, event: &str, source: &str) {
-    note_event_with_now(pane_id, event, source, now_ms());
+pub fn note_event(pane_id: &str, event: &str, source: &str, role: &str) {
+    note_event_with_now(pane_id, event, source, role, now_ms());
 }
 
 pub fn remove_pane(pane_id: &str) {
@@ -182,9 +192,9 @@ fn describe_emit(payload: &Value) -> String {
     }
 }
 
-pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str) {
-    eprintln!("[flame] hook pane={pane_id} source={source} event={event}");
-    note_event(pane_id, event, source);
+pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str, role: &str) {
+    eprintln!("[flame] hook pane={pane_id} source={source} event={event} role={role}");
+    note_event(pane_id, event, source, role);
 
     let settings = crate::store::load_settings();
     let enabled = match source {
@@ -194,7 +204,7 @@ pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str
         "omp" => settings["notifications"]["ohMyPi"].as_bool().unwrap_or(true),
         _ => true,
     };
-    let events = compute_hook_events(pane_id, event, source, enabled);
+    let events = compute_hook_events(pane_id, event, source, role, enabled);
     if events.is_empty() && !enabled {
         let would_emit = event == "session_start"
             || event == "session_created"
@@ -213,12 +223,17 @@ pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str
 
 /// Pure event computation for a hook request — no Tauri dependency.
 /// Returns a list of (event_name, payload) to emit; empty = nothing to do.
+/// 入口层不变量：role=subagent 的事件零 emit（租约侧处理见 note_event）。
 fn compute_hook_events<'a>(
     pane_id: &'a str,
     event: &'a str,
     source: &'a str,
+    role: &'a str,
     enabled: bool,
 ) -> Vec<(&'a str, Value)> {
+    if role == "subagent" {
+        return vec![];
+    }
     let pane = pane_id.to_string();
 
     if event == "session_end" || event == "session_deleted" {
@@ -315,8 +330,8 @@ fn handle_request(
     if status == 400 {
         return tiny_http::Response::from_string(String::new()).with_status_code(400);
     }
-    if let Some((pane_id, event, source)) = forward {
-        on_hook_request(app, &pane_id, &event, &source);
+    if let Some((pane_id, event, source, role)) = forward {
+        on_hook_request(app, &pane_id, &event, &source, &role);
     } else if payload.get("ignored").and_then(Value::as_bool) == Some(true) {
         let pane = serde_json::from_str::<Value>(&body)
             .ok()
@@ -330,12 +345,12 @@ fn handle_request(
 /// Pure hook-request evaluation, split from the tiny_http plumbing so the
 /// auth/validation contract is directly unit-testable. Returns the HTTP
 /// status, response payload, and — for valid requests — the
-/// (pane_id, event, source) tuple to forward to on_hook_request.
+/// (pane_id, event, source, role) tuple to forward to on_hook_request.
 fn evaluate_hook_body(
     secret: &str,
     body: &str,
     session_exists: impl Fn(&str) -> bool,
-) -> (u16, Value, Option<(String, String, String)>) {
+) -> (u16, Value, Option<(String, String, String, String)>) {
     let Ok(data) = serde_json::from_str::<Value>(body) else {
         return (400, Value::Null, None);
     };
@@ -343,6 +358,13 @@ fn evaluate_hook_body(
     if data.get("secret").and_then(Value::as_str) != Some(secret) {
         return (401, json!({ "ok": false, "error": "unauthorized" }), None);
     }
+    // role 是线格式 v2 的可选字段：缺省 main（旧适配器无感）；显式给出却
+    // 不在词汇表内则 fail-closed 拒绝——未知角色不得被当 main 亮灯。
+    let role = match data.get("role") {
+        None | Some(Value::Null) => "main",
+        Some(Value::String(s)) if s == "main" || s == "subagent" => s.as_str(),
+        _ => return (400, Value::Null, None),
+    };
     let pane_id = data.get("paneId").and_then(Value::as_str).unwrap_or("");
     let event = data.get("event").and_then(Value::as_str).unwrap_or("");
     let source = data.get("source").and_then(Value::as_str).unwrap_or("unknown");
@@ -353,7 +375,7 @@ fn evaluate_hook_body(
     (
         200,
         json!({ "ok": true }),
-        Some((pane_id.to_string(), event.to_string(), source.to_string())),
+        Some((pane_id.to_string(), event.to_string(), source.to_string(), role.to_string())),
     )
 }
 
@@ -366,10 +388,10 @@ mod tests {
     #[test]
     fn heartbeat_lease_lifecycle() {
         let pane = format!("hb-{}", std::process::id());
-        note_event_with_now(&pane, "session_start", "opencode", 1000);
+        note_event_with_now(&pane, "session_start", "opencode", "main", 1000);
         assert!(ACTIVE.lock().unwrap().contains_key(&pane));
-        note_event_with_now(&pane, "post_tool_use", "opencode", 2000);
-        note_event_with_now(&pane, "session_end", "opencode", 3000);
+        note_event_with_now(&pane, "post_tool_use", "opencode", "main", 2000);
+        note_event_with_now(&pane, "session_end", "opencode", "main", 3000);
         assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
     }
 
@@ -379,11 +401,11 @@ mod tests {
         // 到达。idle 会经 pty:attn 重新点亮前端火焰，租约必须随之重新打开，
         // 否则看门狗扫不到该 pane → 火焰永久卡死。
         let pane = format!("hb-reopen-{}", std::process::id());
-        note_event_with_now(&pane, "session_created", "opencode", 1000);
-        note_event_with_now(&pane, "session_deleted", "opencode", 2000);
+        note_event_with_now(&pane, "session_created", "opencode", "main", 1000);
+        note_event_with_now(&pane, "session_deleted", "opencode", "main", 2000);
         assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
 
-        note_event_with_now(&pane, "idle", "opencode", 3000);
+        note_event_with_now(&pane, "idle", "opencode", "main", 3000);
         assert!(
             ACTIVE.lock().unwrap().contains_key(&pane),
             "late event after session_deleted must reopen the lease"
@@ -403,17 +425,17 @@ mod tests {
         // opencode 1.18 退出 TUI 后服务器进程仍存活并持续发 alive；
         // 纯心跳不得重建已被清除的租约，否则火焰永不熄灭。
         let pane = format!("hb-alive-{}", std::process::id());
-        note_event_with_now(&pane, "session_created", "opencode", 1000);
-        note_event_with_now(&pane, "session_deleted", "opencode", 2000);
-        note_event_with_now(&pane, "alive", "opencode", 3000);
+        note_event_with_now(&pane, "session_created", "opencode", "main", 1000);
+        note_event_with_now(&pane, "session_deleted", "opencode", "main", 2000);
+        note_event_with_now(&pane, "alive", "opencode", "main", 3000);
         assert!(
             !ACTIVE.lock().unwrap().contains_key(&pane),
             "alive must not reopen a cleared lease"
         );
 
         // 但已有租约必须被 alive 正常续期。
-        note_event_with_now(&pane, "session_created", "opencode", 4000);
-        note_event_with_now(&pane, "alive", "opencode", 5000);
+        note_event_with_now(&pane, "session_created", "opencode", "main", 4000);
+        note_event_with_now(&pane, "alive", "opencode", "main", 5000);
         let expired = {
             let active = ACTIVE.lock().unwrap();
             collect_expired_with_now(&active, 13_000)
@@ -425,7 +447,7 @@ mod tests {
     #[test]
     fn heartbeat_unknown_source_ignored() {
         let pane = format!("hb-unknown-{}", std::process::id());
-        note_event_with_now(&pane, "session_start", "not-a-tool", 1000);
+        note_event_with_now(&pane, "session_start", "not-a-tool", "main", 1000);
         assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
     }
 
@@ -444,7 +466,7 @@ mod tests {
 
     #[test]
     fn compute_events_session_end_clears_ai_type() {
-        let events = compute_hook_events("p1", "session_end", "opencode", true);
+        let events = compute_hook_events("p1", "session_end", "opencode", "main", true);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].0, "pty:attn");
         assert_eq!(events[0].1[0], "p1");
@@ -454,40 +476,40 @@ mod tests {
 
     #[test]
     fn compute_events_session_end_ignores_enabled_flag() {
-        let events = compute_hook_events("p1", "session_end", "opencode", false);
+        let events = compute_hook_events("p1", "session_end", "opencode", "main", false);
         assert_eq!(events.len(), 1, "session_end clears ai even when disabled");
     }
 
     #[test]
     fn compute_events_disabled_source_returns_nothing() {
-        let events = compute_hook_events("p1", "idle", "opencode", false);
+        let events = compute_hook_events("p1", "idle", "opencode", "main", false);
         assert!(events.is_empty());
     }
 
     #[test]
     fn compute_events_session_start_sets_ai_type() {
-        let events = compute_hook_events("p1", "session_start", "opencode", true);
+        let events = compute_hook_events("p1", "session_start", "opencode", "main", true);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].1[2], "opencode");
     }
 
     #[test]
     fn compute_events_session_start_with_codex() {
-        let events = compute_hook_events("p1", "session_start", "codex", true);
+        let events = compute_hook_events("p1", "session_start", "codex", "main", true);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].1[2], "codex");
     }
 
     #[test]
     fn compute_events_session_start_with_omp() {
-        let events = compute_hook_events("p1", "session_start", "omp", true);
+        let events = compute_hook_events("p1", "session_start", "omp", "main", true);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].1[2], "omp");
     }
 
     #[test]
     fn compute_events_permission_maps_to_attention() {
-        let events = compute_hook_events("p1", "permission_prompt", "claude-code", true);
+        let events = compute_hook_events("p1", "permission_prompt", "claude-code", "main", true);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].1[1], "permission");
         assert_eq!(events[0].1[2], "claude");
@@ -495,7 +517,7 @@ mod tests {
 
     #[test]
     fn compute_events_idle_prompt_maps_to_permission() {
-        let events = compute_hook_events("p1", "idle_prompt", "claude-code", true);
+        let events = compute_hook_events("p1", "idle_prompt", "claude-code", "main", true);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].1[1], "permission");
         assert_eq!(events[0].1[2], "claude");
@@ -503,20 +525,20 @@ mod tests {
 
     #[test]
     fn compute_events_unknown_source_sets_null_ai_type() {
-        let events = compute_hook_events("p1", "idle", "unknown-tool", true);
+        let events = compute_hook_events("p1", "idle", "unknown-tool", "main", true);
         assert_eq!(events.len(), 1);
         assert!(events[0].1[2].is_null());
     }
 
     #[test]
     fn compute_events_unknown_event_returns_nothing() {
-        let events = compute_hook_events("p1", "post_tool_use", "opencode", true);
+        let events = compute_hook_events("p1", "post_tool_use", "opencode", "main", true);
         assert!(events.is_empty());
     }
 
     #[test]
     fn compute_events_error_event_maps_to_error_attention() {
-        let events = compute_hook_events("p1", "error_rate_limit", "opencode", true);
+        let events = compute_hook_events("p1", "error_rate_limit", "opencode", "main", true);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].1[1], "error");
     }
@@ -571,6 +593,14 @@ mod tests {
                 "source \"{source}\" must map to an aiType and carry a heartbeat lease"
             );
         }
+
+        let roles: Vec<&str> = protocol["roles"]
+            .as_array()
+            .expect("roles array")
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert_eq!(roles, ["main", "subagent"], "roles vocabulary drifted");
     }
 
     #[test]
@@ -644,7 +674,73 @@ mod tests {
         );
         assert_eq!(status, 200);
         assert_eq!(body["ok"], true);
-        assert_eq!(forward, Some(("p1".to_string(), "idle".to_string(), "opencode".to_string())));
+        // 线格式 v2：未携带 role 的旧适配器按 main 转发。
+        assert_eq!(
+            forward,
+            Some(("p1".to_string(), "idle".to_string(), "opencode".to_string(), "main".to_string()))
+        );
+    }
+
+    #[test]
+    fn evaluate_forwards_subagent_role() {
+        let (status, _body, forward) = evaluate_hook_body(
+            "sec",
+            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":"subagent"}"#,
+            |p| p == "p1",
+        );
+        assert_eq!(status, 200);
+        assert_eq!(
+            forward,
+            Some(("p1".to_string(), "idle".to_string(), "opencode".to_string(), "subagent".to_string()))
+        );
+    }
+
+    #[test]
+    fn evaluate_rejects_malformed_role() {
+        // fail-closed：未知角色不得静默按 main 处理（防未来适配器笔误亮灯）。
+        for body in [
+            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":"worker"}"#,
+            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":1}"#,
+        ] {
+            let (status, ..) = evaluate_hook_body("sec", body, |_| true);
+            assert_eq!(status, 400, "body: {body}");
+        }
+    }
+
+    #[test]
+    fn compute_events_subagent_role_emits_nothing() {
+        // 入口层不变量：subagent 事件零 emit——不亮灯、不点火、不灭焰。
+        for event in ["idle", "stop", "session_created", "session_end", "permission_prompt"] {
+            assert!(
+                compute_hook_events("p1", event, "opencode", "subagent", true).is_empty(),
+                "subagent event \"{event}\" must not emit"
+            );
+        }
+    }
+
+    #[test]
+    fn heartbeat_subagent_refreshes_but_never_opens_or_closes_lease() {
+        let pane = format!("hb-subagent-{}", std::process::id());
+        // 无租约时 subagent 事件不得开租约（区别于 main 的 late-event 重建）。
+        note_event_with_now(&pane, "session_created", "opencode", "subagent", 1000);
+        note_event_with_now(&pane, "idle", "opencode", "subagent", 1500);
+        assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
+
+        // 主会话租约开启后：subagent 的 session_deleted 不得关火（opencode
+        // 子 session 删除不代表顶层任务结束），idle 正常续期。
+        note_event_with_now(&pane, "session_created", "opencode", "main", 2000);
+        note_event_with_now(&pane, "session_deleted", "opencode", "subagent", 3000);
+        assert!(ACTIVE.lock().unwrap().contains_key(&pane));
+        note_event_with_now(&pane, "idle", "opencode", "subagent", 5000);
+        {
+            let active = ACTIVE.lock().unwrap();
+            assert!(
+                !collect_expired_with_now(&active, 13_000).contains(&pane),
+                "subagent event must refresh the lease"
+            );
+            assert!(collect_expired_with_now(&active, 13_001).contains(&pane));
+        }
+        ACTIVE.lock().unwrap().remove(&pane);
     }
 
     #[test]
