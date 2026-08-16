@@ -157,6 +157,20 @@ describe('patty-hook.ps1 contract', () => {
     expect(body).toEqual(expect.objectContaining({ event: 'stop', source: 'codex' }))
   })
 
+  it('Codex PascalCase lifecycle events normalize to canonical names', T, async () => {
+    // Codex 以 PascalCase hook_event_name 上报。不归一化则退化为 default
+    // 透传的 "pretooluse"，与 Claude 侧 -EventType 显式传入的 pre_tool_use
+    // 词汇表漂移。
+    for (const [hookName, event] of [
+      ['PreToolUse', 'pre_tool_use'],
+      ['PostToolUse', 'post_tool_use'],
+      ['UserPromptSubmit', 'user_prompt_submit']
+    ] as const) {
+      const body = await runHook(JSON.stringify({ hook_event_name: hookName }), ['-Source', 'codex'])
+      expect(body.event).toBe(event)
+    }
+  })
+
   it('empty stdin → stop', T, async () => {
     const body = await runHook('')
     expect(body.event).toBe('stop')

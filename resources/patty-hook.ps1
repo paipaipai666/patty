@@ -58,6 +58,11 @@ try {
                         "sessionstart" { $eventType = "session_start" }
                         "permissionrequest" { $eventType = "permission_prompt" }
                         "stop" { $eventType = "stop" }
+                        # Codex 以 PascalCase 上报这些事件；归一化到与 Claude 侧
+                        # -EventType 一致的下划线规范名，避免词汇表漂移。
+                        "pretooluse" { $eventType = "pre_tool_use" }
+                        "posttooluse" { $eventType = "post_tool_use" }
+                        "userpromptsubmit" { $eventType = "user_prompt_submit" }
                         "notification" {
                             # Claude Code 2.x 的 Notification 载荷同时带 hook_event_name
                             # 和 notification_type（permission_prompt / idle_prompt /
