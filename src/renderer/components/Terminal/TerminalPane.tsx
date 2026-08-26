@@ -129,6 +129,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
+  // Incremented on every startPty run; stale async chains (listener-ready /
+  // createSession resolution from a superseded attempt) no-op on mismatch.
+  const ptyGenerationRef = useRef(0)
   const firstDataReceivedRef = useRef(false)
   // Drives the boot shimmer overlay shown until the PTY's first output lands.
   const [hasData, setHasData] = useState(false)
@@ -462,52 +465,88 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
       if (perfEnabled) perfMark('terminal:create-session-ipc-start')
-      window.terminalAPI
-        .createSession(session.id, session.cwd, session.shell, term.cols, term.rows, session.ssh ?? null)
-        .then((result) => {
-          if (effectDisposed) return
-          if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
-          if (!result.success || !result.pid) {
-            const message = result.error ?? 'unknown error'
-            toast(`Failed to start terminal: ${message}`)
-            // The backend's failure text (pty:data) fired before this pane
-            // subscribed, so it never lands — write it here instead, or a
-            // failed SSH connection leaves a blank terminal.
-            term.write(`\r\n\x1b[31m[Connection failed: ${message}]\x1b[0m\r\n`)
-            setHasData(true)
-            return
-          }
-          {
+      const generation = ++ptyGenerationRef.current
+
+      // Subscribe BEFORE invoking create_pty: the backend flips a preheated
+      // PTY to "attached" inside create_pty, and from then on the reader
+      // thread only emits pty:data events — and Tauri drops events with no
+      // registered listener. The subscription must also be *ready* (listen()
+      // registration is itself async IPC) before the invoke, hence the await.
+      // Live data arriving before the replay write is queued and flushed
+      // right after it, preserving replay → live ordering.
+      let replayWritten = false
+      const liveQueue: string[] = []
+      const writeLive = (data: string) => {
+        if (!firstDataReceivedRef.current) {
+          firstDataReceivedRef.current = true
+          setHasData(true)
+          if (perfEnabled) perfMeasure('terminal:first-data', 'terminal:create-session-ipc-start')
+        }
+        term.write(iipPatcherRef.current!(data))
+      }
+      const flushQueue = () => {
+        replayWritten = true
+        for (const data of liveQueue) writeLive(data)
+        liveQueue.length = 0
+      }
+      const dataSub = window.terminalAPI.onData(session.id, (data) => {
+        if (effectDisposed || generation !== ptyGenerationRef.current) return
+        if (!replayWritten) {
+          liveQueue.push(data)
+          return
+        }
+        writeLive(data)
+      })
+      const exitSub = window.terminalAPI.onExit(session.id, () => {
+        if (effectDisposed || generation !== ptyGenerationRef.current) return
+        ptyCreatedRef.current = false
+        term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
+        // Attention/aiType cleanup used to hang off a global 'pty:exit'
+        // listener that never fired (the backend only emits per-session
+        // 'pty:exit:{id}') — it lives here now.
+        const store = useSessionStore.getState()
+        store.setAttention(session.id, null)
+        store.setAiType(session.id, null)
+        ptyRetryCountRef.current++
+        if (ptyRetryCountRef.current < PTY_MAX_RETRIES) {
+          retryTimerRef.current = setTimeout(() => startPty(), 500)
+        } else {
+          term.write('\x1b[90m[Auto-restart limit reached]\x1b[0m\r\n')
+        }
+      })
+      cleanupDataRef.current = dataSub.unsubscribe
+      cleanupExitRef.current = exitSub.unsubscribe
+
+      void Promise.all([dataSub.ready, exitSub.ready]).then(() => {
+        if (effectDisposed || generation !== ptyGenerationRef.current) return
+        window.terminalAPI
+          .createSession(session.id, session.cwd, session.shell, term.cols, term.rows, session.ssh ?? null)
+          .then((result) => {
+            if (effectDisposed || generation !== ptyGenerationRef.current) return
+            if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
+            if (!result.success || !result.pid) {
+              const message = result.error ?? 'unknown error'
+              toast(`Failed to start terminal: ${message}`)
+              // Subscribe-first means the backend's failure text (pty:data)
+              // actually lands now — flush it before the highlighted summary.
+              flushQueue()
+              term.write(`\r\n\x1b[31m[Connection failed: ${message}]\x1b[0m\r\n`)
+              setHasData(true)
+              return
+            }
             updatePid(session.id, result.pid)
             ptyCreatedRef.current = true
             ptyRetryCountRef.current = 0
             if (result.replay) {
               // A preheated PTY already produced its initial output (banner,
-              // prompt) before we attached — write it before subscribing to
-              // live data so ordering is preserved.
+              // prompt) before we attached — replay it before the queued live
+              // data so ordering is preserved.
               term.write(iipPatcherRef.current!(result.replay))
               setHasData(true)
             }
-            cleanupDataRef.current = window.terminalAPI.onData(session.id, (data) => {
-              if (!firstDataReceivedRef.current) {
-                firstDataReceivedRef.current = true
-                setHasData(true)
-                if (perfEnabled) perfMeasure('terminal:first-data', 'terminal:create-session-ipc-start')
-              }
-              term.write(iipPatcherRef.current!(data))
-            })
-            cleanupExitRef.current = window.terminalAPI.onExit(session.id, () => {
-              ptyCreatedRef.current = false
-              term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
-              ptyRetryCountRef.current++
-              if (ptyRetryCountRef.current < PTY_MAX_RETRIES) {
-                retryTimerRef.current = setTimeout(() => startPty(), 500)
-              } else {
-                term.write('\x1b[90m[Auto-restart limit reached]\x1b[0m\r\n')
-              }
-            })
-          }
-        })
+            flushQueue()
+          })
+      })
     }
 
     // Start the PTY immediately. The container is already laid out by the time

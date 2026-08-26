@@ -4,7 +4,6 @@ const mockStateSave = vi.fn()
 const mockStateLoad = vi.fn()
 const mockKill = vi.fn()
 const mockOnAttentionChange = vi.fn(() => vi.fn())
-const mockOnPtyExit = vi.fn(() => vi.fn())
 
 vi.stubGlobal('window', {
   terminalAPI: {
@@ -12,7 +11,6 @@ vi.stubGlobal('window', {
     stateSave: mockStateSave,
     kill: mockKill,
     onAttentionChange: mockOnAttentionChange,
-    onPtyExit: mockOnPtyExit,
   },
   addEventListener: vi.fn(),
 })

@@ -825,4 +825,70 @@ mod tests {
         }
         assert!(gone, "session should be removed after shell exit");
     }
+
+    #[test]
+    fn write_to_non_reading_child_does_not_block_the_caller() {
+        // REVIEW.md P0-5: write_pty is a SYNC tauri command (main thread) and
+        // pty::write does a blocking write_all while holding the writer lock.
+        // The review hypothesized that a child that never reads stdin lets the
+        // ConPTY input pipe fill and write_all then blocks — a full UI freeze.
+        //
+        // EMPIRICAL RESULT (2026-08-26, Win11 + ConPTY, cmd child flooded with
+        // 8 MiB of '\r'-less input): the freeze claim did NOT reproduce —
+        // conhost keeps draining the pipe, every single write returned in
+        // ≤ 54ms, all 512 chunks landed. The observable cost is throughput
+        // (~0.5 MiB/s while flooding), not blockage. This test now pins the
+        // measured contract so a platform/ConPTY behavior change that DOES
+        // apply hard backpressure shows up red instead of freezing a user's
+        // window first.
+        let id = format!("test-write-block-{}", std::process::id());
+        spawn_inner(None, &id, None, Some("cmd"), None, None, true).expect("spawn cmd");
+        thread::sleep(Duration::from_millis(500));
+
+        const CHUNKS: usize = 512; // 512 × 16 KiB = 8 MiB of unread input
+        let chunk = "x".repeat(16 * 1024);
+        let written = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let max_write_ms = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let worker_written = written.clone();
+        let worker_max = max_write_ms.clone();
+        let worker_id = id.clone();
+        let worker = thread::spawn(move || {
+            for _ in 0..CHUNKS {
+                let t = std::time::Instant::now();
+                write(&worker_id, &chunk);
+                worker_max.fetch_max(t.elapsed().as_millis() as u64, std::sync::atomic::Ordering::SeqCst);
+                worker_written.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        });
+
+        // Generous deadline: at the measured ~0.5 MiB/s flood throughput the
+        // full 8 MiB takes ~16s. The deadline exists only so a genuinely
+        // wedged pipe can't hang the suite forever.
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        let mut completed = false;
+        while std::time::Instant::now() < deadline {
+            if written.load(std::sync::atomic::Ordering::SeqCst) >= CHUNKS {
+                completed = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        if !completed {
+            // Unblock the worker: killing the child breaks the pipe, write_all
+            // errors out, and pty::write swallows the error.
+            kill(&id);
+        }
+        let _ = worker.join();
+        let _ = kill(&id);
+        let delivered = written.load(std::sync::atomic::Ordering::SeqCst);
+        let max_ms = max_write_ms.load(std::sync::atomic::Ordering::SeqCst);
+        // The freeze contract: no single write may block long enough to hang
+        // the UI (2s is already user-visible; measured reality is ≤ 54ms).
+        assert!(
+            completed && max_ms < 2000,
+            "pty::write against a non-reading child: {delivered}/{CHUNKS} chunks \
+             (completed={completed}), slowest single write {max_ms}ms — any \
+             multi-second write on the main thread is a user-visible freeze",
+        );
+    }
 }

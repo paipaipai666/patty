@@ -56,8 +56,8 @@ import { useSettingsStore } from '../../../store/settingsStore'
 const terminalAPI = {
   write: vi.fn(),
   createSession: vi.fn().mockResolvedValue({ success: true, pid: 1234 }),
-  onData: vi.fn(() => () => {}),
-  onExit: vi.fn(() => () => {}),
+  onData: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: () => {} })),
+  onExit: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: () => {} })),
   kill: vi.fn(),
   resize: vi.fn()
 }

@@ -18,6 +18,21 @@ const asyncUnsub = (registration: Promise<Unsubscribe>): Unsubscribe => {
   }
 }
 
+/** Event subscription whose registration can be awaited. `ready` resolves
+ *  once the listener is live in the backend — a caller that is about to create
+ *  the event's producer (e.g. create_pty flipping a preheated PTY to attached)
+ *  must await it first, because Tauri drops events that have no registered
+ *  listener. */
+export interface ListenerHandle {
+  ready: Promise<void>
+  unsubscribe: Unsubscribe
+}
+
+const listenHandle = (registration: Promise<Unsubscribe>): ListenerHandle => ({
+  ready: registration.then(() => undefined),
+  unsubscribe: asyncUnsub(registration)
+})
+
 export const terminalAPI = {
   // Session management
   createSession: (id: string, cwd?: string, shell?: string, cols?: number, rows?: number, ssh?: SshTarget | null) =>
@@ -36,11 +51,11 @@ export const terminalAPI = {
 
   kill: (id: string) => invoke<{ success: boolean; error?: string }>('kill_pty', { id }),
 
-  onData: (id: string, callback: (data: string) => void): Unsubscribe =>
-    asyncUnsub(listen<string>(`pty:data:${id}`, (event) => callback(event.payload))),
+  onData: (id: string, callback: (data: string) => void): ListenerHandle =>
+    listenHandle(listen<string>(`pty:data:${id}`, (event) => callback(event.payload))),
 
-  onExit: (id: string, callback: (exitCode: number) => void): Unsubscribe =>
-    asyncUnsub(listen<number>(`pty:exit:${id}`, (event) => callback(event.payload))),
+  onExit: (id: string, callback: (exitCode: number) => void): ListenerHandle =>
+    listenHandle(listen<number>(`pty:exit:${id}`, (event) => callback(event.payload))),
 
   // Attention management
   onAttentionChange: (
@@ -50,11 +65,6 @@ export const terminalAPI = {
       listen<[string, string | null, string | null | undefined]>('pty:attn', (event) =>
         callback(event.payload[0], event.payload[1], event.payload[2])
       )
-    ),
-
-  onPtyExit: (callback: (sessionId: string, exitCode: number) => void): Unsubscribe =>
-    asyncUnsub(
-      listen<[string, number]>('pty:exit', (event) => callback(event.payload[0], event.payload[1]))
     ),
 
   // Hooks

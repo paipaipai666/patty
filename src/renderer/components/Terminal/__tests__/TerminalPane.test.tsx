@@ -48,7 +48,9 @@ vi.mock('../../../store/sessionStore', () => {
     sidebarTransitioning: false,
     resetAttention: vi.fn(),
     updatePid: vi.fn(),
-    updateCwd: vi.fn()
+    updateCwd: vi.fn(),
+    setAttention: vi.fn(),
+    setAiType: vi.fn()
   }
   const useSessionStore = (sel: (s: typeof state) => unknown) => sel(state)
   useSessionStore.getState = () => state
@@ -76,6 +78,7 @@ vi.mock('../../../utils/osc7Handler', () => ({ registerOsc7Handler: () => ({ dis
 vi.mock('../../../utils/shellReadiness', () => ({ markTerminalOpen: () => {} }))
 
 import { TerminalPane } from '../TerminalPane'
+import { useSessionStore } from '../../../store/sessionStore'
 
 // Captures the callbacks TerminalPane registers with the main process.
 let lastOnExit: (() => void) | undefined
@@ -83,10 +86,10 @@ let lastOnExit: (() => void) | undefined
 const terminalAPI = {
   write: vi.fn(),
   createSession: vi.fn().mockResolvedValue({ success: true, pid: 1234 }),
-  onData: vi.fn(() => () => {}),
+  onData: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: () => {} })),
   onExit: vi.fn((_id: string, cb: () => void) => {
     lastOnExit = cb
-    return () => {}
+    return { ready: Promise.resolve(), unsubscribe: () => {} }
   }),
   kill: vi.fn(),
   resize: vi.fn()
@@ -173,6 +176,11 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
       () => new Promise<CreateResult>((resolve) => { resolveCreate = resolve })
     )
     const { root } = render()
+    // Subscribe-first: createSession is invoked only after the listener
+    // registrations resolve, so flush the microtask queue first.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
     expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
 
     // Pane unmounts while the (SSH) connection is still being established.
@@ -180,15 +188,18 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
     expect(terminalAPI.kill).toHaveBeenCalledTimes(1)
 
     // The aborted create resolves late with a failure: no toast, no state
-    // updates, no listeners wired onto the disposed terminal.
+    // updates, no listeners re-wired onto the disposed terminal. (MockTerminal
+    // throws on write-after-dispose, so a late write would fail this test.)
     await act(async () => {
       resolveCreate({ success: false, pid: 0, error: 'cancelled' })
       await Promise.resolve()
     })
     expect(useToastStore.getState().toasts).toHaveLength(0)
     expect(useSessionStore.getState().updatePid).not.toHaveBeenCalled()
-    expect(terminalAPI.onData).not.toHaveBeenCalled()
-    expect(terminalAPI.onExit).not.toHaveBeenCalled()
+    // Listeners were subscribed eagerly at mount — exactly once, not again by
+    // the late resolution.
+    expect(terminalAPI.onData).toHaveBeenCalledTimes(1)
+    expect(terminalAPI.onExit).toHaveBeenCalledTimes(1)
   })
 
   it('writes the backend error into the terminal on create failure', async () => {
@@ -203,12 +214,30 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
       error: 'auth: Authentication failed'
     })
     render()
+    // Subscribe-first: listener-ready microtask → createSession → its .then —
+    // two promise hops before the failure text lands.
     await act(async () => {
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
     })
     const term = instances[before]
     expect(term.writes.some((w) => w.includes('auth: Authentication failed'))).toBe(true)
     expect(useToastStore.getState().toasts.length).toBeGreaterThan(0)
+  })
+
+  it('clears attention and aiType when the PTY exits', async () => {
+    // REVIEW.md P0-2: this cleanup used to hang off a global 'pty:exit'
+    // listener that never fired (the backend only emits per-session
+    // 'pty:exit:{id}') — it lives in the per-session onExit path now.
+    // (useSessionStore is the vi.mock above; static import sees the mock.)
+    render()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    act(() => {
+      lastOnExit!()
+    })
+    expect(useSessionStore.getState().setAttention).toHaveBeenCalledWith('sess-c5', null)
+    expect(useSessionStore.getState().setAiType).toHaveBeenCalledWith('sess-c5', null)
   })
 })
 

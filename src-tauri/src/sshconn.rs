@@ -638,16 +638,27 @@ pub fn parse_stats(out: &str) -> Option<RawStats> {
     })
 }
 
+/// Total deadline for one stats collection round. A healthy round completes
+/// in well under a second; without a deadline, a remote that accepts the exec
+/// and then never answers wedges the loop in channel.wait() forever — no
+/// sample, no {stale:true}, and the channel is never released.
+const COLLECT_TIMEOUT: Duration = Duration::from_secs(10);
+
 async fn collect_once(handle: &Handle<PattyHandler>) -> Result<Option<RawStats>, ()> {
     let mut channel = handle.channel_open_session().await.map_err(|_| ())?;
     channel.exec(false, STATS_CMD).await.map_err(|_| ())?;
     let mut out: Vec<u8> = Vec::new();
-    while let Some(msg) = channel.wait().await {
-        match msg {
-            ChannelMsg::Data { data } => out.extend_from_slice(&data),
-            ChannelMsg::Eof | ChannelMsg::Close => break,
-            _ => {}
+    let read_all = async {
+        while let Some(msg) = channel.wait().await {
+            match msg {
+                ChannelMsg::Data { data } => out.extend_from_slice(&data),
+                ChannelMsg::Eof | ChannelMsg::Close => break,
+                _ => {}
+            }
         }
+    };
+    if tokio::time::timeout(COLLECT_TIMEOUT, read_all).await.is_err() {
+        return Err(());
     }
     Ok(parse_stats(&String::from_utf8_lossy(&out)))
 }
@@ -1076,5 +1087,274 @@ mod tests {
         assert!(!exists(&env.id));
         // Key must NOT have been learned.
         assert!(!env.known_hosts.exists());
+    }
+
+    // ── REVIEW P0-4: wedged-remote and channel-stage-failure probes ────────
+
+    /// Same setup as `setup()` but against an already-running server.
+    async fn setup_on(name: &str, port: u16) -> TestEnv {
+        let guard = INTEGRATION_LOCK.lock().unwrap();
+        TEST_EVENTS.lock().unwrap().clear();
+        let id = format!("sshconn-test-{name}-{}", std::process::id());
+        let dir = std::env::temp_dir().join(format!("patty-sshconn-test-{}", std::process::id()));
+        let known_hosts = dir.join(format!("known_hosts-{name}"));
+        *KNOWN_HOSTS_OVERRIDE.lock().unwrap() = Some(known_hosts.clone());
+        TestEnv { _guard: guard, id, port, known_hosts }
+    }
+
+    /// Like wait_event, but matches on payload content and returns None
+    /// instead of panicking, so a test can assert on a *missing* signal.
+    async fn wait_event_payload(event: &str, needle: &str, attempts: u32) -> Option<String> {
+        for _ in 0..attempts {
+            {
+                let events = TEST_EVENTS.lock().unwrap();
+                if let Some((_, payload)) =
+                    events.iter().find(|(e, p)| e == event && p.contains(needle))
+                {
+                    return Some(payload.clone());
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        None
+    }
+
+    /// Server whose exec channels never answer: exec_request is accepted
+    /// (channel_success) but no data/eof/close/exit-status is ever sent —
+    /// a wedged remote command.
+    #[derive(Clone, Default)]
+    struct HangExecServer;
+
+    #[derive(Default)]
+    struct HangExecHandler;
+
+    impl server::Server for HangExecServer {
+        type Handler = HangExecHandler;
+        fn new_client(&mut self, _addr: Option<std::net::SocketAddr>) -> HangExecHandler {
+            HangExecHandler
+        }
+    }
+
+    impl server::Handler for HangExecHandler {
+        type Error = russh::Error;
+
+        async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
+            if user == "test" && password == "secret" {
+                Ok(Auth::Accept)
+            } else {
+                Ok(Auth::reject())
+            }
+        }
+
+        async fn channel_open_session(
+            &mut self,
+            _channel: Channel<server::Msg>,
+            reply: ChannelOpenHandle,
+            _session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            reply.accept().await;
+            Ok(())
+        }
+
+        async fn pty_request(
+            &mut self,
+            channel: ChannelId,
+            _term: &str,
+            _col_width: u32,
+            _row_height: u32,
+            _pix_width: u32,
+            _pix_height: u32,
+            _modes: &[(russh::Pty, u32)],
+            session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            session.channel_success(channel)?;
+            Ok(())
+        }
+
+        async fn shell_request(
+            &mut self,
+            channel: ChannelId,
+            session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            session.channel_success(channel)?;
+            Ok(())
+        }
+
+        async fn exec_request(
+            &mut self,
+            channel: ChannelId,
+            _data: &[u8],
+            session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            // Accept, then hang: no data, no eof, no close, no exit status.
+            session.channel_success(channel)?;
+            Ok(())
+        }
+    }
+
+    async fn start_hang_server() -> u16 {
+        let config = Arc::new(server::Config {
+            auth_rejection_time: Duration::from_millis(1),
+            auth_rejection_time_initial: Some(Duration::from_millis(1)),
+            keys: vec![keys::PrivateKey::random(&mut rand::rng(), keys::Algorithm::Ed25519)
+                .unwrap()],
+            ..Default::default()
+        });
+        let socket = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = socket.local_addr().unwrap().port();
+        let mut server = HangExecServer;
+        tokio::spawn(async move {
+            let _ = server.run_on_socket(config, &socket).await;
+        });
+        port
+    }
+
+    #[tokio::test]
+    async fn metrics_report_stale_when_remote_exec_hangs() {
+        // REVIEW.md P0-4: collect_once awaits channel.wait() with no timeout.
+        // A remote that accepts the exec request but never answers wedges the
+        // per-session metrics loop forever: no sample, no {stale:true}, and
+        // metrics_stop()/kill() can't interrupt the wait. The renderer relies
+        // on the stale signal to mark the connection dead.
+        let port = start_hang_server().await;
+        let env = setup_on("metrics-hang", port).await;
+        let id = env.id.clone();
+        let target = env.target();
+        let task = tokio::spawn(async move { create(None, &id, target, 80, 24).await });
+
+        wait_event("ssh:hostkey").await;
+        hostkey_respond(&env.id, true);
+        answer_auth(&env.id, Some("secret")).await;
+
+        let result = task.await.unwrap();
+        assert_eq!(result["success"], true, "create failed: {result}");
+
+        metrics_start(None, &env.id);
+        // DESIRED: within a few collection cycles the wedged channel is
+        // abandoned and {stale:true} reaches the renderer.
+        // Currently fails: the loop is stuck in channel.wait() and no metrics
+        // event of any kind is ever emitted.
+        let payload =
+            wait_event_payload(&format!("ssh:metrics:{}", env.id), "stale", 150).await;
+        // This test is red by design until the fix lands; release the
+        // INTEGRATION_LOCK guard (held by TestEnv) BEFORE the failing assert
+        // so the panic can't poison the lock and cascade into sibling tests.
+        drop(env);
+        assert!(
+            payload.is_some(),
+            "metrics loop never reported stale for a wedged remote (15s window)"
+        );
+    }
+
+    /// Server that rejects channel_open_session: the channel stage of
+    /// create() errors AFTER authentication succeeded. Counts handler drops
+    /// so the test can observe server-side connection teardown.
+    ///
+    /// Note: request_pty/request_shell can't serve as the probe point —
+    /// create_inner calls them with want_reply=false, so russh never surfaces
+    /// a server-side failure for them. channel_open_session is the one
+    /// channel-stage call that actually awaits a verdict.
+    #[derive(Clone, Default)]
+    struct RejectChannelServer {
+        drops: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    struct RejectChannelHandler {
+        drops: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl Drop for RejectChannelHandler {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    impl server::Server for RejectChannelServer {
+        type Handler = RejectChannelHandler;
+        fn new_client(&mut self, _addr: Option<std::net::SocketAddr>) -> RejectChannelHandler {
+            RejectChannelHandler { drops: self.drops.clone() }
+        }
+    }
+
+    impl server::Handler for RejectChannelHandler {
+        type Error = russh::Error;
+
+        async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
+            if user == "test" && password == "secret" {
+                Ok(Auth::Accept)
+            } else {
+                Ok(Auth::reject())
+            }
+        }
+
+        async fn channel_open_session(
+            &mut self,
+            _channel: Channel<server::Msg>,
+            reply: ChannelOpenHandle,
+            _session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            reply.reject(russh::ChannelOpenFailure::AdministrativelyProhibited).await;
+            Ok(())
+        }
+    }
+
+    async fn start_reject_channel_server(drops: Arc<std::sync::atomic::AtomicUsize>) -> u16 {
+        let config = Arc::new(server::Config {
+            auth_rejection_time: Duration::from_millis(1),
+            auth_rejection_time_initial: Some(Duration::from_millis(1)),
+            keys: vec![keys::PrivateKey::random(&mut rand::rng(), keys::Algorithm::Ed25519)
+                .unwrap()],
+            ..Default::default()
+        });
+        let socket = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = socket.local_addr().unwrap().port();
+        let mut server = RejectChannelServer { drops };
+        tokio::spawn(async move {
+            let _ = server.run_on_socket(config, &socket).await;
+        });
+        port
+    }
+
+    #[tokio::test]
+    async fn channel_stage_failure_tears_down_connection() {
+        // REVIEW.md P0-4: create_inner explicitly disconnects the russh
+        // handle on the auth-failure path but NOT on the channel-stage
+        // failure paths (channel_open_session / request_pty / request_shell).
+        // This probe asserts the observable contract: after a channel-stage
+        // failure the server must see the connection torn down (its handler
+        // dropped) promptly — not linger as a half-open connection/task.
+        let drops = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let port = start_reject_channel_server(drops.clone()).await;
+        let env = setup_on("reject-channel", port).await;
+        let id = env.id.clone();
+        let target = env.target();
+        let task = tokio::spawn(async move { create(None, &id, target, 80, 24).await });
+
+        wait_event("ssh:hostkey").await;
+        hostkey_respond(&env.id, true);
+        answer_auth(&env.id, Some("secret")).await;
+
+        let result = task.await.unwrap();
+        assert_eq!(result["success"], false, "create should fail: {result}");
+        let error = result["error"].as_str().unwrap();
+        assert!(error.starts_with("channel: "), "unexpected error: {error}");
+        assert!(!exists(&env.id));
+
+        let mut torn_down = false;
+        for _ in 0..50 {
+            if drops.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                torn_down = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        // If this fails, the missing disconnect() on the channel-stage failure
+        // paths is a real connection/task leak. If it passes, russh tears the
+        // connection down on Handle drop alone and the finding downgrades to
+        // an asymmetry (no Disconnect::ByApplication sent) without a leak.
+        assert!(
+            torn_down,
+            "server never observed connection teardown after channel-stage failure"
+        );
     }
 }

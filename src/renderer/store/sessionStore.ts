@@ -126,17 +126,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }
       })
 
-      // Listen for PTY exit to cleanup attention state
-      // Don't remove the session — let the user close it manually.
-      // TerminalPane's onExit handler writes "[Process exited]" to the terminal.
-      const offPtyExit = window.terminalAPI.onPtyExit((sessionId) => {
-        get().setAttention(sessionId, null)
-        get().setAiType(sessionId, null)
-      })
+      // PTY-exit attention cleanup lives in TerminalPane's per-session onExit
+      // handler — there is no global 'pty:exit' event (the backend only emits
+      // per-session 'pty:exit:{id}'), so a store-level listener never fired.
+      // The session itself is never auto-removed — the user closes it
+      // manually.
 
       ipcCleanup = () => {
         offAttention()
-        offPtyExit()
         ipcCleanup = null
       }
 

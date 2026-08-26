@@ -269,9 +269,10 @@ export default function App() {
     const focusedId = getFocusedSessionId()
     useWorkspaceStore.getState().closeFocused()
     // Clear AI state for the closed pane. The session stays in the sidebar but
-    // its PTY is about to be killed by the unmounting TerminalPane — fallback
-    // cleanup (onPtyExit → setAiType) would be blocked by ptyManager's stale
-    // sessions.has() check, so we clear aiType here synchronously.
+    // its PTY is about to be killed by the unmounting TerminalPane — unmount
+    // disposes the pane's exit listener before the exit event would arrive,
+    // so the onExit cleanup path never runs for this pane; clear aiType here
+    // synchronously instead.
     if (focusedId) {
       useSessionStore.getState().setAiType(focusedId, null)
     }

@@ -197,14 +197,13 @@ fn apply_codex_hooks(settings: &mut Value, hook_script_path: &str) {
     upsert_hook(hooks, "UserPromptSubmit", cmd_hook("", hook_command), is_patty_codex_hook);
 }
 
-fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_path: &str, reset_on_corrupt: bool) {
+fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_path: &str) {
     let mut settings = if settings_path.exists() {
         match fs::read_to_string(settings_path)
             .ok()
             .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
         {
             Some(s) => s,
-            None if reset_on_corrupt => json!({}),
             None => {
                 // Leave the file untouched rather than wiping the user's
                 // theme/model/permissions/other hooks on the next install.
@@ -218,11 +217,11 @@ fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_
 
     apply(&mut settings, hook_script_path);
 
-    if let Some(dir) = settings_path.parent() {
-        let _ = fs::create_dir_all(dir);
-    }
-    if let Ok(payload) = serde_json::to_string_pretty(&settings) {
-        let _ = fs::write(settings_path, payload);
+    // Atomic tmp+rename: these are the user's own config files (claude
+    // settings.json, codex hooks.json) — a direct fs::write truncates first,
+    // so a crash mid-write would destroy them.
+    if let Err(e) = crate::store::save_atomic_to(settings_path, &settings) {
+        eprintln!("[installer] failed to write {}: {e}", settings_path.display());
     }
 }
 
@@ -233,7 +232,7 @@ pub fn ensure_claude_code_hook() {
     // Drop Patty entries from settings.local.json (the broken 2.0.x install
     // location that Claude never reads) so stale copies can't confuse anyone.
     strip_patty_hooks(&claude_legacy_local_settings_path());
-    install_at(&claude_settings_path(), apply_claude_hooks, &hook_script.to_string_lossy(), false);
+    install_at(&claude_settings_path(), apply_claude_hooks, &hook_script.to_string_lossy());
 }
 
 /// Remove Patty-managed hook entries from a settings file, leaving all other
@@ -252,15 +251,15 @@ fn strip_patty_hooks(path: &PathBuf) {
         }
     }
     if changed {
-        if let Ok(payload) = serde_json::to_string_pretty(&settings) {
-            let _ = fs::write(path, payload);
+        if let Err(e) = crate::store::save_atomic_to(path, &settings) {
+            eprintln!("[installer] failed to write {}: {e}", path.display());
         }
     }
 }
 
 pub fn ensure_codex_hook() {
     let hook_script = ensure_hook_script_exists();
-    install_at(&codex_settings_path(), apply_codex_hooks, &hook_script.to_string_lossy(), true);
+    install_at(&codex_settings_path(), apply_codex_hooks, &hook_script.to_string_lossy());
 }
 
 pub fn ensure_opencode_plugin() {
@@ -373,7 +372,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("settings.json");
         fs::write(&file, "{corrupt").unwrap();
-        install_at(&file, apply_claude_hooks, "X/patty-hook.ps1", false);
+        install_at(&file, apply_claude_hooks, "X/patty-hook.ps1");
         assert_eq!(fs::read_to_string(&file).unwrap(), "{corrupt");
         let _ = fs::remove_dir_all(&dir);
     }
@@ -489,9 +488,27 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("patty-installer-e2e-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let file = dir.join("hooks.json");
-        install_at(&file, apply_codex_hooks, "X/patty-hook.ps1", true);
+        install_at(&file, apply_codex_hooks, "X/patty-hook.ps1");
         let written: Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
         assert!(written["hooks"]["SessionStart"].is_array());
+        let _ = fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn install_codex_preserves_corrupt_settings() {
+        // REVIEW.md P0-3 regression guard: codex installs used to pass
+        // reset_on_corrupt=true, silently resetting an unparseable
+        // ~/.codex/hooks.json to {} and rewriting it with only Patty hooks —
+        // destroying whatever the file contained. install_at no longer has a
+        // reset path at all: corrupt files are always left untouched (same as
+        // the claude case pinned by install_leaves_corrupt_claude_settings_untouched).
+        let dir = std::env::temp_dir().join(format!("patty-installer-corrupt-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("hooks.json");
+        let original = "{corrupt json — user content here";
+        fs::write(&file, original).unwrap();
+        install_at(&file, apply_codex_hooks, "X/patty-hook.ps1");
+        assert_eq!(fs::read_to_string(&file).unwrap(), original);
         let _ = fs::remove_dir_all(&dir);
     }
 }

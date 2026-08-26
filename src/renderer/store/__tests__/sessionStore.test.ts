@@ -6,21 +6,15 @@ vi.mock('../dirtyScheduler', () => ({
 
 const mockStateLoad = vi.fn()
 let capturedAttentionCallback: ((...args: any[]) => void) | null = null
-let capturedPtyExitCallback: ((...args: any[]) => void) | null = null
 const mockOnAttentionChange = vi.fn((cb) => {
   capturedAttentionCallback = cb
-  return vi.fn()
-})
-const mockOnPtyExit = vi.fn((cb) => {
-  capturedPtyExitCallback = cb
   return vi.fn()
 })
 
 vi.stubGlobal('window', {
   terminalAPI: {
     stateLoad: mockStateLoad,
-    onAttentionChange: mockOnAttentionChange,
-    onPtyExit: mockOnPtyExit
+    onAttentionChange: mockOnAttentionChange
   },
   addEventListener: vi.fn()
 })
@@ -30,7 +24,6 @@ import { useSessionStore, buildSessionPersistedState, teardownSessionIPC, SESSIO
 beforeEach(() => {
   vi.clearAllMocks()
   capturedAttentionCallback = null
-  capturedPtyExitCallback = null
   teardownSessionIPC()
   useSessionStore.setState({
     sessions: [],
@@ -397,7 +390,6 @@ describe('loadState / saveState', () => {
     expect(state.loaded).toBe(true)
     expect(result).not.toBeNull()
     expect(mockOnAttentionChange).toHaveBeenCalled()
-    expect(mockOnPtyExit).toHaveBeenCalled()
   })
 
   it('loadState adds pid and null aiType to sessions', async () => {
@@ -454,29 +446,6 @@ describe('loadState / saveState', () => {
 
     expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
     expect(useSessionStore.getState().sessions[0].aiType).toBe('claude')
-  })
-
-  it('loadState IPC callback clears attention on PTY exit', async () => {
-    useSessionStore.setState({
-      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: 'claude' }],
-      attentionMap: { s1: 'start' }
-    })
-    mockStateLoad.mockResolvedValue({
-      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', collectionId: null }],
-      collections: [],
-      activeSessionId: 's1',
-      sidebarVisible: true,
-      sidebarWidth: 220
-    })
-    await useSessionStore.getState().loadState()
-
-    expect(capturedPtyExitCallback).not.toBeNull()
-
-    // Simulate a PTY exit event
-    capturedPtyExitCallback!('s1')
-
-    expect(useSessionStore.getState().attentionMap['s1']).toBeUndefined()
-    expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
   })
 
   it('loadState IPC attention change without aiType does not call setAiType', async () => {

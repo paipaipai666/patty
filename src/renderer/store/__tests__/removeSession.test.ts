@@ -5,8 +5,7 @@ vi.stubGlobal('window', {
   terminalAPI: {
     kill,
     stateLoad: vi.fn(),
-    onAttentionChange: vi.fn(() => vi.fn()),
-    onPtyExit: vi.fn(() => vi.fn())
+    onAttentionChange: vi.fn(() => vi.fn())
   },
   addEventListener: vi.fn()
 })
