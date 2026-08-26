@@ -192,7 +192,46 @@ pub fn validate_state(state: &Value) -> Result<(), String> {
     if !obj.get("sidebarVisible").is_some_and(Value::is_boolean) {
         return Err("Invalid state: sidebarVisible must be a boolean".into());
     }
+    // Workspaces carry the split layout; a malformed tree would surface only
+    // at renderer restore time, after the corrupt state already overwrote the
+    // good one. Validate the shape here instead (REVIEW.md P1-8b).
+    if let Some(workspaces) = obj.get("workspaces") {
+        let list = workspaces
+            .as_array()
+            .ok_or("Invalid state: workspaces must be an array")?;
+        for ws in list {
+            if !ws.get("id").is_some_and(Value::is_string) {
+                return Err("Invalid state: workspace id must be a string".into());
+            }
+            let tree = ws.get("paneTree").ok_or("Invalid state: workspace missing paneTree")?;
+            if !validate_pane_tree(tree) {
+                return Err("Invalid state: malformed paneTree".into());
+            }
+        }
+    }
     Ok(())
+}
+
+/// Shape-check a persisted pane tree: leaves carry id+sessionId, splits carry
+/// id+direction+ratio and two valid children. Anything else is corrupt.
+fn validate_pane_tree(tree: &Value) -> bool {
+    match tree.get("type").and_then(Value::as_str) {
+        Some("leaf") => {
+            tree.get("id").is_some_and(Value::is_string)
+                && tree.get("sessionId").is_some_and(Value::is_string)
+        }
+        Some("split") => {
+            tree.get("id").is_some_and(Value::is_string)
+                && matches!(
+                    tree.get("direction").and_then(Value::as_str),
+                    Some("horizontal" | "vertical")
+                )
+                && tree.get("ratio").is_some_and(Value::is_number)
+                && tree.get("first").is_some_and(validate_pane_tree)
+                && tree.get("second").is_some_and(validate_pane_tree)
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]

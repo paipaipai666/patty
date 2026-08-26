@@ -178,7 +178,8 @@ export default function App() {
       const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
         persisted.workspaces,
         persisted.activeWorkspaceId,
-        knownIds
+        knownIds,
+        { paneTree: persisted.paneTree, focusedPaneId: persisted.focusedPaneId }
       )
       if (perfEnabled) perfMeasure('renderer:normalize-workspaces', 'renderer:normalize-workspaces-start')
       if (perfEnabled) perfMark('renderer:load-workspace-start')
@@ -229,7 +230,8 @@ export default function App() {
 
   const handleCloseSession = useCallback(
     (id: string) => {
-      window.terminalAPI.kill(id)
+      // removeSession owns the PTY kill (same as the close-all path);
+      // calling kill here as well would send it twice (REVIEW.md P1-6).
       removeSession(id)
       useWorkspaceStore.getState().removeSessionEverywhere(id)
     },

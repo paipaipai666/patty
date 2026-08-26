@@ -281,7 +281,9 @@ describe('App', () => {
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', ctrlKey: true, bubbles: true }))
     })
-    expect(terminalAPI.kill).toHaveBeenCalledWith('sess-act')
+    // The PTY kill is owned by sessionStore.removeSession (REVIEW.md P1-6) —
+    // App must not call kill itself, or the same PTY gets killed twice.
+    expect(terminalAPI.kill).not.toHaveBeenCalled()
     expect(hoisted.mockRemoveSession).toHaveBeenCalledWith('sess-act')
     expect(hoisted.mockRemoveSessionEverywhere).toHaveBeenCalledWith('sess-act')
   })

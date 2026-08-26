@@ -262,6 +262,52 @@ pub fn ensure_codex_hook() {
     install_at(&codex_settings_path(), apply_codex_hooks, &hook_script.to_string_lossy());
 }
 
+/// Remove Patty's hook entries from the Claude settings files (both the live
+/// settings.json and the legacy settings.local.json), leaving the user's own
+/// hooks untouched. No-op when absent or unparseable.
+pub fn remove_claude_code_hook() {
+    strip_patty_hooks(&claude_settings_path());
+    strip_patty_hooks(&claude_legacy_local_settings_path());
+}
+
+pub fn remove_codex_hook() {
+    strip_patty_hooks(&codex_settings_path());
+}
+
+fn remove_file_if_present(path: PathBuf, what: &str) {
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => eprintln!("[installer] remove {what}: {e}"),
+    }
+}
+
+pub fn remove_opencode_plugin() {
+    remove_file_if_present(
+        home_dir().join(".config").join("opencode").join("plugins").join("patty-notifier.ts"),
+        "opencode plugin",
+    );
+}
+
+pub fn remove_omp_hook() {
+    remove_file_if_present(
+        home_dir().join(".omp").join("agent").join("extensions").join("patty-notifier.ts"),
+        "omp hook",
+    );
+}
+
+/// Sync external AI-tool hook installations with the notifications settings:
+/// enabled tools get the hook ensured, disabled tools get it REMOVED — a
+/// toggle-off must not leave residue that keeps spawning the hook script on
+/// every AI tool event (REVIEW.md P1-10).
+pub fn sync_notification_tools(settings: &Value) {
+    let on = |key: &str| settings["notifications"][key].as_bool().unwrap_or(true);
+    if on("claudeCode") { ensure_claude_code_hook() } else { remove_claude_code_hook() }
+    if on("openCode") { ensure_opencode_plugin() } else { remove_opencode_plugin() }
+    if on("codex") { ensure_codex_hook() } else { remove_codex_hook() }
+    if on("ohMyPi") { ensure_omp_hook() } else { remove_omp_hook() }
+}
+
 pub fn ensure_opencode_plugin() {
     let source = opencode_plugin_source();
     let dest_dir = home_dir().join(".config").join("opencode").join("plugins");

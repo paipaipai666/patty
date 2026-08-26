@@ -38,11 +38,12 @@ const legacyState: PersistedState = {
 
 describe('legacy paneTree migration into workspaces (REVIEW P1-9)', () => {
   it('upgrades a pre-workspace state file without losing the split layout', () => {
-    // Same call App.tsx makes on load.
+    // Same call App.tsx makes on load, legacy fields included.
     const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
       legacyState.workspaces,
       legacyState.activeWorkspaceId,
-      new Set(legacyState.sessions.map((s) => s.id))
+      new Set(legacyState.sessions.map((s) => s.id)),
+      { paneTree: legacyState.paneTree, focusedPaneId: legacyState.focusedPaneId }
     )
     // DESIRED: one workspace holding the legacy split, focused pane preserved.
     // Currently fails: workspaces comes back empty and the layout is gone.

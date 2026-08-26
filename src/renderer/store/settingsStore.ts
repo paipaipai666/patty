@@ -73,6 +73,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     } catch (err) {
       console.error('Failed to save setting:', err)
       set({ settings: prev })
+      // Roll back the side effects too: the optimistic apply already touched
+      // the DOM (CSS variables) and the patty-theme/patty-boot-bg localStorage
+      // entries the next launch's boot splash reads (REVIEW.md P1-15a).
+      applyTheme(prev.theme, prev.customThemes)
+      cacheBootTheme(prev.theme, prev.customThemes)
+      applyFontSettings(prev.fontFamily, prev.fontSize)
     }
   },
 

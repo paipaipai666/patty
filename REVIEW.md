@@ -15,25 +15,23 @@
 | P0-4b | 远端 exec 悬挂时 metrics 必须报 stale | `sshconn.rs::metrics_report_stale_when_remote_exec_hangs` | `collect_once` 读循环外套 10s `tokio::time::timeout`（`COLLECT_TIMEOUT`），超时走既有 `Err → emit {stale:true} → break` 路径 | ✅ 已修复（绿） |
 | P0-5 | 8MiB 洪泛下无单次写入阻塞 >2s | `pty.rs::tests::write_to_non_reading_child_does_not_block_the_caller` | 无需修复——实测 512×16KiB 全部送达、最慢单次写 54ms（conhost 持续 drain，代价是 ~0.5 MiB/s 吞吐而非阻塞）。测试保留为回归护栏 | ⤵️ 降级 P2（吞吐注记） |
 
-## P1 验证状态（2026-08-26，测试先行，功能代码未动）
+## P1 验证与修复状态（2026-08-26）
 
-可行为验证的 P1 逐项补了复现测试。**七条确认为真 bug（红）**，两条当前一致、以守护测试锁定（绿）；五条不适合测试验证，附原因。
+可行为验证的 P1 逐项补了复现测试，七条确认为真 bug 并已全部修复；两条以守护测试锁定一致性。回归全绿：`vitest run` 514、`cargo test --no-fail-fast` 203、`tsc -b --noEmit` 干净。
 
-| # | 测试 | 位置 | 状态 | 结论 |
-|---|---|---|---|---|
-| P1-6 | 单次关闭只杀一次 PTY | `src/renderer/__tests__/closeSessionKill.test.tsx`（真实 store + Ctrl+W 走 App 处理器） | 🔴 红 | kill('s1') 被调 2 次（handleCloseSession 显式 + removeSession 内部）；TerminalPane 卸载路径未计入（TerminalArea 已 mock，注释说明） |
-| P1-7 | 主题 --bg-app 四源一致 | `styles/__tests__/themeSourceConsistency.test.ts` | 🔴 红 | 实锤漂移：`variables.css :root = #000000` vs `themes/dark.json = #0a0a0c`；lib.rs BUILTIN 与 index.html boot 与 JSON 一致 |
-| P1-8b | validate_state 拒绝畸形 paneTree | `store.rs::tests::validate_state_rejects_malformed_workspaces` | 🔴 红 | `"paneTree": "garbage"` 与缺 first/second 的 split 均通过校验 |
-| P1-9 | legacy paneTree 迁入 workspaces | `src/shared/__tests__/legacyMigration.test.ts` | 🔴 红 | 带 legacy 字段的旧状态加载后 workspaces 为空——分屏布局静默丢失，App.tsx 的「无缝升级」注释不实 |
-| P1-10 | 关闭通知开关应摘除已装 hook | `lib.rs::tests::disabling_notification_tool_removes_its_installed_hooks`（env 隔离临时 HOME） | 🔴 红 | `settings_set(notifications, claudeCode:false)` 后 `~/.claude/settings.json` 仍含全部 8 条 patty hook |
-| P1-14a | 引号内 # 不得截断 | `ssh.rs::tests::parse_preserves_hash_inside_quoted_values` | 🔴 红 | `"example#host.internal"` 解析为 `example`，doc 声称的引号豁免不存在 |
-| P1-15a | 主题 IPC 失败回滚 DOM/缓存 | `store/__tests__/settingsStore.test.ts` 新用例 | 🔴 红 | 回滚后 localStorage 最后一次写入仍是 'light'，CSS `--bg-app` 停在亮色——三处状态分裂 |
-| P1-8a | settings 默认值 Rust↔TS 一致 | `src/shared/__tests__/settingsDefaultsParity.test.ts`（解析 store.rs 的 json! 字面量） | 🟢 绿（守护） | 当前零漂移；任一端加键即红 |
-| P1-11 | CSP sha256 与 boot 脚本对表 | `src/renderer/__tests__/cspBootHash.test.ts` | 🟢 绿（守护） | 当前匹配；改脚本不重算 hash 即红 |
+| # | 修复 | 状态 |
+|---|---|---|
+| P1-6 重复 kill | `App.handleCloseSession` 删掉显式 kill——kill 归 `sessionStore.removeSession` 独占；App.test 的 Ctrl+W 用例改钉新归属 | ✅ |
+| P1-7 主题色漂移 | `variables.css :root --bg-app` `#000000`→`#0a0a0c` 对齐 dark.json；四源一致性测试常驻 | ✅ |
+| P1-8b 校验过浅 | `validate_state` 新增 workspaces/paneTree 递归形状校验（leaf/split 字段、direction 词汇、ratio 类型） | ✅ |
+| P1-9 假迁移 | `normalizeWorkspaces` 新增可选 `legacy` 参数：无 workspaces 且存在 legacy paneTree 时合成一个 workspace 走正常校验路径；App 加载处传入 | ✅ |
+| P1-10 无卸载 | installer 新增 `remove_claude_code_hook`/`remove_codex_hook`/`remove_opencode_plugin`/`remove_omp_hook` 与统一入口 `sync_notification_tools`（开→ensure，关→remove）；`settings_set("notifications")` 与启动线程都改走该入口 | ✅ |
+| P1-14a 引号截断 | `ssh.rs` 注释剥离改为引号感知的 `strip_comment`（OpenSSH 语义：引号内 # 为字面量） | ✅ |
+| P1-15a 回滚不一致 | `updateSetting` 失败回滚时重放 `applyTheme`/`cacheBootTheme`/`applyFontSettings` 的旧值 | ✅ |
+| P1-8a | settings 默认值双端对表守护测试（解析 store.rs `json!` 字面量 ↔ DEFAULT_SETTINGS） | 🟢 守护常驻 |
+| P1-11 | CSP sha256 与 boot 脚本对表守护测试 | 🟢 守护常驻 |
 
 **不适合测试验证的 P1**（附原因）：P1-8c settings_set 跨调用竞态（需在 Tauri 命令层并发注入，进程内复现价值低）；P1-12 SettingsModal 体量/可访问性（结构性问题，行为测试无法表达）；P1-13 WebGL 模块级全局污染（行为真实但属保守降级设计，改不改是产品决策）；P1-14b TOFU 无锁追加（并发窗口极小，确定性复现不现实）；P1-14c passphrase attempt 计数（UX 打磨）；P1-15b attentionTimers 死机制（死代码无可观察行为可钉，直接删即可）；dirtyScheduler 崩溃窗口（进程崩溃语义进程内不可测）。
-
-套件影响：vitest 514 中 4 红（均设计内）；`cargo test --no-fail-fast` 全量 200 中 3 红（均设计内），integration 67 全绿无连带。
 
 ---
 

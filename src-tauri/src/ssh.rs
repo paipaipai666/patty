@@ -28,6 +28,23 @@ pub struct SshProfileDraft {
     pub identity_file: Option<String>,
 }
 
+/// Cut a config line at the first unquoted '#'. OpenSSH only treats '#' as a
+/// comment starter outside quotes — quoted values may legally contain it
+/// (e.g. IdentityFile "C:\keys\site#2.pem").
+fn strip_comment(line: &str) -> &str {
+    let mut quote: Option<char> = None;
+    for (i, ch) in line.char_indices() {
+        match (quote, ch) {
+            (Some(q), c) if c == q => quote = None,
+            (Some(_), _) => {}
+            (None, '"' | '\'') => quote = Some(ch),
+            (None, '#') => return &line[..i],
+            _ => {}
+        }
+    }
+    line
+}
+
 /// Parse OpenSSH client config into profile drafts. Only Host / HostName /
 /// User / Port / IdentityFile are honored; Include, Match, ProxyJump and other
 /// directives are ignored. Wildcard-only blocks (`Host *`) are skipped.
@@ -45,12 +62,8 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshProfileDraft> {
     let mut current: Option<Block> = None;
 
     for raw_line in content.lines() {
-        // Strip comments: a '#' starts a comment unless inside quotes (good
-        // enough for config files — quoted values containing '#' are rare).
-        let line = match raw_line.find('#') {
-            Some(i) => &raw_line[..i],
-            None => raw_line,
-        };
+        // Strip comments: a '#' starts a comment unless inside quotes.
+        let line = strip_comment(raw_line);
         let line = line.trim();
         if line.is_empty() {
             continue;

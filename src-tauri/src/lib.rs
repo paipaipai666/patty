@@ -39,6 +39,11 @@ fn settings_set(key: &str, value: Value) -> Result<Value, String> {
     let mut settings = store::load_settings();
     settings[key] = value;
     store::save_settings(&settings)?;
+    // Notification toggles install AND remove the external AI-tool hooks —
+    // disabling a tool must not leave its hook installed (REVIEW.md P1-10).
+    if key == "notifications" {
+        installer::sync_notification_tools(&settings);
+    }
     Ok(settings)
 }
 
@@ -271,18 +276,7 @@ pub fn run() {
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let settings = store::load_settings();
-                if settings["notifications"]["claudeCode"].as_bool().unwrap_or(true) {
-                    installer::ensure_claude_code_hook();
-                }
-                if settings["notifications"]["openCode"].as_bool().unwrap_or(true) {
-                    installer::ensure_opencode_plugin();
-                }
-                if settings["notifications"]["codex"].as_bool().unwrap_or(true) {
-                    installer::ensure_codex_hook();
-                }
-                if settings["notifications"]["ohMyPi"].as_bool().unwrap_or(true) {
-                    installer::ensure_omp_hook();
-                }
+                installer::sync_notification_tools(&settings);
                 pty::warm_startup(&handle);
             });
             Ok(())
