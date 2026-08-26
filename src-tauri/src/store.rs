@@ -240,6 +240,32 @@ mod tests {
     }
 
     #[test]
+    fn validate_state_rejects_malformed_workspaces() {
+        // REVIEW.md P1-8b: validate_state only checks 4 top-level keys; a
+        // state file with a garbage paneTree passes validation and overwrites
+        // good persisted state — the renderer only discovers the corruption
+        // at restore time. Workspaces/paneTree shape must be validated too.
+        let mut state = json!({
+            "sessions": [],
+            "collections": [],
+            "sidebarWidth": 220,
+            "sidebarVisible": true
+        });
+        state["workspaces"] = json!([{ "id": "w1", "paneTree": "garbage" }]);
+        assert!(
+            validate_state(&state).is_err(),
+            "workspace with non-object paneTree must be rejected"
+        );
+
+        // A split node missing its children is equally malformed.
+        state["workspaces"] = json!([{ "id": "w1", "paneTree": { "type": "split" } }]);
+        assert!(
+            validate_state(&state).is_err(),
+            "split node without first/second must be rejected"
+        );
+    }
+
+    #[test]
     fn validate_state_checks_shape() {
         assert!(validate_state(&json!(null)).is_err());
         assert!(validate_state(&json!({})).is_err());

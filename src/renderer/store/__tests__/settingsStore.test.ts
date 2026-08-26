@@ -132,6 +132,27 @@ describe('updateSetting', () => {
     // Should roll back to the original value
     expect(useSettingsStore.getState().settings.fontSize).toBe(14)
   })
+
+  it('rolls back theme side effects (DOM + boot cache) on IPC failure', async () => {
+    // REVIEW.md P1-15a: updateSetting's catch restores only the store
+    // snapshot. applyTheme's CSS variable writes and cacheBootTheme's
+    // localStorage writes (patty-theme / patty-boot-bg, read by the next
+    // launch's boot splash) stay on the rejected value — the UI shows a theme
+    // the settings don't have, and the next cold start paints it too.
+    mockSettingsSet.mockRejectedValue(new Error('save failed'))
+    await useSettingsStore.getState().updateSetting('theme', 'light')
+
+    expect(useSettingsStore.getState().settings.theme).toBe('dark')
+    // DESIRED: the boot cache's last write is the rolled-back theme.
+    const themeWrites = vi
+      .mocked(localStorage.setItem)
+      .mock.calls.filter((c) => c[0] === 'patty-theme')
+    // Currently fails: the last write is 'light' from the optimistic apply.
+    expect(themeWrites.at(-1)?.[1]).toBe('dark')
+    // And the applied CSS background is back to the dark theme's color.
+    const bgWrites = mockSetProperty.mock.calls.filter((c) => c[0] === '--bg-app')
+    expect(bgWrites.at(-1)?.[1]).toBe('#0a0a0c')
+  })
 })
 
 describe('openSettings / closeSettings', () => {

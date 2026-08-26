@@ -318,6 +318,66 @@ pub fn run() {
 mod tests {
     use super::*;
 
+    /// Restore a mutated env var even when the test body panics, so a failure
+    /// can't leak a wrong USERPROFILE into parallel tests.
+    struct EnvRestore {
+        key: &'static str,
+        old: Option<std::ffi::OsString>,
+    }
+    impl EnvRestore {
+        fn set(key: &'static str, value: &std::path::Path) -> Self {
+            let old = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, old }
+        }
+    }
+    impl Drop for EnvRestore {
+        fn drop(&mut self) {
+            match &self.old {
+                Some(v) => std::env::set_var(self.key, v),
+                None => std::env::remove_var(self.key),
+            }
+        }
+    }
+
+    #[test]
+    fn disabling_notification_tool_removes_its_installed_hooks() {
+        // REVIEW.md P1-10: startup ensure_* writes Patty hooks into
+        // ~/.claude/settings.json, but toggling the tool off in Settings only
+        // suppresses events server-side — the installed hooks stay forever
+        // (and every Claude tool call keeps spawning the hook script). The
+        // settings write path must strip Patty's entries for the disabled
+        // tool. installer::strip_patty_hooks already implements the removal;
+        // it is just never wired to the toggle.
+        //
+        // Note: home_dir() reads USERPROFILE, so this test mutates process
+        // env; installer::tests::home_dir_falls_back_to_dot does the same
+        // without a shared lock — both windows are milliseconds, accepted.
+        let dir = std::env::temp_dir().join(format!("patty-uninstall-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        store::set_data_dir_for_test(dir.join("appdata"));
+        let _guard = EnvRestore::set("USERPROFILE", &dir);
+
+        installer::ensure_claude_code_hook();
+        let settings_file = installer::claude_settings_path();
+        let installed = std::fs::read_to_string(&settings_file).unwrap();
+        assert!(installed.contains("patty-hook.ps1"), "precondition: hooks installed");
+
+        settings_set(
+            "notifications",
+            json!({ "claudeCode": false, "openCode": true, "codex": true, "ohMyPi": true }),
+        )
+        .unwrap();
+
+        let after = std::fs::read_to_string(&settings_file).unwrap();
+        assert!(
+            !after.contains("patty-hook.ps1"),
+            "disabling the tool must strip its installed hooks, got: {after}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn parse_hex_color_6_digit() {
         let c = parse_hex_color("#ff8800").unwrap();

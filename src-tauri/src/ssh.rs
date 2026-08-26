@@ -193,4 +193,19 @@ mod tests {
         assert_eq!(drafts.len(), 1);
         assert_eq!(drafts[0].name, "app");
     }
+
+    #[test]
+    fn parse_preserves_hash_inside_quoted_values() {
+        // REVIEW.md P1-14a: the comment-strip claims a '#' is safe inside
+        // quotes ("unless inside quotes"), but the implementation truncates at
+        // the first '#' unconditionally. A quoted HostName/IdentityFile
+        // containing '#' — legal on both OpenSSH and Windows paths — is
+        // silently mangled into a wrong target.
+        let cfg = "Host router\n  HostName \"example#host.internal\"\n  IdentityFile \"C:\\keys\\site#2.pem\"\n";
+        let drafts = parse_ssh_config(cfg);
+        assert_eq!(drafts.len(), 1);
+        // OpenSSH semantics: quotes removed, '#' inside them kept literal.
+        assert_eq!(drafts[0].host, "example#host.internal");
+        assert_eq!(drafts[0].identity_file.as_deref(), Some("C:\\keys\\site#2.pem"));
+    }
 }
