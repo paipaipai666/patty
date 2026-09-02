@@ -176,7 +176,7 @@ vi.mock('../components/App/Toasts', () => ({
   Toasts: () => <div data-testid="toasts" />
 }))
 
-import App, { createTerminalInCollection } from '../App'
+import App from '../App'
 
 let terminalAPI: Record<string, any>
 const roots: ReturnType<typeof createRoot>[] = []
@@ -241,36 +241,13 @@ describe('App', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', ctrlKey: true, bubbles: true }))
     })
     expect(hoisted.mockAddSession).toHaveBeenCalledWith({ cwd: undefined, shell: 'powershell' })
-    expect(hoisted.mockCreateWorkspace).toHaveBeenCalledWith('sess-new')
+    // Lifecycle passes the collectionId explicitly (null = top level).
+    expect(hoisted.mockCreateWorkspace).toHaveBeenCalledWith('sess-new', null)
   })
 
-  it('New Terminal Here creates session + workspace eagerly (consistent with Ctrl+T)', async () => {
-    const selectDirectory = vi.fn().mockResolvedValue({ canceled: false, directory: 'D:\\work' })
-    const addSession = vi.fn().mockReturnValue('sess-coll')
-    const createWorkspace = vi.fn()
-    await createTerminalInCollection('col-1', {
-      selectDirectory,
-      addSession,
-      createWorkspace,
-      defaultShell: 'powershell'
-    })
-    expect(addSession).toHaveBeenCalledWith({ cwd: 'D:\\work', collectionId: 'col-1', shell: 'powershell' })
-    expect(createWorkspace).toHaveBeenCalledWith('sess-coll', 'col-1')
-  })
-
-  it('New Terminal Here is a no-op when the folder picker is canceled', async () => {
-    const selectDirectory = vi.fn().mockResolvedValue({ canceled: true, directory: null })
-    const addSession = vi.fn()
-    const createWorkspace = vi.fn()
-    await createTerminalInCollection('col-1', {
-      selectDirectory,
-      addSession,
-      createWorkspace,
-      defaultShell: 'powershell'
-    })
-    expect(addSession).not.toHaveBeenCalled()
-    expect(createWorkspace).not.toHaveBeenCalled()
-  })
+  // The "New Terminal Here" coverage moved with the function — it now lives in
+  // store/sessionLifecycle.ts and is tested in store/__tests__/sessionLifecycle.test.ts
+  // against the real stores.
 
   it('Ctrl+W calls handleCloseSession when active session exists', () => {
     hoisted.sessionState.activeSessionId = 'sess-act'

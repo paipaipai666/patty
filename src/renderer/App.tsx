@@ -1,5 +1,14 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS, buildSessionPersistedState } from './store/sessionStore'
+import {
+  createTerminal,
+  createSshTerminal,
+  createTerminalSplit,
+  closeSession,
+  closeAllSessions,
+  selectSession,
+  createTerminalInCollection as lifecycleCreateTerminalInCollection
+} from './store/sessionLifecycle'
 import { useWorkspaceStore, getFocusedSessionId } from './store/workspaceStore'
 import { configureDirtyScheduler, markDirty } from './store/dirtyScheduler'
 import { normalizeWorkspaces } from '../shared/workspaceNormalize'
@@ -34,39 +43,7 @@ interface CollectionContextMenuState {
 
 const LAST_CWD_KEY = 'patty-last-cwd'
 
-/**
- * "New Terminal Here" (collection context menu): create a session in the
- * collection AND mount it eagerly — identical to Ctrl+T / sidebar +. Before
- * this, the collection path only called addSession, leaving a background
- * record with no workspace, no pane and no PTY until the user clicked it.
- * Deps are injected so the behavior is unit-testable without rendering App.
- */
-export async function createTerminalInCollection(
-  collectionId: string,
-  deps: {
-    selectDirectory: () => Promise<{ canceled: boolean; directory: string | null }>
-    addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null }) => string
-    createWorkspace: (sessionId: string, collectionId?: string | null) => string
-    defaultShell: string
-  }
-): Promise<void> {
-  try {
-    const result = await deps.selectDirectory()
-    if (result.canceled) return
-    const newId = deps.addSession({
-      cwd: result.directory || undefined,
-      collectionId,
-      shell: deps.defaultShell
-    })
-    deps.createWorkspace(newId, collectionId)
-  } catch (err) {
-    console.error('Failed to create terminal:', err)
-  }
-}
-
 export default function App() {
-  const addSession = useSessionStore((s) => s.addSession)
-  const removeSession = useSessionStore((s) => s.removeSession)
   const setActive = useSessionStore((s) => s.setActive)
   const renameSession = useSessionStore((s) => s.renameSession)
   const setColor = useSessionStore((s) => s.setColor)
@@ -202,77 +179,45 @@ export default function App() {
     }
   }, [loadState])
 
+  // All session lifecycle goes through the orchestrator — it owns the
+  // sessionStore/workspaceStore pairing (create/mount, close/prune, select).
   const handleNewTerminal = useCallback(() => {
     // Instant create: reuse the last picked directory, or the user's home
     // (pty.rs falls back to USERPROFILE when cwd is undefined). The native
     // folder picker stays available as a separate menu item.
     const cwd = localStorage.getItem(LAST_CWD_KEY) || undefined
-    const newId = addSession({ cwd, shell: defaultShell })
-    useWorkspaceStore.getState().createWorkspace(newId)
-  }, [addSession, defaultShell])
+    createTerminal({ cwd, shell: defaultShell })
+  }, [defaultShell])
 
   const handleNewSsh = useCallback((profile: SshProfile) => {
-    const newId = addSession({
-      shell: 'ssh',
-      title: profile.name,
-      ssh: {
-        host: profile.host,
-        port: profile.port,
-        user: profile.user,
-        identityFile: profile.identityFile
-      }
-    })
-    useWorkspaceStore.getState().createWorkspace(newId)
-  }, [addSession])
+    createSshTerminal(profile)
+  }, [])
 
   const handleNewTerminalPickFolder = useCallback(async () => {
     try {
       const result = await window.terminalAPI.selectDirectory()
       if (result.canceled) return
       if (result.directory) localStorage.setItem(LAST_CWD_KEY, result.directory)
-      const newId = addSession({ cwd: result.directory || undefined, shell: defaultShell })
-      useWorkspaceStore.getState().createWorkspace(newId)
+      createTerminal({ cwd: result.directory || undefined, shell: defaultShell })
     } catch (err) {
       console.error('Failed to create terminal:', err)
     }
-  }, [addSession, defaultShell])
+  }, [defaultShell])
 
-  const handleCloseSession = useCallback(
-    (id: string) => {
-      // removeSession owns the PTY kill (same as the close-all path);
-      // calling kill here as well would send it twice (REVIEW.md P1-6).
-      removeSession(id)
-      useWorkspaceStore.getState().removeSessionEverywhere(id)
-    },
-    [removeSession]
-  )
+  const handleCloseSession = useCallback((id: string) => {
+    closeSession(id)
+  }, [])
 
-  // Close every terminal: removeSession kills each PTY (it calls api.kill
-  // internally), removeSessionEverywhere prunes the pane trees.
   const handleCloseAllSessions = useCallback(() => {
-    const ids = useSessionStore.getState().sessions.map((s) => s.id)
-    for (const id of ids) {
-      removeSession(id)
-      useWorkspaceStore.getState().removeSessionEverywhere(id)
-    }
-  }, [removeSession])
+    closeAllSessions()
+  }, [])
 
   // Split the focused pane: the new half inherits the focused session's cwd
   // (tmux-style) and shell. The new session becomes a leaf beside the focused
   // one and receives focus.
-  const handleSplit = useCallback(
-    (direction: 'horizontal' | 'vertical') => {
-      const focusedSessionId = getFocusedSessionId()
-      const sessions = useSessionStore.getState().sessions
-      const focused = focusedSessionId ? sessions.find((s) => s.id === focusedSessionId) : undefined
-      const newId = addSession({
-        cwd: focused?.cwd || undefined,
-        shell: focused?.shell
-      })
-      useWorkspaceStore.getState().splitFocused(newId, direction)
-    },
-    [addSession]
-  )
+  const handleSplit = useCallback((direction: 'horizontal' | 'vertical') => {
+    createTerminalSplit(direction)
+  }, [])
 
   // Close the focused pane (not the session — the session goes to the sidebar
   // background). Its PTY is killed when the TerminalPane unmounts.
@@ -306,13 +251,9 @@ export default function App() {
   // Sidebar click on a session: make it the active session (sidebar highlight +
   // status bar) and ensure it's visible. With workspaces, this switches to the
   // workspace containing the session (creating one if needed) and focuses its pane.
-  const handleSelectSession = useCallback(
-    (id: string) => {
-      setActive(id)
-      useWorkspaceStore.getState().ensureVisible(id)
-    },
-    [setActive]
-  )
+  const handleSelectSession = useCallback((id: string) => {
+    selectSession(id)
+  }, [])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, sessionId: string) => {
     e.preventDefault()
@@ -454,12 +395,7 @@ export default function App() {
       },
       {
         label: 'New Terminal Here',
-        action: () => void createTerminalInCollection(collectionId, {
-          selectDirectory: () => window.terminalAPI.selectDirectory(),
-          addSession,
-          createWorkspace: (id, cid) => useWorkspaceStore.getState().createWorkspace(id, cid),
-          defaultShell
-        })
+        action: () => void lifecycleCreateTerminalInCollection(collectionId, defaultShell)
       }
     ]
   }
