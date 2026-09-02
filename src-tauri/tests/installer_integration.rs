@@ -70,14 +70,14 @@ fn omp_hook_source_exists() {
 
 #[test]
 fn claude_settings_path_format() {
-    let path = patty::installer::claude_settings_path();
+    let path = patty::installer::claude_settings_path().unwrap();
     assert_eq!(path.file_name().unwrap(), "settings.json");
     assert!(path.to_string_lossy().contains(".claude"));
 }
 
 #[test]
 fn codex_settings_path_format() {
-    let path = patty::installer::codex_settings_path();
+    let path = patty::installer::codex_settings_path().unwrap();
     assert_eq!(path.file_name().unwrap(), "hooks.json");
     assert!(path.to_string_lossy().contains(".codex"));
 }

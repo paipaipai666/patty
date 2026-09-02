@@ -1,5 +1,6 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::io::Read;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use std::thread;
@@ -53,12 +54,10 @@ pub fn note_event_with_now(pane_id: &str, event: &str, source: &str, role: &str,
     }
     match event {
         "session_start" | "session_created" => {
-            eprintln!("[flame] lease OPEN pane={pane_id} source={source} event={event}");
             active.insert(pane_id.to_string(), ActiveEntry { source: source.to_string(), last_seen: now });
         }
         "session_end" | "session_deleted" => {
-            let existed = active.remove(pane_id).is_some();
-            eprintln!("[flame] lease CLOSE pane={pane_id} source={source} event={event} existed={existed}");
+            active.remove(pane_id);
         }
         // 纯心跳只刷新已存在的租约，绝不重建：opencode 1.18 退出 TUI 后其服务
         // 进程还会存活一段时间并持续发 alive，若心跳能重建租约，火焰在工具
@@ -81,7 +80,6 @@ pub fn note_event_with_now(pane_id: &str, event: &str, source: &str, role: &str,
                     entry.source = source.to_string();
                 }
                 None => {
-                    eprintln!("[flame] lease REOPEN pane={pane_id} source={source} event={event} (late event after lease removal)");
                     active.insert(pane_id.to_string(), ActiveEntry { source: source.to_string(), last_seen: now });
                 }
             }
@@ -109,35 +107,17 @@ fn collect_expired_with_now(active: &HashMap<String, ActiveEntry>, now: u64) -> 
 
 pub fn start_heartbeat_watchdog(app: AppHandle) {
     thread::spawn(move || {
-        eprintln!("[flame] heartbeat watchdog started (5s tick)");
         loop {
             thread::sleep(Duration::from_secs(5));
             let expired = {
                 let mut active = ACTIVE.lock().unwrap();
-                let now = now_ms();
-                for (id, e) in active.iter() {
-                    let timeout = heartbeat_timeout_ms(&e.source).unwrap_or(0);
-                    eprintln!(
-                        "[flame] watchdog tick pane={id} source={} age={}s/{}s",
-                        e.source,
-                        now.saturating_sub(e.last_seen) / 1000,
-                        timeout / 1000
-                    );
+                let expired = collect_expired_with_now(&active, now_ms());
+                for id in &expired {
+                    active.remove(id);
                 }
-                let expired = collect_expired_with_now(&active, now);
-                let mut rows = Vec::with_capacity(expired.len());
-                for id in expired {
-                    if let Some(e) = active.remove(&id) {
-                        rows.push((id, e.source, now.saturating_sub(e.last_seen)));
-                    }
-                }
-                rows
+                expired
             };
-            for (id, source, silent_ms) in expired {
-                eprintln!(
-                    "[flame] EXTINGUISH flame pane={id} source={source} (lease expired: no events for {}s)",
-                    silent_ms / 1000
-                );
+            for id in expired {
                 if let Err(e) = app.emit("pty:attn", (id, Value::Null, Value::Null)) {
                     eprintln!("[hooks] emit pty:attn failed: {e}");
                 }
@@ -179,21 +159,7 @@ fn map_source_to_ai_type(source: &str) -> Option<&'static str> {
     }
 }
 
-/// Human-readable flame effect of a pty:attn payload: (pane, attention|null,
-/// aiType|null) — attention 事件带 aiType 会顺带重新点亮火焰。
-fn describe_emit(payload: &Value) -> String {
-    let attn = payload.get(1).and_then(Value::as_str);
-    let ai = payload.get(2).and_then(Value::as_str);
-    match (attn, ai) {
-        (Some(kind), Some(ai)) => format!("GLOW {kind} + LIGHT flame ai={ai}"),
-        (Some(kind), None) => format!("GLOW {kind}"),
-        (None, Some(ai)) => format!("LIGHT flame ai={ai}"),
-        (None, None) => "EXTINGUISH flame".to_string(),
-    }
-}
-
 pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str, role: &str) {
-    eprintln!("[flame] hook pane={pane_id} source={source} event={event} role={role}");
     note_event(pane_id, event, source, role);
 
     let settings = crate::store::load_settings();
@@ -205,16 +171,7 @@ pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str
         _ => true,
     };
     let events = compute_hook_events(pane_id, event, source, role, enabled);
-    if events.is_empty() && !enabled {
-        let would_emit = event == "session_start"
-            || event == "session_created"
-            || map_event_to_attention_type(event).is_some();
-        if would_emit {
-            eprintln!("[flame] suppressed pane={pane_id} source={source} event={event} reason=notifications disabled for this tool");
-        }
-    }
     for (evt, payload) in events {
-        eprintln!("[flame] {} pane={} (trigger event={})", describe_emit(&payload), pane_id, event);
         if let Err(e) = app.emit(evt, payload) {
             eprintln!("[hooks] emit {evt} failed: {e}");
         }
@@ -322,8 +279,21 @@ fn handle_request(
         return tiny_http::Response::from_string(String::new()).with_status_code(404);
     }
 
+    // Cap the request body: hook payloads are a few hundred bytes, so anything
+    // bigger is a malfunctioning local process, not an event (loopback +
+    // secret already gate this endpoint; this is just resource hygiene).
+    const MAX_HOOK_BODY: u64 = 16 * 1024;
+    if request.body_length().is_some_and(|len| len as u64 > MAX_HOOK_BODY) {
+        return tiny_http::Response::from_string(String::new()).with_status_code(413);
+    }
     let mut body = String::new();
-    if request.as_reader().read_to_string(&mut body).is_err() {
+    // as_reader() is &mut dyn Read; UFCS keeps Self = the sized reference so
+    // Read::take (which requires Self: Sized) applies.
+    let mut reader = request.as_reader();
+    if std::io::Read::take(&mut reader, MAX_HOOK_BODY)
+        .read_to_string(&mut body)
+        .is_err()
+    {
         return tiny_http::Response::from_string(String::new()).with_status_code(400);
     }
     let (status, payload, forward) = evaluate_hook_body(secret, &body, crate::pty::session_exists);
@@ -337,7 +307,7 @@ fn handle_request(
             .ok()
             .and_then(|v| v.get("paneId").and_then(Value::as_str).map(str::to_string))
             .unwrap_or_default();
-        eprintln!("[flame] ignored hook pane={pane} reason=no live PTY session for this pane id");
+        eprintln!("[hooks] ignored hook pane={pane} reason=no live PTY session for this pane id");
     }
     json_response(status, payload)
 }

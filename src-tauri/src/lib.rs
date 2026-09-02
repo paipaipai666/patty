@@ -32,13 +32,7 @@ fn settings_get_all() -> Value {
 
 #[tauri::command]
 fn settings_set(key: &str, value: Value) -> Result<Value, String> {
-    let defaults = store::default_settings();
-    if !defaults.as_object().unwrap().contains_key(key) {
-        return Err(format!("Unknown settings key: {key}"));
-    }
-    let mut settings = store::load_settings();
-    settings[key] = value;
-    store::save_settings(&settings)?;
+    let settings = store::update_settings(key, value)?;
     // Notification toggles install AND remove the external AI-tool hooks —
     // disabling a tool must not leave its hook installed (REVIEW.md P1-10).
     if key == "notifications" {
@@ -138,7 +132,6 @@ fn hooks_clear_pane(pane_id: &str) {
     // 其服务器进程会存活一段时间并持续心跳，退出事件和看门狗都无法及时
     // 熄灭火焰；prompt 返回时由前端调用此命令立即清除租约。
     hooks::remove_pane(pane_id);
-    eprintln!("[flame] lease CLEAR pane={pane_id} (shell prompt returned)");
 }
 
 #[tauri::command]
@@ -187,8 +180,16 @@ async fn theme_import() -> Value {
     let parse = (|| -> Result<Value, String> {
         let raw = std::fs::read_to_string(file.path()).map_err(|e| e.to_string())?;
         let mut theme: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-        if theme.get("name").is_none() || theme.get("ui").is_none() || theme.get("terminal").is_none() {
-            return Err("Invalid theme file".into());
+        // Type-check, not just presence: a malformed theme writes invalid CSS
+        // variables into the renderer on every launch.
+        let string_map = |v: &Value| {
+            v.as_object().is_some_and(|o| o.values().all(Value::is_string))
+        };
+        if !theme.get("name").is_some_and(Value::is_string)
+            || !theme.get("ui").is_some_and(string_map)
+            || !theme.get("terminal").is_some_and(string_map)
+        {
+            return Err("Invalid theme file: name must be a string, ui/terminal must be string maps".into());
         }
         let millis = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -345,7 +346,7 @@ mod tests {
         // it is just never wired to the toggle.
         //
         // Note: home_dir() reads USERPROFILE, so this test mutates process
-        // env; installer::tests::home_dir_falls_back_to_dot does the same
+        // env; installer::tests::home_dir_is_none_without_env does the same
         // without a shared lock — both windows are milliseconds, accepted.
         let dir = std::env::temp_dir().join(format!("patty-uninstall-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -354,7 +355,7 @@ mod tests {
         let _guard = EnvRestore::set("USERPROFILE", &dir);
 
         installer::ensure_claude_code_hook();
-        let settings_file = installer::claude_settings_path();
+        let settings_file = installer::claude_settings_path().unwrap();
         let installed = std::fs::read_to_string(&settings_file).unwrap();
         assert!(installed.contains("patty-hook.ps1"), "precondition: hooks installed");
 

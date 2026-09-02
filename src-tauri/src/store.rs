@@ -56,6 +56,9 @@ pub fn default_settings() -> Value {
 }
 
 pub fn default_state() -> Value {
+    // Note: no paneTree/focusedPaneId — those legacy pre-workspace fields are
+    // only READ (from old state files, for migration) and must not be written
+    // into new files.
     json!({
         "sessions": [],
         "collections": [],
@@ -63,9 +66,7 @@ pub fn default_state() -> Value {
         "sidebarVisible": true,
         "sidebarWidth": 220,
         "workspaces": [],
-        "activeWorkspaceId": null,
-        "paneTree": null,
-        "focusedPaneId": null
+        "activeWorkspaceId": null
     })
 }
 
@@ -148,14 +149,18 @@ fn migrate_old_data_from(user_data: &Path, file_name: &str, old_app_name: &str) 
 // JSON file. Invalidated whenever we persist (mirrors the old TS handler).
 static SETTINGS_CACHE: LazyLock<Mutex<Option<Value>>> = LazyLock::new(|| Mutex::new(None));
 
+fn load_settings_uncached() -> Value {
+    migrate_old_data_from(&data_dir(), "settings.json", "terminal-sidebar");
+    let defaults = default_settings();
+    load_json_from(&data_dir().join("settings.json"), &defaults, merge_settings)
+}
+
 pub fn load_settings() -> Value {
     let mut cache = SETTINGS_CACHE.lock().unwrap();
     if let Some(cached) = cache.as_ref() {
         return cached.clone();
     }
-    migrate_old_data_from(&data_dir(), "settings.json", "terminal-sidebar");
-    let defaults = default_settings();
-    let settings = load_json_from(&data_dir().join("settings.json"), &defaults, merge_settings);
+    let settings = load_settings_uncached();
     *cache = Some(settings.clone());
     settings
 }
@@ -164,6 +169,23 @@ pub fn save_settings(settings: &Value) -> Result<(), String> {
     save_atomic_to(&data_dir().join("settings.json"), settings)?;
     *SETTINGS_CACHE.lock().unwrap() = Some(settings.clone());
     Ok(())
+}
+
+/// Load-modify-save a single key under the cache lock: two concurrent
+/// settings_set commands otherwise race (load → modify → save with no mutual
+/// exclusion) and the later writer silently drops the earlier one's key.
+/// Unknown keys (absent from defaults) are rejected — the defaults double as
+/// the settable-keys whitelist.
+pub fn update_settings(key: &str, value: Value) -> Result<Value, String> {
+    let mut cache = SETTINGS_CACHE.lock().unwrap();
+    if !default_settings().as_object().unwrap().contains_key(key) {
+        return Err(format!("Unknown settings key: {key}"));
+    }
+    let mut settings = cache.clone().unwrap_or_else(load_settings_uncached);
+    settings[key] = value;
+    save_atomic_to(&data_dir().join("settings.json"), &settings)?;
+    *cache = Some(settings.clone());
+    Ok(settings)
 }
 
 pub fn load_state() -> Value {

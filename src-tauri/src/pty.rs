@@ -20,8 +20,16 @@ pub fn resource_dir() -> PathBuf {
 pub struct Shared {
     attached: AtomicBool,
     /// Output produced before the renderer attaches (preheat replay).
-    buffer: Mutex<Vec<String>>,
+    buffer: Mutex<ReplayBuffer>,
     app: Option<AppHandle>,
+}
+
+/// Pre-attach output buffer with a running byte total — push/pop are O(1)
+/// instead of re-summing every chunk on each push.
+#[derive(Default)]
+struct ReplayBuffer {
+    chunks: std::collections::VecDeque<String>,
+    total: usize,
 }
 
 pub struct Session {
@@ -84,10 +92,45 @@ fn shell_paths(name: &str) -> Option<&'static str> {
     match name {
         "powershell" => Some(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"),
         "cmd" => Some(r"C:\Windows\System32\cmd.exe"),
-        "gitbash" => Some(r"C:\Program Files\Git\bin\bash.exe"),
         "wsl" => Some(r"C:\Windows\System32\wsl.exe"),
         _ => None,
     }
+}
+
+// Same probe-once policy as find_pwsh. Git Bash has no fixed install root —
+// where.exe finds git.exe wherever it is, and bash.exe lives next to it.
+fn find_gitbash() -> Option<PathBuf> {
+    static GITBASH: OnceLock<Option<PathBuf>> = OnceLock::new();
+    GITBASH
+        .get_or_init(|| {
+            if let Ok(out) = Command::new("where.exe").arg("git").creation_flags(0x08000000).output() {
+                if out.status.success() {
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    // ...\Git\cmd\git.exe → ...\Git\bin\bash.exe
+                    if let Some(git) = stdout.lines().next().map(str::trim) {
+                        let bash = PathBuf::from(git)
+                            .parent()
+                            .and_then(Path::parent)
+                            .map(|root| root.join("bin").join("bash.exe"));
+                        if let Some(b) = bash.filter(|p| p.exists()) {
+                            return Some(b);
+                        }
+                    }
+                }
+            }
+            let local = std::env::var("LOCALAPPDATA")
+                .ok()
+                .map(|l| PathBuf::from(l).join(r"Programs\Git\bin\bash.exe"));
+            [local, None]
+                .into_iter()
+                .flatten()
+                .chain([
+                    PathBuf::from(r"C:\Program Files\Git\bin\bash.exe"),
+                    PathBuf::from(r"C:\Program Files (x86)\Git\bin\bash.exe"),
+                ])
+                .find(|p| p.exists())
+        })
+        .clone()
 }
 
 // ponytail: the TS version re-probed when the cached path vanished (pwsh
@@ -120,6 +163,11 @@ pub fn shell_path(shell_name: Option<&str>) -> String {
     let key = name.to_lowercase();
     if key == "pwsh" {
         return find_pwsh()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(detect_default_shell);
+    }
+    if key == "gitbash" {
+        return find_gitbash()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(detect_default_shell);
     }
@@ -295,7 +343,10 @@ fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
             match child.try_wait() {
                 Ok(Some(status)) => break i64::from(status.exit_code()),
                 Ok(None) => {}
-                Err(_) => break 0,
+                // A wait error is not a clean exit — report -1 so the
+                // renderer's auto-retry path treats it as a failure, not as
+                // "exited 0".
+                Err(_) => break -1,
             }
         }
         thread::sleep(Duration::from_millis(150));
@@ -318,6 +369,13 @@ fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
 
 // ── Spawn ───────────────────────────────────────────────────────────────────
 
+/// Empty strings and directories deleted since the state was saved mean "no
+/// opinion" — normalize to None so they hit the home fallback instead of
+/// leaking into ConPTY as Some("") (renderer sessions persist cwd: '').
+fn normalize_cwd(cwd: Option<&str>) -> Option<&str> {
+    cwd.filter(|c| !c.is_empty() && Path::new(c).is_dir())
+}
+
 fn spawn_inner(
     app: Option<&AppHandle>,
     id: &str,
@@ -328,6 +386,7 @@ fn spawn_inner(
     attached: bool,
 ) -> Result<u32, String> {
     let shell_path = shell_path(shell);
+    let cwd = normalize_cwd(cwd);
     let working_dir = cwd
         .map(String::from)
         .or_else(|| std::env::var("USERPROFILE").ok())
@@ -348,9 +407,15 @@ fn spawn_inner(
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "vscode");
-    cmd.env("PATTY_PANE_ID", id);
-    cmd.env("PATTY_PORT", crate::hooks::hook_port().to_string());
-    cmd.env("PATTY_HOOK_SECRET", crate::hooks::hook_secret());
+    // Only inject the hook channel when the hook server actually started —
+    // otherwise every shell would pointlessly POST to port 0 (and a stale
+    // PATTY_PORT from the environment could hit an unrelated listener).
+    let hook_port = crate::hooks::hook_port();
+    if hook_port != 0 {
+        cmd.env("PATTY_PANE_ID", id);
+        cmd.env("PATTY_PORT", hook_port.to_string());
+        cmd.env("PATTY_HOOK_SECRET", crate::hooks::hook_secret());
+    }
     let xdg = std::env::var("XDG_CONFIG_HOME")
         .ok()
         .or_else(|| std::env::var("USERPROFILE").ok().map(|u| format!(r"{u}\.config")));
@@ -366,7 +431,7 @@ fn spawn_inner(
 
     let shared = Arc::new(Shared {
         attached: AtomicBool::new(attached),
-        buffer: Mutex::new(Vec::new()),
+        buffer: Mutex::new(ReplayBuffer::default()),
         app: app.cloned(),
     });
 
@@ -392,11 +457,11 @@ fn spawn_inner(
 }
 
 fn take_buffer(shared: &Shared) -> Option<String> {
-    let chunks = std::mem::take(&mut *shared.buffer.lock().unwrap());
-    if chunks.is_empty() {
+    let buf = std::mem::take(&mut *shared.buffer.lock().unwrap());
+    if buf.chunks.is_empty() {
         None
     } else {
-        Some(chunks.join(""))
+        Some(buf.chunks.into_iter().collect())
     }
 }
 
@@ -410,10 +475,12 @@ const PREHEAT_BUFFER_CAP: usize = 256 * 1024;
 /// still replays).
 fn buffer_push(shared: &Shared, text: String) {
     let mut buf = shared.buffer.lock().unwrap();
-    buf.push(text);
-    let mut total: usize = buf.iter().map(String::len).sum();
-    while total > PREHEAT_BUFFER_CAP && buf.len() > 1 {
-        total -= buf.remove(0).len();
+    buf.total += text.len();
+    buf.chunks.push_back(text);
+    while buf.total > PREHEAT_BUFFER_CAP && buf.chunks.len() > 1 {
+        if let Some(front) = buf.chunks.pop_front() {
+            buf.total -= front.len();
+        }
     }
 }
 
@@ -428,6 +495,7 @@ pub fn create(
     rows: Option<u16>,
 ) -> Value {
     let _spawn_guard = begin_spawn(id);
+    let cwd = normalize_cwd(cwd);
     // Reattach to a preheated session when cwd/shell match.
     let mut map = SESSIONS.write().unwrap();
     if let Some(existing) = map.get(id) {
@@ -467,6 +535,7 @@ pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>) {
     let Some(_spawn_guard) = try_begin_spawn(id) else {
         return;
     };
+    let cwd = normalize_cwd(cwd);
     if SESSIONS.read().unwrap().contains_key(id) {
         return;
     }
@@ -758,43 +827,42 @@ mod tests {
     fn buffer_push_preserves_order_under_cap() {
         let shared = Arc::new(Shared {
             attached: AtomicBool::new(false),
-            buffer: Mutex::new(Vec::new()),
+            buffer: Mutex::new(ReplayBuffer::default()),
             app: None,
         });
         buffer_push(&shared, "a".to_string());
         buffer_push(&shared, "b".to_string());
         buffer_push(&shared, "c".to_string());
-        assert_eq!(shared.buffer.lock().unwrap().join(""), "abc");
+        assert_eq!(shared.buffer.lock().unwrap().chunks.iter().cloned().collect::<String>(), "abc");
     }
 
     #[test]
     fn buffer_push_drops_oldest_chunks_over_cap() {
         let shared = Arc::new(Shared {
             attached: AtomicBool::new(false),
-            buffer: Mutex::new(Vec::new()),
+            buffer: Mutex::new(ReplayBuffer::default()),
             app: None,
         });
         let chunk = "x".repeat(PREHEAT_BUFFER_CAP / 2);
         buffer_push(&shared, chunk.clone());
         buffer_push(&shared, chunk.clone());
         buffer_push(&shared, "tail".to_string());
-        let kept = shared.buffer.lock().unwrap().join("");
+        let kept = shared.buffer.lock().unwrap().chunks.iter().cloned().collect::<String>();
         assert_eq!(kept, format!("{chunk}tail"));
-        let total: usize = shared.buffer.lock().unwrap().iter().map(String::len).sum();
-        assert!(total <= PREHEAT_BUFFER_CAP, "buffer must stay under cap");
+        assert!(shared.buffer.lock().unwrap().total <= PREHEAT_BUFFER_CAP, "buffer must stay under cap");
     }
 
     #[test]
     fn take_buffer_clears_and_returns_joined() {
         let shared = Arc::new(Shared {
             attached: AtomicBool::new(false),
-            buffer: Mutex::new(Vec::new()),
+            buffer: Mutex::new(ReplayBuffer::default()),
             app: None,
         });
         buffer_push(&shared, "hello".to_string());
         buffer_push(&shared, " world".to_string());
         assert_eq!(take_buffer(&shared).as_deref(), Some("hello world"));
-        assert!(shared.buffer.lock().unwrap().is_empty());
+        assert!(shared.buffer.lock().unwrap().chunks.is_empty());
     }
 
     #[test]
@@ -809,7 +877,7 @@ mod tests {
         {
             let map = SESSIONS.read().unwrap();
             let session = map.get(&id).expect("session registered");
-            let buffered = session.shared.buffer.lock().unwrap().join("");
+            let buffered = session.shared.buffer.lock().unwrap().chunks.iter().cloned().collect::<String>();
             assert!(!buffered.is_empty(), "expected some shell banner output");
         }
         // ConPTY's startup DSR query is answered by dsr_filter internally;

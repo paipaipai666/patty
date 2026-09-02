@@ -436,7 +436,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       // 注意态，并通知后端清除租约（纯心跳不会重建它）。
       const store = useSessionStore.getState()
       if (store.sessions.find((s) => s.id === id)?.aiType) {
-        console.log(`[flame] prompt returned → EXTINGUISH session=${id}`)
         store.setAiType(id, null)
         store.resetAttention(id)
         void window.terminalAPI.hooksClearPane(id)

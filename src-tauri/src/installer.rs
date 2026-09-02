@@ -5,27 +5,31 @@ use std::path::PathBuf;
 const HOOK_MATCHER: &str = "permission_prompt|idle_prompt|elicitation_dialog";
 const STOP_FAILURE_MATCHER: &str = "rate_limit|overloaded|authentication_failed|oauth_org_not_allowed|billing_error|invalid_request|model_not_found|server_error|max_output_tokens|unknown";
 
-fn home_dir() -> PathBuf {
+fn home_dir() -> Option<PathBuf> {
     std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
+        .ok()
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."))
+        // Never fall back to ".": a missing home dir means the user's config
+        // location is unknowable, and writing into the process CWD would plant
+        // hooks in a random repository (REVIEW.md P2).
+        .filter(|p| !p.as_os_str().is_empty())
 }
 
-pub fn claude_settings_path() -> PathBuf {
+pub fn claude_settings_path() -> Option<PathBuf> {
     // Hooks must live in the user-level settings.json: Claude Code's
     // localSettings source only reads <project>/.claude/settings.local.json —
     // a user-level ~/.claude/settings.local.json is never loaded, so hooks
     // installed there silently never fire.
-    home_dir().join(".claude").join("settings.json")
+    home_dir().map(|h| h.join(".claude").join("settings.json"))
 }
 
-fn claude_legacy_local_settings_path() -> PathBuf {
-    home_dir().join(".claude").join("settings.local.json")
+fn claude_legacy_local_settings_path() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".claude").join("settings.local.json"))
 }
 
-pub fn codex_settings_path() -> PathBuf {
-    home_dir().join(".codex").join("hooks.json")
+pub fn codex_settings_path() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".codex").join("hooks.json"))
 }
 
 fn hook_script_source() -> PathBuf {
@@ -228,11 +232,17 @@ fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_
 // ── Public installers (gated by notification settings at the call site) ─────
 
 pub fn ensure_claude_code_hook() {
+    let Some(settings_path) = claude_settings_path() else {
+        eprintln!("[installer] no home directory (USERPROFILE/HOME unset) — skipping claude hook install");
+        return;
+    };
     let hook_script = ensure_hook_script_exists();
     // Drop Patty entries from settings.local.json (the broken 2.0.x install
     // location that Claude never reads) so stale copies can't confuse anyone.
-    strip_patty_hooks(&claude_legacy_local_settings_path());
-    install_at(&claude_settings_path(), apply_claude_hooks, &hook_script.to_string_lossy());
+    if let Some(legacy) = claude_legacy_local_settings_path() {
+        strip_patty_hooks(&legacy);
+    }
+    install_at(&settings_path, apply_claude_hooks, &hook_script.to_string_lossy());
 }
 
 /// Remove Patty-managed hook entries from a settings file, leaving all other
@@ -258,20 +268,30 @@ fn strip_patty_hooks(path: &PathBuf) {
 }
 
 pub fn ensure_codex_hook() {
+    let Some(settings_path) = codex_settings_path() else {
+        eprintln!("[installer] no home directory (USERPROFILE/HOME unset) — skipping codex hook install");
+        return;
+    };
     let hook_script = ensure_hook_script_exists();
-    install_at(&codex_settings_path(), apply_codex_hooks, &hook_script.to_string_lossy());
+    install_at(&settings_path, apply_codex_hooks, &hook_script.to_string_lossy());
 }
 
 /// Remove Patty's hook entries from the Claude settings files (both the live
 /// settings.json and the legacy settings.local.json), leaving the user's own
 /// hooks untouched. No-op when absent or unparseable.
 pub fn remove_claude_code_hook() {
-    strip_patty_hooks(&claude_settings_path());
-    strip_patty_hooks(&claude_legacy_local_settings_path());
+    if let Some(p) = claude_settings_path() {
+        strip_patty_hooks(&p);
+    }
+    if let Some(p) = claude_legacy_local_settings_path() {
+        strip_patty_hooks(&p);
+    }
 }
 
 pub fn remove_codex_hook() {
-    strip_patty_hooks(&codex_settings_path());
+    if let Some(p) = codex_settings_path() {
+        strip_patty_hooks(&p);
+    }
 }
 
 fn remove_file_if_present(path: PathBuf, what: &str) {
@@ -283,17 +303,21 @@ fn remove_file_if_present(path: PathBuf, what: &str) {
 }
 
 pub fn remove_opencode_plugin() {
-    remove_file_if_present(
-        home_dir().join(".config").join("opencode").join("plugins").join("patty-notifier.ts"),
-        "opencode plugin",
-    );
+    if let Some(home) = home_dir() {
+        remove_file_if_present(
+            home.join(".config").join("opencode").join("plugins").join("patty-notifier.ts"),
+            "opencode plugin",
+        );
+    }
 }
 
 pub fn remove_omp_hook() {
-    remove_file_if_present(
-        home_dir().join(".omp").join("agent").join("extensions").join("patty-notifier.ts"),
-        "omp hook",
-    );
+    if let Some(home) = home_dir() {
+        remove_file_if_present(
+            home.join(".omp").join("agent").join("extensions").join("patty-notifier.ts"),
+            "omp hook",
+        );
+    }
 }
 
 /// Sync external AI-tool hook installations with the notifications settings:
@@ -309,8 +333,12 @@ pub fn sync_notification_tools(settings: &Value) {
 }
 
 pub fn ensure_opencode_plugin() {
+    let Some(home) = home_dir() else {
+        eprintln!("[installer] no home directory (USERPROFILE/HOME unset) — skipping opencode plugin install");
+        return;
+    };
     let source = opencode_plugin_source();
-    let dest_dir = home_dir().join(".config").join("opencode").join("plugins");
+    let dest_dir = home.join(".config").join("opencode").join("plugins");
     let dest = dest_dir.join("patty-notifier.ts");
     if let Err(e) = fs::create_dir_all(&dest_dir) {
         eprintln!("[installer] opencode plugin dir: {e}");
@@ -330,7 +358,11 @@ pub fn ensure_omp_hook() {
     // Install target is the extensions dir, NOT hooks/: hook-factory discovery
     // exposes only the legacy HookAPI, which lacks session_stop,
     // tool_approval_requested and ctx.setInterval.
-    let dest_dir = home_dir().join(".omp").join("agent").join("extensions");
+    let Some(home) = home_dir() else {
+        eprintln!("[installer] no home directory (USERPROFILE/HOME unset) — skipping omp hook install");
+        return;
+    };
+    let dest_dir = home.join(".omp").join("agent").join("extensions");
     let dest = dest_dir.join("patty-notifier.ts");
     if let Err(e) = fs::create_dir_all(&dest_dir) {
         eprintln!("[installer] omp extensions dir: {e}");
@@ -481,28 +513,29 @@ mod tests {
     }
 
     #[test]
-    fn home_dir_falls_back_to_dot() {
-        // Unset USERPROFILE and HOME, verify the fallback.
+    fn home_dir_is_none_without_env() {
+        // Unset USERPROFILE and HOME: no fallback to "." — writing hooks into
+        // the process CWD is worse than skipping the install.
         let old_u = std::env::var("USERPROFILE").ok();
         let old_h = std::env::var("HOME").ok();
         std::env::remove_var("USERPROFILE");
         std::env::remove_var("HOME");
-        let dir = home_dir();
-        assert_eq!(dir, std::path::PathBuf::from("."));
+        assert!(home_dir().is_none());
+        assert!(claude_settings_path().is_none());
         if let Some(v) = old_u { std::env::set_var("USERPROFILE", v); }
         if let Some(v) = old_h { std::env::set_var("HOME", v); }
     }
 
     #[test]
     fn claude_settings_path_ends_in_user_settings() {
-        let path = claude_settings_path();
+        let path = claude_settings_path().unwrap();
         assert_eq!(path.file_name().unwrap(), "settings.json");
         assert!(path.to_string_lossy().contains(".claude"));
     }
 
     #[test]
     fn codex_settings_path_ends_in_hooks_json() {
-        let path = codex_settings_path();
+        let path = codex_settings_path().unwrap();
         assert_eq!(path.file_name().unwrap(), "hooks.json");
         assert!(path.to_string_lossy().contains(".codex"));
     }
@@ -513,7 +546,7 @@ mod tests {
         // <project>/.claude/settings.local.json — a user-level
         // settings.local.json is never loaded, so hooks there never fire.
         assert_eq!(
-            claude_settings_path().file_name().unwrap(),
+            claude_settings_path().unwrap().file_name().unwrap(),
             "settings.json"
         );
     }

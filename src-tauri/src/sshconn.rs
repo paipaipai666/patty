@@ -101,30 +101,40 @@ fn user_known_hosts() -> Option<PathBuf> {
         .map(|u| PathBuf::from(u).join(".ssh").join("known_hosts"))
 }
 
+// Serialize known_hosts read/learn: two panes connecting to the same new host
+// would otherwise race the append (interleaved/duplicate lines), and a second
+// connection could re-prompt before the first one's write lands.
+static KNOWN_HOSTS_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
 impl client::Handler for PattyHandler {
     type Error = russh::Error;
 
     async fn check_server_key(&mut self, key: &ssh_key::PublicKey) -> Result<bool, Self::Error> {
-        for path in [user_known_hosts(), Some(app_known_hosts())]
-            .into_iter()
-            .flatten()
+        // Lock only the file operations — never across the UI prompt's await,
+        // or a second connection would stall behind the user's decision.
         {
-            if !path.exists() {
-                continue;
-            }
-            match keys::known_hosts::check_known_hosts_path(&self.host, self.port, key, &path) {
-                Ok(true) => return Ok(true),
-                Err(keys::Error::KeyChanged { line }) => {
-                    emit(
-                        &self.app,
-                        &format!("pty:data:{}", self.id),
-                        format!(
-                            "\r\n*** HOST KEY CHANGED (known_hosts line {line}) — connection refused, possible MITM ***\r\n"
-                        ),
-                    );
-                    return Ok(false);
+            let _guard = KNOWN_HOSTS_LOCK.lock().unwrap();
+            for path in [user_known_hosts(), Some(app_known_hosts())]
+                .into_iter()
+                .flatten()
+            {
+                if !path.exists() {
+                    continue;
                 }
-                _ => {}
+                match keys::known_hosts::check_known_hosts_path(&self.host, self.port, key, &path) {
+                    Ok(true) => return Ok(true),
+                    Err(keys::Error::KeyChanged { line }) => {
+                        emit(
+                            &self.app,
+                            &format!("pty:data:{}", self.id),
+                            format!(
+                                "\r\n*** HOST KEY CHANGED (known_hosts line {line}) — connection refused, possible MITM ***\r\n"
+                            ),
+                        );
+                        return Ok(false);
+                    }
+                    _ => {}
+                }
             }
         }
 
@@ -144,10 +154,19 @@ impl client::Handler for PattyHandler {
         let trust = rx.await.unwrap_or(false);
         PENDING_HOSTKEY.lock().unwrap().remove(&self.id);
         if trust {
-            if let Err(e) =
-                keys::known_hosts::learn_known_hosts_path(&self.host, self.port, key, app_known_hosts())
-            {
-                eprintln!("[ssh] failed to record host key: {e}");
+            let _guard = KNOWN_HOSTS_LOCK.lock().unwrap();
+            // Re-check under the lock: a concurrent connection may have
+            // learned this host while the user was deciding.
+            let already = matches!(
+                keys::known_hosts::check_known_hosts_path(&self.host, self.port, key, &app_known_hosts()),
+                Ok(true)
+            );
+            if !already {
+                if let Err(e) =
+                    keys::known_hosts::learn_known_hosts_path(&self.host, self.port, key, app_known_hosts())
+                {
+                    eprintln!("[ssh] failed to record host key: {e}");
+                }
             }
         }
         Ok(trust)
@@ -466,17 +485,27 @@ async fn create_inner(
         return fail(&app, id, "auth", e);
     }
 
+    // Every failure after connect() must explicitly disconnect — same as the
+    // auth path. russh tears the connection down on Handle drop too, but only
+    // disconnect() sends Disconnect::ByApplication and closes promptly.
     let channel = match handle.channel_open_session().await {
         Ok(c) => c,
-        Err(e) => return fail(&app, id, "channel", e.to_string()),
+        Err(e) => {
+            let _ = handle.disconnect(russh::Disconnect::ByApplication, "", "").await;
+            return fail(&app, id, "channel", e.to_string());
+        }
     };
     if let Err(e) = channel
         .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
         .await
     {
+        drop(channel);
+        let _ = handle.disconnect(russh::Disconnect::ByApplication, "", "").await;
         return fail(&app, id, "channel", e.to_string());
     }
     if let Err(e) = channel.request_shell(false).await {
+        drop(channel);
+        let _ = handle.disconnect(russh::Disconnect::ByApplication, "", "").await;
         return fail(&app, id, "channel", e.to_string());
     }
     let (mut read_half, write_half) = channel.split();

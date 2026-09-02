@@ -465,8 +465,11 @@ function ThemeEditor({
   const applyJsonEdit = () => {
     try {
       const parsed = JSON.parse(jsonText) as CustomTheme
-      if (!parsed.name || !parsed.ui || !parsed.terminal) {
-        setJsonError('Invalid theme: missing name, ui, or terminal')
+      const isStringMap = (v: unknown): v is Record<string, string> =>
+        typeof v === 'object' && v !== null && !Array.isArray(v) &&
+        Object.values(v).every((x) => typeof x === 'string')
+      if (typeof parsed.name !== 'string' || !isStringMap(parsed.ui) || !isStringMap(parsed.terminal)) {
+        setJsonError('Invalid theme: name must be a string, ui/terminal must be string maps')
         return
       }
       updateEditingTheme(() => ({ ...parsed, id: editingId! }))

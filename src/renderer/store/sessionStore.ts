@@ -79,7 +79,6 @@ interface SessionStore {
   loadState: () => Promise<PersistedState | null>
 }
 
-const attentionTimers: Record<string, ReturnType<typeof setTimeout>> = {}
 let ipcCleanup: (() => void) | null = null
 // Safety timer that clears sidebarTransitioning after the CSS width transition
 // has had time to finish. Covers reduced-motion (no transitionend fires) and the
@@ -88,12 +87,8 @@ let sidebarTransitionTimer: ReturnType<typeof setTimeout> | null = null
 
 export function teardownSessionIPC() {
   if (ipcCleanup) ipcCleanup()
-  // Also reset module-level timers so tests and StrictMode remounts don't
-  // inherit stale timer state from a previous mount.
-  for (const id of Object.keys(attentionTimers)) {
-    clearTimeout(attentionTimers[id])
-    delete attentionTimers[id]
-  }
+  // Reset the module-level sidebar timer so tests and StrictMode remounts
+  // don't inherit stale timer state from a previous mount.
   if (sidebarTransitionTimer) {
     clearTimeout(sidebarTransitionTimer)
     sidebarTransitionTimer = null
@@ -119,7 +114,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       // Guard against duplicate registration (e.g. React StrictMode remount)
       if (ipcCleanup) ipcCleanup()
       const offAttention = window.terminalAPI.onAttentionChange((sessionId, eventType, aiType) => {
-        console.log(`[flame] attn received session=${sessionId} attention=${String(eventType)} aiType=${String(aiType)}`)
         get().setAttention(sessionId, eventType)
         if (aiType !== undefined) {
           get().setAiType(sessionId, (aiType ?? null) as 'claude' | 'opencode' | 'codex' | 'omp' | null)
@@ -182,10 +176,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   removeSession: (id: string) => {
-    if (attentionTimers[id]) {
-      clearTimeout(attentionTimers[id])
-      delete attentionTimers[id]
-    }
     // Tear down the live PTY for this session, not just the store entry —
     // otherwise the shell process and its GPU/PTY resources leak until the app
     // exits. Guarded so it's a no-op outside the renderer (e.g. node tests).
@@ -381,21 +371,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setAttention: (id: string, eventType: string | null) => {
-    if (eventType === null) {
-      // Reset: clear any active timer and write immediately
-      if (attentionTimers[id]) {
-        clearTimeout(attentionTimers[id])
-        delete attentionTimers[id]
-      }
-    } else {
-      // Latest-wins: (re)start the coalesce window from the most recent event
-      // so a newer attention event always overwrites the previous one, instead
-      // of the first event in the window winning and later ones being dropped.
-      if (attentionTimers[id]) clearTimeout(attentionTimers[id])
-      attentionTimers[id] = setTimeout(() => {
-        delete attentionTimers[id]
-      }, 1000)
-    }
+    // Latest event wins, applied immediately.
     set((state) => {
       if (eventType === null) {
         // Remove the key entirely so cleared entries don't linger in the map
@@ -414,12 +390,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | 'omp' | null) => {
-    const target = get().sessions.find((s) => s.id === id)
-    if (!target) {
-      console.warn(`[flame] command for UNKNOWN session=${id} aiType=${String(aiType)} — no matching sidebar session, dropped`)
-    } else if ((target.aiType ?? null) !== aiType) {
-      console.log(`[flame] ${aiType ? `LIGHT ai=${aiType}` : 'EXTINGUISH'} session=${id} (was ${target.aiType ?? 'none'})`)
-    }
     set((state) => ({
       sessions: state.sessions.map((s) =>
         s.id === id ? { ...s, aiType } : s

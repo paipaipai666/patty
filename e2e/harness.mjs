@@ -3,6 +3,7 @@
  * isolated APPDATA and a WebView2 debug port, attach CDP, and clean up.
  */
 import { spawn, execFileSync } from 'node:child_process'
+import { createServer } from 'node:net'
 import { mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -42,6 +43,15 @@ export function resolveExe() {  if (process.env.PATTY_EXE) return process.env.PA
   return exe
 }
 
+/** Grab an OS-assigned free port (two concurrent e2e runs must not collide). */
+async function freePort() {
+  const srv = createServer()
+  await new Promise((res) => srv.listen(0, '127.0.0.1', res))
+  const { port } = srv.address()
+  await new Promise((res) => srv.close(res))
+  return port
+}
+
 /**
  * Launch Patty and attach CDP. Returns { cdp, appData, close }.
  * close() kills the process tree and removes the isolated APPDATA.
@@ -52,7 +62,7 @@ export async function launchApp() {
   }
   const exe = resolveExe()
   const appData = mkdtempSync(join(tmpdir(), 'patty-e2e-'))
-  const debugPort = 9300 + (process.pid % 500)
+  const debugPort = await freePort()
   const startedAt = Date.now()
 
   console.log(`[harness] exe: ${exe}`)
@@ -74,9 +84,15 @@ export async function launchApp() {
   // is what hung the CI job for an hour).
   const killApp = async () => {
     if (appExited !== null) return
-    app.kill('SIGTERM')
-    await sleep(500)
-    if (appExited === null) app.kill('SIGKILL')
+    // Kill the whole tree, not just the exe: Windows TerminateProcess runs no
+    // Rust Drop, so a bare kill would orphan the ConPTY conhost/pwsh children.
+    try {
+      execFileSync('taskkill', ['/T', '/F', '/PID', String(app.pid)], { stdio: 'ignore' })
+    } catch {
+      app.kill('SIGKILL')
+    }
+    // Give the exit event a moment to arrive before callers poll appExited.
+    await sleep(300)
   }
 
   let page
