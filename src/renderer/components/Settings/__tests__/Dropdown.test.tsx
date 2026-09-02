@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import { Dropdown } from '../../App/Dropdown'
@@ -14,11 +14,11 @@ const OPTIONS = [
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
-let onSelect: ReturnType<typeof vi.fn>
+let onSelect: Mock<(value: string, mouse?: { x: number; y: number }) => void>
 
 beforeEach(() => {
   ;(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
-  onSelect = vi.fn()
+  onSelect = vi.fn<(value: string, mouse?: { x: number; y: number }) => void>()
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
