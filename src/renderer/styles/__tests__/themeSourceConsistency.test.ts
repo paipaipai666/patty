@@ -2,17 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-// REVIEW.md P1-7 — theme background color has FOUR hand-maintained sources:
-//   1. src/renderer/themes/*.json        (runtime truth, applied by applyTheme)
-//   2. src/renderer/styles/variables.css (:root + :root[data-theme=...] blocks,
-//      the no-flash fallback painted before JS runs)
-//   3. src-tauri/src/lib.rs BUILTIN      (native window background at startup)
-//   4. src/renderer/index.html           (boot splash var(--patty-boot-bg, #hex))
-// New/renamed themes must update all of them; a missed one shows as a flash of
-// the wrong color at launch. This test fails on ANY drift between sources.
-//
-// Known live drift at introduction: variables.css :root says #000000 while
-// themes/dark.json says #0a0a0c.
+// REVIEW.md P1-7 — theme background color used to have FOUR hand-maintained
+// sources (themes/*.json, variables.css data-theme blocks, lib.rs BUILTIN,
+// index.html boot splash). After the C2 single-sourcing:
+//   - themes/*.json is the only per-theme truth;
+//   - lib.rs embeds the JSONs via include_str! (compile time);
+//   - the pre-JS paint comes from the localStorage cache written by
+//     settingsStore (main.tsx), not from stylesheet fallback blocks;
+//   - variables.css :root and the index.html splash fallback only ever carry
+//     the DEFAULT (dark) theme.
+// This test pins that structure so the duplication can't creep back.
 
 const ROOT = join(__dirname, '..', '..', '..', '..')
 
@@ -27,66 +26,34 @@ function readThemesJson(): Record<string, string> {
   return out
 }
 
-function readVariablesCss(): Record<string, string> {
-  const css = readFileSync(join(ROOT, 'src', 'renderer', 'styles', 'variables.css'), 'utf8')
-  const out: Record<string, string> = {}
-  // :root { ... } is the dark (default) theme fallback; it has no data-theme
-  // attribute, so it must not be confused with :root[data-theme="..."].
-  for (const m of css.matchAll(/:root\[data-theme="([a-z-]+)"\]\s*\{([^}]*)\}/g)) {
-    const bg = /--bg-app:\s*(#[0-9a-fA-F]{6})/.exec(m[2])
-    if (bg) out[m[1]] = bg[1]
-  }
-  const rootBlock = /(?:^|\n):root\s*\{([^}]*)\}/.exec(css)
-  if (rootBlock) {
-    const bg = /--bg-app:\s*(#[0-9a-fA-F]{6})/.exec(rootBlock[1])
-    if (bg) out['dark'] = bg[1]
-  }
-  return out
-}
+const themes = readThemesJson()
+const THEME_IDS = ['dark', 'dracula', 'light', 'nord', 'solarized-light', 'tokyo-night']
 
-function readRustBuiltin(): Record<string, string> {
-  const src = readFileSync(join(ROOT, 'src-tauri', 'src', 'lib.rs'), 'utf8')
-  // Note: the const's type annotation itself contains ';' — scan to the
-  // array's closing bracket instead of the first semicolon.
-  const block = /const BUILTIN[\s\S]*?\];/.exec(src)
-  const out: Record<string, string> = {}
-  if (block) {
-    for (const m of block[0].matchAll(/\("([a-z-]+)",\s*"(#[0-9a-fA-F]{6})"\)/g)) {
-      out[m[1]] = m[2]
-    }
-  }
-  return out
-}
-
-describe('theme --bg-app single-source consistency (REVIEW P1-7)', () => {
-  const themes = readThemesJson()
-  const css = readVariablesCss()
-  const rust = readRustBuiltin()
-
-  it('scanned all sources (sanity: the test is not vacuously green)', () => {
-    expect(Object.keys(themes).sort()).toEqual([
-      'dark',
-      'dracula',
-      'light',
-      'nord',
-      'solarized-light',
-      'tokyo-night'
-    ])
-    // variables.css and lib.rs must cover every built-in theme.
-    expect(Object.keys(css).sort()).toEqual(Object.keys(themes).sort())
-    expect(Object.keys(rust).sort()).toEqual(Object.keys(themes).sort())
+describe('theme single-source structure (REVIEW P1-7)', () => {
+  it('scans all built-in themes (sanity)', () => {
+    expect(Object.keys(themes).sort()).toEqual(THEME_IDS)
   })
 
-  it('variables.css fallback matches themes/*.json', () => {
-    for (const [id, bg] of Object.entries(themes)) {
-      expect(css[id], `variables.css ${id === 'dark' ? ':root' : `[data-theme="${id}"]`}`).toBe(bg)
-    }
+  it('variables.css has no per-theme data-theme blocks (deleted in favor of the boot cache)', () => {
+    const css = readFileSync(join(ROOT, 'src', 'renderer', 'styles', 'variables.css'), 'utf8')
+    expect(css.includes('[data-theme=')).toBe(false)
   })
 
-  it('lib.rs BUILTIN matches themes/*.json', () => {
-    for (const [id, bg] of Object.entries(themes)) {
-      expect(rust[id], `lib.rs BUILTIN "${id}"`).toBe(bg)
-    }
+  it('variables.css :root default matches themes/dark.json', () => {
+    const css = readFileSync(join(ROOT, 'src', 'renderer', 'styles', 'variables.css'), 'utf8')
+    const rootBlock = /(?:^|\n):root\s*\{([^}]*)\}/.exec(css)
+    const bg = rootBlock && /--bg-app:\s*(#[0-9a-fA-F]{6})/.exec(rootBlock[1])
+    expect(bg?.[1]).toBe(themes['dark'])
+  })
+
+  it('lib.rs embeds every theme JSON via include_str!', () => {
+    const src = readFileSync(join(ROOT, 'src-tauri', 'src', 'lib.rs'), 'utf8')
+    const embedded = [
+      ...src.matchAll(/include_str!\("\.\.\/\.\.\/src\/renderer\/themes\/([a-z-]+)\.json"\)/g)
+    ].map((m) => m[1])
+    expect(embedded.sort()).toEqual(THEME_IDS)
+    // And no hand-maintained hex table may return alongside it.
+    expect(src.includes('const BUILTIN')).toBe(false)
   })
 
   it('index.html boot splash fallback matches dark theme', () => {

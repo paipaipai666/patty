@@ -8,6 +8,8 @@ pub mod sshconn;
 pub mod store;
 
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::sync::LazyLock;
 use tauri::Manager;
 
 pub fn parse_hex_color(hex: &str) -> Option<tauri::window::Color> {
@@ -229,29 +231,42 @@ fn metrics_record_first_terminal(entry: Value) -> Value {
     json!({ "success": true })
 }
 
+/// Built-in theme backgrounds are read from the same JSON files the renderer
+/// applies at runtime — embedded at compile time, so there is exactly one
+/// source of truth for theme colors (REVIEW.md P1-7). Parsed once per process.
+fn builtin_themes() -> &'static HashMap<&'static str, Value> {
+    static BUILTIN: LazyLock<HashMap<&'static str, Value>> = LazyLock::new(|| {
+        [
+            ("dark", include_str!("../../src/renderer/themes/dark.json")),
+            ("light", include_str!("../../src/renderer/themes/light.json")),
+            ("dracula", include_str!("../../src/renderer/themes/dracula.json")),
+            ("nord", include_str!("../../src/renderer/themes/nord.json")),
+            ("tokyo-night", include_str!("../../src/renderer/themes/tokyo-night.json")),
+            ("solarized-light", include_str!("../../src/renderer/themes/solarized-light.json")),
+        ]
+        .into_iter()
+        .filter_map(|(id, raw)| serde_json::from_str::<Value>(raw).ok().map(|v| (id, v)))
+        .collect()
+    });
+    &BUILTIN
+}
+
+fn builtin_bg(theme: &str) -> Option<String> {
+    builtin_themes().get(theme)?["ui"]["--bg-app"].as_str().map(String::from)
+}
+
 fn boot_bg_from_settings(settings: &Value) -> tauri::window::Color {
-    const BUILTIN: [(&str, &str); 6] = [
-        ("dark", "#0a0a0c"),
-        ("light", "#f6f7f9"),
-        ("dracula", "#282a36"),
-        ("nord", "#2e3440"),
-        ("tokyo-night", "#1a1b26"),
-        ("solarized-light", "#fdf6e3"),
-    ];
     let theme = settings["theme"].as_str().unwrap_or("dark");
-    let hex = BUILTIN
-        .iter()
-        .find(|(id, _)| *id == theme)
-        .map(|(_, hex)| *hex)
+    let hex = builtin_bg(theme)
         .or_else(|| {
             settings["customThemes"]
                 .as_array()?
                 .iter()
                 .find(|t| t["id"].as_str() == Some(theme))
-                .and_then(|t| t["ui"]["--bg-app"].as_str())
+                .and_then(|t| t["ui"]["--bg-app"].as_str().map(String::from))
         })
-        .unwrap_or("#0a0a0c");
-    parse_hex_color(hex).unwrap_or(tauri::window::Color(10, 10, 12, 255))
+        .unwrap_or_else(|| builtin_bg("dark").unwrap_or_else(|| "#0a0a0c".into()));
+    parse_hex_color(&hex).unwrap_or(tauri::window::Color(10, 10, 12, 255))
 }
 
 pub fn run() {
@@ -356,6 +371,7 @@ mod tests {
         // Note: home_dir() reads USERPROFILE, so this test mutates process
         // env; installer::tests::home_dir_is_none_without_env does the same
         // without a shared lock — both windows are milliseconds, accepted.
+        let _env_guard = store::TEST_ENV_LOCK.lock().unwrap();
         let dir = std::env::temp_dir().join(format!("patty-uninstall-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();

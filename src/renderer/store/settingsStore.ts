@@ -10,8 +10,12 @@ import { applyTheme, applyFontSettings, getThemeColors } from '../styles/themes'
 // exactly when it's needed — at cold start.
 function cacheBootTheme(theme: string, customThemes: AppSettings['customThemes']) {
   try {
+    const colors = getThemeColors(theme, customThemes)
     localStorage.setItem('patty-theme', theme)
-    localStorage.setItem('patty-boot-bg', getThemeColors(theme, customThemes).ui['--bg-app'])
+    localStorage.setItem('patty-boot-bg', colors.ui['--bg-app'])
+    // The full resolved var map lets main.tsx paint the whole theme before the
+    // settings IPC round trip — not just the splash background.
+    localStorage.setItem('patty-boot-ui', JSON.stringify(colors.ui))
     document.documentElement.dataset.theme = theme
   } catch {
     // ignore localStorage failures

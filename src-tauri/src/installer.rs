@@ -516,6 +516,7 @@ mod tests {
     fn home_dir_is_none_without_env() {
         // Unset USERPROFILE and HOME: no fallback to "." — writing hooks into
         // the process CWD is worse than skipping the install.
+        let _env_guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
         let old_u = std::env::var("USERPROFILE").ok();
         let old_h = std::env::var("HOME").ok();
         std::env::remove_var("USERPROFILE");
@@ -528,6 +529,7 @@ mod tests {
 
     #[test]
     fn claude_settings_path_ends_in_user_settings() {
+        let _env_guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
         let path = claude_settings_path().unwrap();
         assert_eq!(path.file_name().unwrap(), "settings.json");
         assert!(path.to_string_lossy().contains(".claude"));
@@ -535,6 +537,7 @@ mod tests {
 
     #[test]
     fn codex_settings_path_ends_in_hooks_json() {
+        let _env_guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
         let path = codex_settings_path().unwrap();
         assert_eq!(path.file_name().unwrap(), "hooks.json");
         assert!(path.to_string_lossy().contains(".codex"));
@@ -545,6 +548,7 @@ mod tests {
         // Regression guard: Claude Code's localSettings source only reads
         // <project>/.claude/settings.local.json — a user-level
         // settings.local.json is never loaded, so hooks there never fire.
+        let _env_guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
         assert_eq!(
             claude_settings_path().unwrap().file_name().unwrap(),
             "settings.json"

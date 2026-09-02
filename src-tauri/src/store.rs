@@ -25,6 +25,12 @@ pub fn set_data_dir_for_test(dir: PathBuf) {
     *SETTINGS_CACHE.lock().unwrap() = None;
 }
 
+/// Serializes tests that mutate or read process env vars (USERPROFILE/HOME) —
+/// home_dir() and friends read them, so an env-mutating test running in
+/// parallel with a path-asserting test flakes otherwise.
+#[doc(hidden)]
+pub static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
+
 static TEST_DATA_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 pub fn default_settings() -> Value {

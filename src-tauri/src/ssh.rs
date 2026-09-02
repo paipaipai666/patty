@@ -153,6 +153,7 @@ mod tests {
 
     #[test]
     fn parse_basic_block() {
+        let _env_guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
         let cfg = "Host prod\n  HostName 10.0.0.5\n  User deploy\n  Port 2222\n  IdentityFile ~/.ssh/prod_key\n";
         let drafts = parse_ssh_config(cfg);
         assert_eq!(drafts.len(), 1);
