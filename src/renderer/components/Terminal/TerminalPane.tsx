@@ -34,6 +34,10 @@ const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
 // immediately, and the pane ends up with no renderer at all — every write
 // then throws on RenderService.dimensions. Detect support once, and give up
 // permanently if a live context loss never restores.
+// NOTE: the two flags below are process-global ON PURPOSE — a broken GPU
+// process is a process-level condition, so one pane's permanent context loss
+// degrades all panes to canvas. Revisit only if per-pane recovery becomes
+// worth the complexity (it has not been observed to matter in practice).
 let webglSupported: boolean | null = null
 let webglPermanentlyLost = false
 
@@ -138,7 +142,18 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const renderCountRef = useRef(0)
   const updatePid = useSessionStore((s) => s.updatePid)
   const updateCwd = useSessionStore((s) => s.updateCwd)
-  const settings = useSettingsStore((s) => s.settings)
+  // Per-field selectors: subscribing to the whole settings object re-renders
+  // every mounted pane on ANY settings change (shortcuts, notifications...).
+  // updateSetting replaces the settings object but keeps unchanged fields
+  // referentially stable, so these only fire for their own key.
+  const fontFamily = useSettingsStore((s) => s.settings.fontFamily)
+  const fontSize = useSettingsStore((s) => s.settings.fontSize)
+  const cursorBlink = useSettingsStore((s) => s.settings.cursorBlink)
+  const cursorStyle = useSettingsStore((s) => s.settings.cursorStyle)
+  const opacity = useSettingsStore((s) => s.settings.opacity)
+  const theme = useSettingsStore((s) => s.settings.theme)
+  const customThemes = useSettingsStore((s) => s.settings.customThemes)
+  const scrollback = useSettingsStore((s) => s.settings.scrollback)
 
   if (perfEnabled) {
     renderCountRef.current++
@@ -186,18 +201,18 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     cleanupExitRef.current = null
 
     const termOptions: Record<string, unknown> = {
-      fontFamily: `'${settings.fontFamily}', Consolas, 'Courier New', monospace`,
-      fontSize: settings.fontSize,
+      fontFamily: `'${fontFamily}', Consolas, 'Courier New', monospace`,
+      fontSize: fontSize,
       lineHeight: 1.2,
       letterSpacing: 0,
       fontLigatures: true,
-      cursorBlink: settings.cursorBlink,
-      cursorStyle: settings.cursorStyle,
-      allowTransparency: settings.opacity < 1,
+      cursorBlink: cursorBlink,
+      cursorStyle: cursorStyle,
+      allowTransparency: opacity < 1,
       allowProposedApi: true,
       bracketedPasteMode: true,
-      theme: getThemeColors(settings.theme, settings.customThemes).terminal,
-      scrollback: settings.scrollback,
+      theme: getThemeColors(theme, customThemes).terminal,
+      scrollback: scrollback,
       convertEol: false,
       rescaleOverlappingGlyphs: true
     }
@@ -357,6 +372,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     // over the WebGL text canvas, rendering opaque black instead of transparent.
     // Override getContext globally — safe because only 2D+desynchronized is
     // affected; WebGL contexts use getContext('webgl') which is untouched.
+    // Deliberately process-global (a scoped patch can't intercept the addon's
+    // internal canvas creation); re-audit when upgrading @xterm/addon-image.
     if (!(window as any).__imageAddonPatchApplied) {
       const _orig = HTMLCanvasElement.prototype.getContext
       HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, options?: any) {
@@ -685,12 +702,12 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     const term = termRef.current
     if (!term) return
 
-    term.options.fontFamily = `'${settings.fontFamily}', Consolas, 'Courier New', monospace`
-    term.options.fontSize = settings.fontSize
-    term.options.cursorBlink = settings.cursorBlink
-    term.options.cursorStyle = settings.cursorStyle
-    term.options.theme = getThemeColors(settings.theme, settings.customThemes).terminal
-  }, [settings.fontFamily, settings.fontSize, settings.cursorBlink, settings.cursorStyle, settings.theme, settings.customThemes])
+    term.options.fontFamily = `'${fontFamily}', Consolas, 'Courier New', monospace`
+    term.options.fontSize = fontSize
+    term.options.cursorBlink = cursorBlink
+    term.options.cursorStyle = cursorStyle
+    term.options.theme = getThemeColors(theme, customThemes).terminal
+  }, [fontFamily, fontSize, cursorBlink, cursorStyle, theme, customThemes])
 
   // Only a geometry-affecting change (font family / size alters cell
   // dimensions → column/row count) needs a re-fit. Splitting this out keeps
@@ -698,13 +715,13 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   useEffect(() => {
     if (!termRef.current) return
     setTimeout(() => fitTerminal(), 20)
-  }, [settings.fontFamily, settings.fontSize, fitTerminal])
+  }, [fontFamily, fontSize, fitTerminal])
 
   return (
     <div
       ref={containerRef}
       className={styles.pane}
-      style={{ opacity: settings.opacity < 1 ? settings.opacity : 1 }}
+      style={{ opacity: opacity < 1 ? opacity : 1 }}
     >
       {!hasData && visible && <div className={styles.bootShimmer} aria-hidden="true" />}
     </div>
