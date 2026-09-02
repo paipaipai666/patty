@@ -69,6 +69,7 @@ export const terminalAPI = {
 
   // Hooks
   hooksClearPane: (paneId: string) => invoke<void>('hooks_clear_pane', { paneId }),
+  hookServerStatus: () => invoke<{ available: boolean }>('hook_server_status'),
 
   // Window controls
   windowMinimize: () => void appWindow.minimize(),

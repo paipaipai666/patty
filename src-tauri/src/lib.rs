@@ -126,6 +126,13 @@ fn get_fonts() -> Result<Vec<String>, String> {
     fonts::get_fonts()
 }
 
+/// Whether the hook HTTP server is up (it binds an ephemeral port at startup;
+/// failure leaves the port 0 and AI notifications silently dead — surface it).
+#[tauri::command]
+fn hook_server_status() -> Value {
+    json!({ "available": hooks::hook_port() != 0 })
+}
+
 #[tauri::command]
 fn hooks_clear_pane(pane_id: &str) {
     // shell 提示符重绘（OSC 7）= 前台 TUI 已退出。opencode 1.18 退出 TUI 后
@@ -297,6 +304,7 @@ pub fn run() {
             ssh_metrics_stop,
             ssh_config_import,
             get_fonts,
+            hook_server_status,
             hooks_clear_pane,
             select_directory,
             theme_export,

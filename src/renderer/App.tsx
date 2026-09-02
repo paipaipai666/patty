@@ -16,6 +16,7 @@ import { ContextMenu, type MenuItem } from './components/App/ContextMenu'
 import { PromptDialog, type PromptOptions } from './components/App/PromptDialog'
 import { SettingsModal } from './components/Settings/SettingsModal'
 import { Toasts } from './components/App/Toasts'
+import { toast } from './store/toastStore'
 import type { SshProfile, SshAuthRequest, SshHostkeyRequest } from '../shared/settingsTypes'
 import styles from './App.module.css'
 
@@ -141,6 +142,14 @@ export default function App() {
       if (perfEnabled) perfMeasure('renderer:settings-init', 'renderer:settings-init-start')
     })
   }, [settingsInit])
+
+  // The hook server binds at process start; if it failed, AI attention
+  // notifications are silently dead — surface that once instead.
+  useEffect(() => {
+    void window.terminalAPI.hookServerStatus?.().then((s) => {
+      if (s && !s.available) toast('AI notifications unavailable: hook server failed to start')
+    })
+  }, [])
 
   // Metrics sampling spawns a powershell.exe per sample in the main process —
   // only run it while the dashboard is open.
