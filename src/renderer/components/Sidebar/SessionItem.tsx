@@ -127,7 +127,7 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
     <div
       className={`${styles.item} ${isActive ? styles.itemActive : ''} ${getAttentionClass()}`}
       style={{ paddingLeft: `${depth * 16 + 8}px`, position: 'relative', overflow: 'hidden' }}
-      role="tab"
+      role="treeitem"
       tabIndex={isEditing ? -1 : 0}
       aria-selected={isActive}
       aria-label={session.title}

@@ -57,19 +57,19 @@ describe('SessionItem', () => {
 
   it('shows active state when isActive is true', () => {
     const { container } = render({ isActive: true })
-    const tab = container.querySelector('[role="tab"][aria-selected="true"]')
+    const tab = container.querySelector('[role="treeitem"][aria-selected="true"]')
     expect(tab).not.toBeNull()
   })
 
   it('does not show active state when isActive is false', () => {
     const { container } = render({ isActive: false })
-    const tab = container.querySelector('[role="tab"][aria-selected="true"]')
+    const tab = container.querySelector('[role="treeitem"][aria-selected="true"]')
     expect(tab).toBeNull()
   })
 
   it('double-click enters rename mode with input field', () => {
     const { container } = render()
-    const tab = container.querySelector('[role="tab"]')!
+    const tab = container.querySelector('[role="treeitem"]')!
     act(() => { tab.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })
     const input = container.querySelector('input')!
     expect(input).not.toBeNull()
@@ -78,7 +78,7 @@ describe('SessionItem', () => {
 
   it('rename submits on Enter', () => {
     const { container } = render()
-    const tab = container.querySelector('[role="tab"]')!
+    const tab = container.querySelector('[role="treeitem"]')!
     act(() => { tab.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })
     const input = container.querySelector('input')!
     const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
@@ -92,7 +92,7 @@ describe('SessionItem', () => {
 
   it('rename cancels on Escape', () => {
     const { container } = render()
-    const tab = container.querySelector('[role="tab"]')!
+    const tab = container.querySelector('[role="treeitem"]')!
     act(() => { tab.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })
     const input = container.querySelector('input')!
     act(() => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
@@ -102,7 +102,7 @@ describe('SessionItem', () => {
 
   it('drag start sets data and calls setDraggingSession', () => {
     const { container } = render()
-    const tab = container.querySelector('[role="tab"]')!
+    const tab = container.querySelector('[role="treeitem"]')!
     const dt = { setData: vi.fn(), effectAllowed: '' }
     const event = new Event('dragstart', { bubbles: true })
     Object.defineProperty(event, 'dataTransfer', { value: dt, writable: true })
@@ -126,7 +126,7 @@ describe('SessionItem', () => {
   it('selects session on click', () => {
     const onSelect = vi.fn()
     const { container } = render({ onSelect })
-    const tab = container.querySelector('[role="tab"]')!
+    const tab = container.querySelector('[role="treeitem"]')!
     act(() => { tab.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
     expect(onSelect).toHaveBeenCalledWith('s1')
   })
