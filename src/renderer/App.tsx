@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { useSessionStore, teardownSessionIPC, SESSION_COLORS, buildSessionPersistedState } from './store/sessionStore'
 import {
   createTerminal,
@@ -50,6 +50,8 @@ export default function App() {
   const sidebarVisible = useSessionStore((s) => s.sidebarVisible)
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const toggleSidebar = useSessionStore((s) => s.toggleSidebar)
+  const endSidebarTransition = useSessionStore((s) => s.endSidebarTransition)
+  const sidebarWrapperRef = useRef<HTMLDivElement>(null)
   const navigateNext = useSessionStore((s) => s.navigateNext)
   const navigatePrev = useSessionStore((s) => s.navigatePrev)
   const navigateToIndex = useSessionStore((s) => s.navigateToIndex)
@@ -402,11 +404,25 @@ export default function App() {
 
   const sidebarOnRight = sidebarPosition === 'right'
 
+  // Primary end signal for the sidebar width animation. The store's fallback
+  // timer only covers reduced-motion / interrupted transitions that never fire
+  // transitionend.
+  useEffect(() => {
+    const el = sidebarWrapperRef.current
+    if (!el) return
+    const onEnd = (e: TransitionEvent) => {
+      if (e.propertyName !== 'width' || e.target !== el) return
+      endSidebarTransition()
+    }
+    el.addEventListener('transitionend', onEnd)
+    return () => el.removeEventListener('transitionend', onEnd)
+  }, [endSidebarTransition])
+
   return (
     <div className={styles.app}>
       <TitleBar onOpenSettings={openSettings} sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
-        <div className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
+        <div ref={sidebarWrapperRef} className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
           <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
         </div>
         <div

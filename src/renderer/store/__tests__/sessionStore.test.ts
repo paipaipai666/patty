@@ -263,6 +263,20 @@ describe('sidebar', () => {
     expect(useSessionStore.getState().sidebarVisible).toBe(true)
   })
 
+  it('toggleSidebar marks transitioning until endSidebarTransition', () => {
+    useSessionStore.setState({ sidebarVisible: true, sidebarTransitioning: false })
+    useSessionStore.getState().toggleSidebar()
+    expect(useSessionStore.getState().sidebarTransitioning).toBe(true)
+    useSessionStore.getState().endSidebarTransition()
+    expect(useSessionStore.getState().sidebarTransitioning).toBe(false)
+  })
+
+  it('endSidebarTransition is a no-op when not transitioning', () => {
+    useSessionStore.setState({ sidebarTransitioning: false })
+    useSessionStore.getState().endSidebarTransition()
+    expect(useSessionStore.getState().sidebarTransitioning).toBe(false)
+  })
+
   it('setSidebarWidth clamps within bounds', () => {
     useSessionStore.getState().setSidebarWidth(50)
     expect(useSessionStore.getState().sidebarWidth).toBe(160)

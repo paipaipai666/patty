@@ -66,6 +66,10 @@ interface SessionStore {
   moveCollection: (collectionId: string, newParentId: string | null) => void
 
   toggleSidebar: () => void
+  /** Clear sidebarTransitioning after the CSS width animation ends. Called from
+   *  the wrapper's transitionend; the fallback timer covers reduced-motion /
+   *  interrupted transitions. */
+  endSidebarTransition: () => void
   setSidebarWidth: (width: number) => void
   navigateNext: () => void
   navigatePrev: () => void
@@ -80,9 +84,10 @@ interface SessionStore {
 }
 
 let ipcCleanup: (() => void) | null = null
-// Safety timer that clears sidebarTransitioning after the CSS width transition
-// has had time to finish. Covers reduced-motion (no transitionend fires) and the
-// keyboard shortcut path. The last toggle wins.
+// Fallback only: primary end signal is transitionend on the sidebar wrapper.
+// Must exceed --transition-normal (250ms) with enough headroom for a janky
+// frame; 450ms is well past a 250ms ease without locking fits for long.
+const SIDEBAR_TRANSITION_FALLBACK_MS = 450
 let sidebarTransitionTimer: ReturnType<typeof setTimeout> | null = null
 
 export function teardownSessionIPC() {
@@ -329,12 +334,35 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   toggleSidebar: () => {
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    // No CSS width animation → ResizeObserver fits normally; skip the flag.
+    if (prefersReduced) {
+      set((state) => ({ sidebarVisible: !state.sidebarVisible }))
+      markDirty()
+      return
+    }
+
     set((state) => ({ sidebarVisible: !state.sidebarVisible, sidebarTransitioning: true }))
     if (sidebarTransitionTimer) clearTimeout(sidebarTransitionTimer)
     sidebarTransitionTimer = setTimeout(() => {
+      sidebarTransitionTimer = null
       set({ sidebarTransitioning: false })
-    }, 260)
+    }, SIDEBAR_TRANSITION_FALLBACK_MS)
     markDirty()
+  },
+
+  endSidebarTransition: () => {
+    if (sidebarTransitionTimer) {
+      clearTimeout(sidebarTransitionTimer)
+      sidebarTransitionTimer = null
+    }
+    if (get().sidebarTransitioning) {
+      set({ sidebarTransitioning: false })
+    }
   },
 
   setSidebarWidth: (width: number) => {

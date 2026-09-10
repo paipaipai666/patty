@@ -127,6 +127,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     iipPatcherRef.current = createIIPStreamPatcher()
   }
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Scale-bridge snapshot captured at the start of a sidebar width animation.
+  // Keeps the already-rastered xterm canvas visually tracking the container
+  // without calling term.resize (which clears/repaints WebGL and flickers).
+  const scaleBridgeRef = useRef<{ w: number; h: number; el: HTMLElement } | null>(null)
   // Handle for the post-exit auto-restart timer. Tracked so unmount can cancel a
   // retry that is still pending — otherwise an exit that lands just before
   // unmount respawns an orphaned PTY and writes to a disposed terminal.
@@ -178,6 +182,40 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     },
     [session.id]
   )
+
+  const beginScaleBridge = useCallback(() => {
+    const root = containerRef.current?.querySelector('.xterm') as HTMLElement | null
+    if (!root) return
+    const rect = root.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) {
+      scaleBridgeRef.current = null
+      return
+    }
+    scaleBridgeRef.current = { w: rect.width, h: rect.height, el: root }
+    root.style.transformOrigin = 'top left'
+    // Seed identity so the first update has a stable origin; layout may already
+    // have shifted on this frame.
+    root.style.transform = `scale(1, 1)`
+  }, [])
+
+  const updateScaleBridge = useCallback(() => {
+    const base = scaleBridgeRef.current
+    const container = containerRef.current
+    if (!base || !container) return
+    const cw = container.clientWidth
+    const ch = container.clientHeight
+    if (base.w <= 0 || base.h <= 0 || cw <= 0 || ch <= 0) return
+    base.el.style.transform = `scale(${cw / base.w}, ${ch / base.h})`
+  }, [])
+
+  const endScaleBridge = useCallback(() => {
+    const base = scaleBridgeRef.current
+    scaleBridgeRef.current = null
+    if (base?.el) {
+      base.el.style.transform = ''
+      base.el.style.transformOrigin = ''
+    }
+  }, [])
 
   // ── Initialize terminal ─────────────────────────────────────────────────
 
@@ -655,19 +693,26 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
   }, [visible, fitTerminal])
 
-  // ── Fit once when sidebar finishes sliding ───────────────────────────────
-  // The ResizeObserver skips fits during the width transition to avoid
-  // repeated WebGL repaints. We do one final fit after the animation ends.
+  // ── Sidebar slide: scale-bridge then one final fit ───────────────────────
+  // During the CSS width animation we never term.resize (that clears WebGL).
+  // Instead the .xterm root is CSS-scaled so the already-rastered canvas
+  // tracks the container. After transitionend the store flips the flag, we
+  // drop the transform and fit once to the final size in the same turn so the
+  // intermediate unscaled layout never paints.
 
   const sidebarTransitioning = useSessionStore((s) => s.sidebarTransitioning)
   const wasTransitioningRef = useRef(false)
 
   useEffect(() => {
-    if (wasTransitioningRef.current && !sidebarTransitioning) {
-      setTimeout(() => fitTerminal(), 10)
+    if (sidebarTransitioning && !wasTransitioningRef.current) {
+      beginScaleBridge()
+      updateScaleBridge()
+    } else if (!sidebarTransitioning && wasTransitioningRef.current) {
+      endScaleBridge()
+      fitTerminal()
     }
     wasTransitioningRef.current = sidebarTransitioning
-  }, [sidebarTransitioning, fitTerminal])
+  }, [sidebarTransitioning, fitTerminal, beginScaleBridge, updateScaleBridge, endScaleBridge])
 
   // ── Resize observer ─────────────────────────────────────────────────────
 
@@ -675,12 +720,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     if (!containerRef.current) return
 
     const observer = new ResizeObserver(() => {
-      // Only react when the pane has a real size and a live PTY. A hidden or
-      // zero-sized pane (mid-split transition) would otherwise fit to 0×0.
-      if (!visible || !ptyCreatedRef.current) return
-      // Skip fits while the sidebar is sliding (see effect above) — fitting on
-      // every intermediate frame clears/repaints the WebGL canvas and flickers.
-      if (useSessionStore.getState().sidebarTransitioning) return
+      if (!visible) return
+      // While the sidebar is sliding, only re-apply the CSS scale bridge —
+      // fitting every intermediate frame clears/repaints WebGL and flickers.
+      if (useSessionStore.getState().sidebarTransitioning) {
+        updateScaleBridge()
+        return
+      }
+      if (!ptyCreatedRef.current) return
       const el = containerRef.current
       if (el && (el.clientWidth === 0 || el.clientHeight === 0)) return
       if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current)
@@ -691,8 +738,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     return () => {
       observer.disconnect()
       if (resizeTimerRef.current) clearTimeout(resizeTimerRef.current)
+      endScaleBridge()
     }
-  }, [visible, fitTerminal])
+  }, [visible, fitTerminal, updateScaleBridge, endScaleBridge])
 
   // ── Settings changes ────────────────────────────────────────────────────
 
