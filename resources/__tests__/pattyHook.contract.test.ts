@@ -48,6 +48,18 @@ beforeAll(async () => {
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('no server address')
   port = address.port
+  // Warm up powershell.exe before the first test: a cold binary start can
+  // exceed the 10s per-test POST timeout on a busy machine (observed 2026-09:
+  // the first two spawns each took >10s, timed out, and their late POSTs
+  // poisoned later tests' inboxes — a cascade of confusing off-by-one
+  // failures). One throwaway launch puts the image in the OS cache.
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const warmup = spawn('powershell.exe', ['-NoProfile', '-Command', '$null'], {
+      stdio: 'ignore',
+    })
+    warmup.on('exit', () => resolvePromise())
+    warmup.on('error', (err) => rejectPromise(err))
+  })
 })
 
 afterAll(async () => {
@@ -86,7 +98,14 @@ async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<
   // fails internally, so a missing POST is only observable as the absence of
   // an event — deterministic timer control cannot detect "nothing happened".
   const timeout = new Promise<never>((_resolve, reject) => {
-    setTimeout(() => reject(new Error(`no POST received for payload: ${stdinPayload}`)), 10_000)
+    setTimeout(() => {
+      // Kill the timed-out spawn so its late POST cannot land in the NEXT
+      // test's inbox (the inbox resets per test; a late arrival from a
+      // timed-out spawn is indistinguishable from this test's own result and
+      // cascades into off-by-one failures across the file).
+      child.kill()
+      reject(new Error(`no POST received for payload: ${stdinPayload}`))
+    }, 10_000)
   })
   await Promise.race([posted, timeout])
   // 每个用例的载荷都越过真实 powershell 进程：在这里统一钉词汇表，
