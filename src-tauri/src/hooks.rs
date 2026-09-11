@@ -275,6 +275,18 @@ fn handle_request(
             )
     };
 
+    // GET /image-rows?pane=<id>&secret=<s> — shell-integration poll for the
+    // ConPTY cursor repair: rows of inline images the shell hasn't compensated
+    // for yet. Only reads per-session counters; no body, no side effects
+    // beyond consuming the row count when nothing is mid-stream.
+    if request.method() == &tiny_http::Method::Get {
+        if let Some((status, body)) =
+            evaluate_image_rows_query(request.url(), secret, crate::pty::take_image_rows)
+        {
+            return json_response(status, body);
+        }
+        return tiny_http::Response::from_string(String::new()).with_status_code(404);
+    }
     if request.method() != &tiny_http::Method::Post || request.url() != "/hook" {
         return tiny_http::Response::from_string(String::new()).with_status_code(404);
     }
@@ -310,6 +322,36 @@ fn handle_request(
         eprintln!("[hooks] ignored hook pane={pane} reason=no live PTY session for this pane id");
     }
     json_response(status, payload)
+}
+
+/// Pure hook-request evaluation, split from the tiny_http plumbing so the
+/// Pure evaluation for GET /image-rows, mirroring evaluate_hook_body's
+/// testable-without-tiny_http pattern. `take` reads (and, when nothing is
+/// mid-stream, clears) the session's uncompensated inline-image rows.
+/// Returns None when the URL isn't the image-rows route.
+fn evaluate_image_rows_query(
+    url: &str,
+    secret: &str,
+    take: impl FnOnce(&str) -> Option<(u32, bool)>,
+) -> Option<(u16, Value)> {
+    let query = url.strip_prefix("/image-rows?")?;
+    let mut pane = "";
+    let mut given = "";
+    for pair in query.split('&') {
+        if let Some((k, v)) = pair.split_once('=') {
+            match k {
+                "pane" => pane = v,
+                "secret" => given = v,
+                _ => {}
+            }
+        }
+    }
+    // ids are uuids and the secret is hex — neither needs URL-decoding
+    if given != secret {
+        return Some((401, json!({ "ok": false, "error": "unauthorized" })));
+    }
+    let (rows, pending) = take(pane).unwrap_or((0, false));
+    Some((200, json!({ "rows": rows, "pending": pending })))
 }
 
 /// Pure hook-request evaluation, split from the tiny_http plumbing so the
@@ -711,6 +753,29 @@ mod tests {
             assert!(collect_expired_with_now(&active, 13_001).contains(&pane));
         }
         ACTIVE.lock().unwrap().remove(&pane);
+    }
+
+    #[test]
+    fn image_rows_query_auth_and_shape() {
+        // wrong route → None (caller 404s)
+        assert!(evaluate_image_rows_query("/hook", "s", |_| None).is_none());
+        // wrong secret → 401
+        let (status, _) = evaluate_image_rows_query("/image-rows?pane=p1&secret=no", "sec", |_| None)
+            .unwrap();
+        assert_eq!(status, 401);
+        // missing secret param → 401 (empty != real secret)
+        let (status, _) = evaluate_image_rows_query("/image-rows?pane=p1", "sec", |_| None).unwrap();
+        assert_eq!(status, 401);
+        // valid → rows/pending from the session lookup; unknown pane → zeros
+        let (status, body) =
+            evaluate_image_rows_query("/image-rows?pane=p1&secret=sec", "sec", |_| Some((23, false)))
+                .unwrap();
+        assert_eq!(status, 200);
+        assert_eq!(body, json!({ "rows": 23, "pending": false }));
+        let (status, body) =
+            evaluate_image_rows_query("/image-rows?pane=gone&secret=sec", "sec", |_| None).unwrap();
+        assert_eq!(status, 200);
+        assert_eq!(body, json!({ "rows": 0, "pending": false }));
     }
 
     #[test]

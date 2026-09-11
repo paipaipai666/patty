@@ -428,6 +428,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     } catch {
       console.warn('Image addon failed to load')
     }
+    // 已知遗留（后续单独做，2026-09 chafa 图像链路上线时确认存在）：
+    // 1. DPR 模糊：ImageAddon 的图像层 canvas 按 CSS 像素建（rescaleCanvas
+    //    用 dimensions.css.canvas），不乘 devicePixelRatio；Windows 125%/150%
+    //    缩放下图像被浏览器二次放大，轻度发虚（yazi 同样受影响）。修法：
+    //    包装 ImageRenderer 让画布按 device px 建、ctx 按 dpr 缩放。
+    // 2. resize 残图：ConPTY resize 时 conhost 重绘自身 buffer，xterm 的
+    //    图像占位 tile 会被抹乱。可在 fit/resize 时主动清 ImageAddon 的
+    //    storage（clearImageStorage）避免半残画面——光标/文本不受影响。
     if (perfEnabled) perfMeasure('terminal:image-addon-init', 'terminal:image-addon-init')
 
     term.loadAddon(unicode11Addon)

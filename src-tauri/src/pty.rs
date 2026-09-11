@@ -5,7 +5,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::os::windows::process::CommandExt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::Duration;
@@ -22,6 +22,13 @@ pub struct Shared {
     /// Output produced before the renderer attaches (preheat replay).
     buffer: Mutex<ReplayBuffer>,
     app: Option<AppHandle>,
+    /// Inline-image rows the shell still needs to compensate for (ConPTY
+    /// cursor repair). Credited at image-terminator time; claimed by the
+    /// shell-integration prompt hook via take_image_rows().
+    image_rows: AtomicU32,
+    /// True while an IIP image is mid-stream — lets the hook endpoint tell the
+    /// shell to retry shortly instead of consuming a partial row count.
+    image_pending: AtomicBool,
 }
 
 /// Pre-attach output buffer with a running byte total — push/pop are O(1)
@@ -300,12 +307,240 @@ pub fn dsr_filter(state: &mut DsrState, text: &str) -> (Option<String>, bool) {
     (Some(combined), false)
 }
 
+// ── Inline-image row tracking (ConPTY cursor repair) ───────────────────────
+//
+// OSC 1337 (iTerm2 inline image) passes through ConPTY without touching the
+// console's cursor model: conhost never advances past the image, while
+// xterm.js's ImageAddon advances its own cursor by the image's row count. The
+// next absolute-positioned output (e.g. PSReadLine's input redraw) then lands
+// inside the image. The shell integration claims the owed row count at every
+// prompt via the hook endpoint and repairs conhost's cursor with an absolute
+// SetConsoleCursorPosition; we supply the row count by scanning the PTY
+// output stream for IIP headers here.
+//
+// Counting rules:
+// - only cell-valued `height=N` fields (chafa always sends cells); `px`/`auto`/
+//   `%` heights are skipped — we can't map them to rows without cell metrics.
+// - rows are credited only when the image's terminator (BEL or ST) is seen, so
+//   a querying shell never acts on a half-streamed image; `pending` tells it
+//   to retry instead.
+// - alt-screen output (fullscreen TUIs like yazi, which manage their own
+//   layout) is not counted.
+//
+// 已知限制与后续方向（2026-09 上线时记录）：
+// - 动图/监控类输出（chafa --watch、GIF 动画）：每一帧都算一次图像行，
+//   行数会持续累积；传送门在命令结束后的首个 prompt 一次结清并 clamp 到
+//   buffer 底部。静态图是正确路径；动图如需支持，应先在前端限制为静态帧
+//   或按帧去重，再谈光标补偿。
+// - 根治不在我们手里：conhost 侧认图像行才是任意裸跑工具都对的前提。
+//   实测 in-box conhost 会吃掉 sixel DCS（不透传也不出图），sixel 路线已死；
+//   剩下两条是自带 patched OpenConsole（ConPTY 握手是个真项目）或推
+//   microsoft/terminal 上游（sixel 的 cursor tracking 是现成先例）。
+// - chafa 在 Windows 从不等待探测回复，单元格像素恒为 10×20 回退值，
+//   烘焙分辨率 = 列数×10。默认字号下相对显示尺寸是降采样（清晰）；
+//   字号调很大时会变升采样发虚——属 chafa 上游限制，不绕道修。
+
+const IIP_MARKER: &[u8] = b"\x1b]1337;File=";
+const ALT_ENTER: &[u8] = b"\x1b[?1049h";
+const ALT_LEAVE: &[u8] = b"\x1b[?1049l";
+const ALT_ENTER_47: &[u8] = b"\x1b[?1047h";
+const ALT_LEAVE_47: &[u8] = b"\x1b[?1047l";
+const NEEDLES: [&[u8]; 5] = [IIP_MARKER, ALT_ENTER, ALT_LEAVE, ALT_ENTER_47, ALT_LEAVE_47];
+const MAX_NEEDLE_LEN: usize = 12; // IIP_MARKER.len()
+const IIP_HEADER_LIMIT: usize = 1024;
+
+#[derive(Default, PartialEq, Clone, Copy)]
+enum ImageScanState {
+    #[default]
+    Idle,
+    Header,
+    Payload,
+}
+
+/// Longest suffix of `tail` that is a prefix of any needle (0 = none). Lets us
+/// hold a split `\x1b]1337;File=` / `\x1b[?1049h` across chunk boundaries.
+fn needle_prefix_len(tail: &[u8]) -> usize {
+    let max = (MAX_NEEDLE_LEN - 1).min(tail.len());
+    for len in (1..=max).rev() {
+        let suffix = &tail[tail.len() - len..];
+        if NEEDLES.iter().any(|n| n.starts_with(suffix)) {
+            return len;
+        }
+    }
+    0
+}
+
+#[derive(Default)]
+struct ImageRowTracker {
+    state: ImageScanState,
+    /// Header bytes accumulated between the marker and its terminating ':'.
+    header: Vec<u8>,
+    /// Held bytes that may be a needle prefix split across chunks (always
+    /// ASCII escape-sequence prefixes, so String is lossless).
+    carry: String,
+    alt_screen: bool,
+    /// Parsed height of the in-flight image (0 = skip / not counted).
+    pending_rows: u32,
+}
+
+impl ImageRowTracker {
+    /// True while an IIP image is mid-stream (header or payload incomplete) —
+    /// the hook endpoint uses it to tell the shell to retry instead of acting
+    /// on a partial row count.
+    fn is_pending(&self) -> bool {
+        self.state != ImageScanState::Idle
+    }
+
+    /// Feed one decoded output chunk; returns rows credited by this chunk.
+    /// Rows are credited only at the image terminator, and only outside the
+    /// alt screen.
+    fn feed(&mut self, text: &str) -> u32 {
+        // Fast path: base64 image payloads contain no ESC, so the bulk of an
+        // image stream skips scanning entirely.
+        if self.state == ImageScanState::Idle && self.carry.is_empty() && !text.contains('\x1b') {
+            return 0;
+        }
+        let mut combined = std::mem::take(&mut self.carry);
+        combined.push_str(text);
+        let bytes = combined.as_bytes();
+        let mut i = 0usize;
+        let mut credited = 0u32;
+        let mut hold_from: Option<usize> = None;
+
+        while i < bytes.len() {
+            match self.state {
+                ImageScanState::Idle => {
+                    let Some(rel) = bytes[i..].iter().position(|&b| b == 0x1b) else {
+                        break;
+                    };
+                    let p = i + rel;
+                    let mut matched = false;
+                    for needle in NEEDLES {
+                        if bytes.len() - p >= needle.len() && &bytes[p..p + needle.len()] == needle {
+                            matched = true;
+                            if needle == IIP_MARKER {
+                                self.state = ImageScanState::Header;
+                                self.header.clear();
+                            } else {
+                                self.alt_screen = needle == ALT_ENTER || needle == ALT_ENTER_47;
+                            }
+                            i = p + needle.len();
+                            break;
+                        }
+                    }
+                    if !matched {
+                        if needle_prefix_len(&bytes[p..]) > 0 && p + MAX_NEEDLE_LEN > bytes.len() {
+                            hold_from = Some(p); // possible needle split across chunks
+                            break;
+                        }
+                        i = p + 1;
+                    }
+                }
+                ImageScanState::Header => {
+                    let Some(rel) = bytes[i..].iter().position(|&b| b == b':') else {
+                        self.header.extend_from_slice(&bytes[i..]);
+                        if self.header.len() > IIP_HEADER_LIMIT {
+                            self.state = ImageScanState::Idle; // malformed; drop
+                        }
+                        break;
+                    };
+                    let colon = i + rel;
+                    self.header.extend_from_slice(&bytes[i..colon]);
+                    self.pending_rows = parse_iip_cell_height(&self.header);
+                    self.state = ImageScanState::Payload;
+                    i = colon + 1;
+                }
+                ImageScanState::Payload => {
+                    // base64 contains neither BEL nor ESC, so the first BEL or
+                    // ESC\ after the payload is the image terminator.
+                    let bel = bytes[i..].iter().position(|&b| b == 0x07).map(|r| i + r);
+                    let st = bytes[i..]
+                        .windows(2)
+                        .position(|w| w == b"\x1b\\")
+                        .map(|r| i + r);
+                    // An ESC as the final byte may be half of a split ST.
+                    let esc_tail = bytes.last() == Some(&0x1b);
+                    match (bel, st) {
+                        (None, None) => {
+                            if esc_tail {
+                                hold_from = Some(bytes.len() - 1);
+                            }
+                            i = bytes.len();
+                        }
+                        _ => {
+                            let (t, tlen) = match (bel, st) {
+                                (Some(b), Some(s)) => {
+                                    if b < s { (b, 1) } else { (s, 2) }
+                                }
+                                (Some(b), None) => (b, 1),
+                                (None, Some(s)) => (s, 2),
+                                _ => unreachable!(),
+                            };
+                            if !self.alt_screen {
+                                credited += self.pending_rows;
+                            }
+                            self.pending_rows = 0;
+                            self.state = ImageScanState::Idle;
+                            i = t + tlen;
+                        }
+                    }
+                }
+            }
+        }
+
+        self.carry = match hold_from {
+            // hold_from is always at an ASCII ESC byte, so slicing is safe
+            Some(p) => combined[p..].to_string(),
+            None => String::new(),
+        };
+        credited
+    }
+}
+
+/// Parse `height=N` from an IIP header; returns 0 (skip) for px/auto/percent
+/// heights or a missing field — only cell counts map to terminal rows.
+fn parse_iip_cell_height(header: &[u8]) -> u32 {
+    let header = String::from_utf8_lossy(header);
+    let Some(pos) = header.find("height=") else {
+        return 0;
+    };
+    let rest = &header[pos + "height=".len()..];
+    let digits: usize = rest.bytes().take_while(|b| b.is_ascii_digit()).count();
+    if digits == 0 {
+        return 0;
+    }
+    // A bare number is a cell count only when the field ends right after the
+    // digits (`;` or header end); a suffix like `px`/`%` disqualifies it.
+    match rest.as_bytes()[digits..].first() {
+        None | Some(b';') => {}
+        _ => return 0,
+    }
+    rest[..digits].parse().unwrap_or(0)
+}
+
+/// Shell-integration hook support: (rows, pending) for the pane's
+/// uncompensated inline-image rows. The counter is cleared only when no image
+/// is mid-stream — while pending, the count is still growing and the shell
+/// retries instead of consuming a partial count.
+pub fn take_image_rows(id: &str) -> Option<(u32, bool)> {
+    let session = SESSIONS.read().unwrap().get(id).cloned()?;
+    let shared = &session.shared;
+    let pending = shared.image_pending.load(Ordering::Relaxed);
+    let rows = if pending {
+        shared.image_rows.load(Ordering::Relaxed)
+    } else {
+        shared.image_rows.swap(0, Ordering::Relaxed)
+    };
+    Some((rows, pending))
+}
+
 // ── Reader / waiter threads ─────────────────────────────────────────────────
 
 fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
     let shared = session.shared.clone();
     let mut carry: Vec<u8> = Vec::new();
     let mut dsr = DsrState::Pending(String::new());
+    let mut image_tracker = ImageRowTracker::default();
     let mut buf = [0u8; 8192];
     loop {
         match reader.read(&mut buf) {
@@ -315,6 +550,11 @@ fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Sen
                 if text.is_empty() {
                     continue;
                 }
+                let credited = image_tracker.feed(&text);
+                if credited > 0 {
+                    session.shared.image_rows.fetch_add(credited, Ordering::Relaxed);
+                }
+                session.shared.image_pending.store(image_tracker.is_pending(), Ordering::Relaxed);
                 let (forward, reply) = dsr_filter(&mut dsr, &text);
                 if reply {
                     let mut writer = session.writer.lock().unwrap();
@@ -407,6 +647,13 @@ fn spawn_inner(
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "vscode");
+    // chafa 1.18's term-db has no entry for TERM_PROGRAM=vscode, so without this
+    // it renders images as cell-resolution block symbols (what users perceive as
+    // "blurry"). LC_TERMINAL=iTerm2 matches chafa's iTerm2 rule → chafa emits
+    // IIP pixel graphics (TIFF payload, transcoded to PNG by iipStreamPatcher).
+    // yazi likewise treats LC_TERMINAL=iTerm2 as IIP-capable, so its behavior
+    // is unchanged.
+    cmd.env("LC_TERMINAL", "iTerm2");
     // Only inject the hook channel when the hook server actually started —
     // otherwise every shell would pointlessly POST to port 0 (and a stale
     // PATTY_PORT from the environment could hit an unrelated listener).
@@ -433,6 +680,8 @@ fn spawn_inner(
         attached: AtomicBool::new(attached),
         buffer: Mutex::new(ReplayBuffer::default()),
         app: app.cloned(),
+        image_rows: AtomicU32::new(0),
+        image_pending: AtomicBool::new(false),
     });
 
     let session = Arc::new(Session {
@@ -644,6 +893,98 @@ pub fn session_exists(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // ── ImageRowTracker (ConPTY inline-image cursor repair) ─────────────
+
+    fn iip_image(height_cells: u32) -> String {
+        format!("\x1b]1337;File=inline=1;width=87;height={height_cells};preserveAspectRatio=0:QUJDRA==\x07")
+    }
+
+    #[test]
+    fn image_rows_credited_at_terminator_not_header() {
+        let mut t = ImageRowTracker::default();
+        let img = iip_image(23);
+        let colon = img.find(':').unwrap();
+        // header alone credits nothing and reports pending
+        assert_eq!(t.feed(&img[..colon]), 0);
+        assert!(t.is_pending());
+        assert_eq!(t.feed(&img[colon..]), 23);
+        assert!(!t.is_pending());
+    }
+
+    #[test]
+    fn image_rows_survive_split_marker_header_and_terminator() {
+        let img = iip_image(15);
+        // split at every byte position; each split must credit exactly 15
+        for split in 1..img.len() {
+            let mut t = ImageRowTracker::default();
+            let got = t.feed(&img[..split]) + t.feed(&img[split..]);
+            assert_eq!(got, 15, "split at {split}");
+        }
+    }
+
+    #[test]
+    fn image_rows_accept_st_terminator() {
+        let mut t = ImageRowTracker::default();
+        let got = t.feed("\x1b]1337;File=inline=1;height=9;:QUJD\x1b\\");
+        assert_eq!(got, 9);
+    }
+
+    #[test]
+    fn image_rows_skip_px_auto_and_percent_heights() {
+        let mut t = ImageRowTracker::default();
+        assert_eq!(t.feed("\x1b]1337;File=height=200px;:QQ==\x07"), 0);
+        assert_eq!(t.feed("\x1b]1337;File=height=auto;:QQ==\x07"), 0);
+        assert_eq!(t.feed("\x1b]1337;File=height=50%;:QQ==\x07"), 0);
+        // a following cell-height image still counts
+        assert_eq!(t.feed(&iip_image(7)), 7);
+    }
+
+    #[test]
+    fn image_rows_suppressed_in_alt_screen() {
+        let mut t = ImageRowTracker::default();
+        assert_eq!(t.feed("\x1b[?1049h"), 0);
+        assert_eq!(t.feed(&iip_image(10)), 0); // yazi-style fullscreen image
+        assert_eq!(t.feed("\x1b[?1049l"), 0);
+        assert_eq!(t.feed(&iip_image(10)), 10); // back in the main screen
+    }
+
+    #[test]
+    fn image_rows_sum_multiple_images() {
+        let mut t = ImageRowTracker::default();
+        let two = format!("{}{}", iip_image(5), iip_image(8));
+        assert_eq!(t.feed(&two), 13);
+    }
+
+    #[test]
+    fn image_rows_recover_after_malformed_unterminated_header() {
+        let mut t = ImageRowTracker::default();
+        let garbage = format!("\x1b]1337;{}", "A".repeat(IIP_HEADER_LIMIT + 10));
+        assert_eq!(t.feed(&garbage), 0);
+        assert_eq!(t.feed(&iip_image(4)), 4);
+    }
+
+    #[test]
+    fn image_rows_ignore_plain_text_and_other_escapes() {
+        let mut t = ImageRowTracker::default();
+        assert_eq!(t.feed("normal \x1b[31mred\x1b[0m text \x1b[?25h\r\n"), 0);
+        assert!(!t.is_pending());
+    }
+
+    #[test]
+    fn image_rows_pending_false_after_payload_only_chunk() {
+        // payload chunks (pure base64, no ESC) must not stall the pending flag
+        let mut t = ImageRowTracker::default();
+        let img = iip_image(3);
+        let colon = img.find(':').unwrap();
+        t.feed(&img[..colon]);
+        assert!(t.is_pending());
+        let rest = &img[colon..];
+        let bel = rest.find('\x07').unwrap();
+        assert_eq!(t.feed(&rest[..bel]), 0);
+        assert!(t.is_pending()); // still no terminator
+        assert_eq!(t.feed(&rest[bel..]), 3);
+        assert!(!t.is_pending());
+    }
 
     #[test]
     fn decode_handles_split_multibyte_sequence() {
@@ -829,6 +1170,8 @@ mod tests {
             attached: AtomicBool::new(false),
             buffer: Mutex::new(ReplayBuffer::default()),
             app: None,
+            image_rows: AtomicU32::new(0),
+            image_pending: AtomicBool::new(false),
         });
         buffer_push(&shared, "a".to_string());
         buffer_push(&shared, "b".to_string());
@@ -842,6 +1185,8 @@ mod tests {
             attached: AtomicBool::new(false),
             buffer: Mutex::new(ReplayBuffer::default()),
             app: None,
+            image_rows: AtomicU32::new(0),
+            image_pending: AtomicBool::new(false),
         });
         let chunk = "x".repeat(PREHEAT_BUFFER_CAP / 2);
         buffer_push(&shared, chunk.clone());
@@ -858,6 +1203,8 @@ mod tests {
             attached: AtomicBool::new(false),
             buffer: Mutex::new(ReplayBuffer::default()),
             app: None,
+            image_rows: AtomicU32::new(0),
+            image_pending: AtomicBool::new(false),
         });
         buffer_push(&shared, "hello".to_string());
         buffer_push(&shared, " world".to_string());
