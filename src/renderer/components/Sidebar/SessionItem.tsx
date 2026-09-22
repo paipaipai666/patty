@@ -19,8 +19,7 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
   const inputRef = useRef<HTMLInputElement>(null)
   const prevAttention = useRef<string | null>(null)
 
-  // Attention state entrance animation: re-key a declarative glow div on each
-  // new attention transition so the CSS animation replays.
+
   const [glowNonce, setGlowNonce] = useState(0)
   useEffect(() => {
     if (attentionType && attentionType !== prevAttention.current) {
@@ -29,7 +28,7 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
     prevAttention.current = attentionType
   }, [attentionType])
 
-  // Map attention type to CSS class name
+
   const getAttentionClass = () => {
     if (!attentionType) return ''
     switch (attentionType) {

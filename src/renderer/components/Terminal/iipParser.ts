@@ -1,21 +1,12 @@
-/**
- * iTerm2 inline-image (IIP / OSC 1337) parser for Patty's DOM overlay path.
- *
- * ImageAddon silently drops many legal IIP frames (missing `size`, large
- * screenshots, header quirks). This module only *extracts* images so the
- * renderer can paint them itself; it does not talk to xterm.
- *
- * Stream contract (same as iipStreamPatcher): feed every PTY chunk; `out` is
- * the same stream with each complete IIP sequence replaced by `placeholder`.
- * Incomplete sequences are held until the terminator (BEL or ST) arrives.
- */
+
+   
 
 export interface IipHeader {
-  /** 1 = inline image; 0 / missing = download-only (we still extract). */
+                                                                          
   inline: number
-  /** Declared byte size if present (progress hint only). */
+                                                            
   size?: number
-  /** Cell count, `Npx`, `N%`, or `auto`. */
+                                            
   width?: string
   height?: string
   name?: string
@@ -24,27 +15,23 @@ export interface IipHeader {
 
 export interface IipImage {
   header: IipHeader
-  /** Raw base64 payload (no whitespace). */
+                                            
   payloadBase64: string
-  /** Sniffed `image/png` | `image/jpeg` | `image/gif` | `image/webp` | null. */
+                                                                                
   mimeType: string | null
-  /** `data:<mime>;base64,…` ready for `<img src>`. */
+                                                      
   dataUrl: string
-  /** True when header said `inline=1` (or default treat-as-inline). */
+                                                                       
   isInline: boolean
-  /**
-   * One Private-Use character written into the stream in place of the IIP
-   * sequence. Scanning the xterm buffer for it yields the exact cell where the
-   * agent emitted the image (its top-left), independent of ESC7/CUU/ESC8 or
-   * repaint cursor dances around the OSC.
-   */
+
+     
   slot: string
 }
 
 export interface IipExtractResult {
-  /** Stream with complete IIP sequences replaced by the placeholder. */
+                                                                        
   out: string
-  /** Images completed in this call, in stream order. */
+                                                        
   images: IipImage[]
 }
 
@@ -66,10 +53,10 @@ function partialMarkerSuffixLen(tail: string): number {
   return 0
 }
 
-/** Parse the `File=…` field list (text between `File=` and `:`). */
+                                                                    
 export function parseIipFileHeader(fields: string): IipHeader {
   const header: IipHeader = { inline: 0 }
-  // fields example: `inline=1;width=20;height=auto` or `name=…;size=11`
+
   for (const part of fields.split(';')) {
     if (!part) continue
     const eq = part.indexOf('=')
@@ -106,10 +93,8 @@ function toIntLoose(v: string): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
-/**
- * Sniff image MIME from the first base64 characters.
- * PNG `iVBOR`, JPEG `/9j/`, GIF `R0lG`, WebP `UklGR` (RIFF).
- */
+
+   
 export function sniffMimeFromBase64(b64: string): string | null {
   if (b64.startsWith('iVBOR')) return 'image/png'
   if (b64.startsWith('/9j/')) return 'image/jpeg'
@@ -126,10 +111,8 @@ function decodeNameBase64(b64: string): string {
   }
 }
 
-/**
- * Build an IipImage from an already-split header-fields string + payload.
- * `slot` is the 1-char PUA marker the extractor will plant in the stream.
- */
+
+   
 export function buildIipImage(fields: string, payloadBase64: string, slot: string = ''): IipImage {
   const header = parseIipFileHeader(fields)
   if (header.name) header.name = decodeNameBase64(header.name)
@@ -147,18 +130,16 @@ export function buildIipImage(fields: string, payloadBase64: string, slot: strin
   }
 }
 
-/** First PUA codepoint used for IIP slots. */
+                                              
 export const IIP_SLOT0 = 0xe000
 
-/** Allocate the next unique 1-char slot (PUA U+E000…). */
+                                                          
 export function nextIipSlot(n: number): string {
   return String.fromCharCode(IIP_SLOT0 + (n % 0xf8ff))
 }
 
-/**
- * Locate `slot` in a list of buffer row strings.
- * Returns the cell (row, col) of the marker — the image's top-left.
- */
+
+   
 export function findIipSlot(
   lines: readonly string[],
   slot: string
@@ -170,10 +151,8 @@ export function findIipSlot(
   return null
 }
 
-/**
- * Fit an image to cell units using the IIP width/height fields.
- * `auto` / missing → derive from intrinsic pixel size and cell metrics.
- */
+
+   
 export function fitIipToCells(
   image: IipImage,
   intrinsic: { widthPx: number; heightPx: number },
@@ -213,11 +192,8 @@ export function fitIipToCells(
   return { cols, rows }
 }
 
-/**
- * Stateful stream extractor. Hold-back rules match iipStreamPatcher so both
- * see the same frames; this one *consumes* IIP and emits a unique 1-char PUA
- * `slot` in its place (so the buffer scan can find the exact cell).
- */
+
+   
 export function createIipStreamExtractor(): (data: string) => IipExtractResult {
   let buf = ''
   let slotCount = 0
@@ -251,7 +227,7 @@ export function createIipStreamExtractor(): (data: string) => IipExtractResult {
 
       out += combined.slice(pos, markerPos)
 
-      // Header runs to the first `:` after `File=`.
+
       const fileAt = combined.indexOf('File=', markerPos)
       const colon = combined.indexOf(':', markerPos)
       if (fileAt === -1 || colon === -1 || colon < fileAt) {
@@ -268,8 +244,7 @@ export function createIipStreamExtractor(): (data: string) => IipExtractResult {
       const fields = combined.slice(fileAt + 'File='.length, colon)
       const payloadStart = colon + 1
 
-      // Prefer BEL/ST as end of frame; a following `\x1b]1337` also ends it
-      // (base64 never contains ESC).
+
       const termIdx = firstTerminator(combined, payloadStart)
       const nextMarker = combined.indexOf(MARKER, payloadStart)
       let endIdx = -1

@@ -8,16 +8,13 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
-// One powershell.exe per sample running the combined CPU+GPU counter script
-// (measured ~800ms wall on Windows); the 2x safety factor keeps samples from
-// overlapping. Sampling only runs while the dashboard is open.
+
 const SAMPLE_INTERVAL_MS: u64 = 1600;
 const PERSIST_INTERVAL_MS: u64 = 10_000;
 const MAX_SAMPLES: usize = 120;
 const MAX_FIRST_TERMINALS: usize = 30;
 
-// Single-quoted strings only — embedded double quotes complicate argv escaping
-// when passed via powershell -Command.
+
 const CPU_GPU_SCRIPT: &str = "$cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue; $gpu = $null; try { $gpu = ((Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Measure-Object -Property CookedValue -Sum).Sum } catch {}; Write-Output ('CPU:' + $cpu); Write-Output ('GPU:' + $gpu)";
 const CPU_ONLY_SCRIPT: &str = "Write-Output ('CPU:' + (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue)";
 
@@ -102,7 +99,7 @@ pub fn record_first_terminal(entry: Value) {
     persist();
 }
 
-// ── Sampling ────────────────────────────────────────────────────────────────
+
 
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -111,14 +108,13 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-// A wedged powershell (e.g. a stuck WMI provider) must not stall the
-// sequential sampling thread forever — kill it after a timeout and skip.
+
 const SAMPLE_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn run_powershell(script: &str) -> Option<std::process::Output> {
     let mut child = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        // GUI app: without this flag each sample would pop a visible console.
+
         .creation_flags(0x08000000)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
@@ -127,9 +123,7 @@ fn run_powershell(script: &str) -> Option<std::process::Output> {
     let deadline = std::time::Instant::now() + SAMPLE_TIMEOUT;
     loop {
         match child.try_wait() {
-            // wait_with_output after exit just drains the pipe; the script's
-            // output is two lines, far under the pipe buffer, so the child can
-            // never block on a full pipe while we poll.
+
             Ok(Some(_)) => return child.wait_with_output().ok(),
             Ok(None) if std::time::Instant::now() < deadline => {
                 thread::sleep(Duration::from_millis(50));
@@ -163,8 +157,7 @@ fn sample_counters(gpu_available: bool) -> (f64, Option<f64>) {
 static GPU_FAILURES: LazyLock<Mutex<u8>> = LazyLock::new(|| Mutex::new(0));
 
 fn capture_sample(app: &AppHandle) {
-    // App process CPU/mem: current process only. (Electron summed all of its
-    // helper processes; WebView2's children aren't attributable to us.)
+
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
     let pid = sysinfo::get_current_pid().ok();
@@ -192,8 +185,7 @@ fn capture_sample(app: &AppHandle) {
         *GPU_FAILURES.lock().unwrap() = 0;
     }
 
-    // gpuMemMB: Tauri has no owned GPU process (WebView2's GPU process is not
-    // attributable), report 0. gpuProxy mirrors the TS semantics: null util.
+
     let sample = json!({
         "timestamp": now_ms(),
         "appCpu": app_cpu,
@@ -221,7 +213,7 @@ fn capture_sample(app: &AppHandle) {
 pub fn set_sampling(app: &AppHandle, enabled: bool) {
     if enabled {
         if SAMPLING.swap(true, Ordering::SeqCst) {
-            return; // already running
+            return;
         }
         let app = app.clone();
         thread::spawn(move || {
@@ -249,8 +241,7 @@ pub fn set_sampling(app: &AppHandle, enabled: bool) {
 mod tests {
     use super::*;
 
-    // The DATA / SAMPLING globals and the test data_dir are shared process-wide;
-    // serialize tests that touch them (same pattern as tests/installer_integration.rs).
+
     static SERIAL: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     fn serial() -> std::sync::MutexGuard<'static, ()> {
@@ -351,7 +342,7 @@ mod tests {
         crate::store::set_data_dir_for_test(dir.clone());
 
         record_first_terminal(json!({"shell": "pwsh", "durationMs": 42}));
-        // persist() is called by record_first_terminal
+
 
         reset_data();
         assert!(snapshot()["firstTerminal"].as_array().unwrap().is_empty());

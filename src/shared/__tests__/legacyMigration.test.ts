@@ -2,16 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { normalizeWorkspaces } from '../workspaceNormalize'
 import type { PersistedState } from '../stateTypes'
 
-// REVIEW.md P1-9 — state files written before the workspace feature carry the
-// layout in legacy top-level `paneTree`/`focusedPaneId` fields (with an empty
-// `workspaces` array). App.tsx's load effect claims "Legacy paneTree/
-// focusedPaneId fields are normalized into workspaces by normalizeWorkspaces
-// so old state files upgrade seamlessly" — but normalizeWorkspaces never
-// reads those fields, so the split layout is silently dropped and every
-// session lands in a fresh single-pane workspace.
-//
-// This test replays the App load path with a legacy-format state and requires
-// the layout to survive the upgrade.
+
 
 const legacyState: PersistedState = {
   sessions: [
@@ -24,7 +15,7 @@ const legacyState: PersistedState = {
   sidebarWidth: 220,
   workspaces: [],
   activeWorkspaceId: null,
-  // Pre-workspace schema: the split layout lived at the top level.
+
   paneTree: {
     type: 'split',
     id: 'sp1',
@@ -38,15 +29,14 @@ const legacyState: PersistedState = {
 
 describe('legacy paneTree migration into workspaces (REVIEW P1-9)', () => {
   it('upgrades a pre-workspace state file without losing the split layout', () => {
-    // Same call App.tsx makes on load, legacy fields included.
+
     const { workspaces, activeWorkspaceId } = normalizeWorkspaces(
       legacyState.workspaces,
       legacyState.activeWorkspaceId,
       new Set(legacyState.sessions.map((s) => s.id)),
       { paneTree: legacyState.paneTree, focusedPaneId: legacyState.focusedPaneId }
     )
-    // DESIRED: one workspace holding the legacy split, focused pane preserved.
-    // Currently fails: workspaces comes back empty and the layout is gone.
+
     expect(workspaces).toHaveLength(1)
     expect(workspaces[0].paneTree).toEqual(legacyState.paneTree)
     expect(workspaces[0].focusedPaneId).toBe('l2')

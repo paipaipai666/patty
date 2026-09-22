@@ -2,9 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 
-/// All store tests share a global lock because they mutate the module-level
-/// TEST_DATA_DIR and SETTINGS_CACHE. Rust runs tests in parallel within a
-/// binary, so each test must serialize to avoid races on globals.
+
 static SERIAL: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn tmp_dir(tag: &str) -> PathBuf {

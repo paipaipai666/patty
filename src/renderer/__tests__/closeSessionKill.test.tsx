@@ -2,17 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
-// REVIEW.md P1-6 — closing a session kills its PTY more than once:
-// App.handleCloseSession calls window.terminalAPI.kill(id) explicitly, then
-// sessionStore.removeSession(id) kills the same PTY again internally (and a
-// mounted TerminalPane would kill it a third time on unmount — not exercised
-// here, TerminalArea is mocked out). kill is idempotent today so nothing
-// visibly breaks, but the layered kill paths make ownership unclear and turn
-// any future non-idempotent kill (accounting, logging, close handshake) into
-// a bug.
-//
-// This test drives the REAL session/workspace stores through App's Ctrl+W
-// handler and counts kill invocations for a single close.
+
 
 vi.mock('../store/dirtyScheduler', () => ({
   configureDirtyScheduler: vi.fn(),
@@ -80,7 +70,7 @@ let roots: Array<ReturnType<typeof createRoot>>
 
 beforeEach(() => {
   kill = vi.fn()
-  // Test double: only the mount/close-path surface of TerminalAPI exists here.
+
   const terminalAPIStub = {
     kill,
     stateLoad: vi.fn().mockResolvedValue({
@@ -126,7 +116,7 @@ describe('close-session kill ownership (REVIEW P1-6)', () => {
     act(() => {
       root.render(<App />)
     })
-    // Let loadState() resolve and the seeded session become active.
+
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -140,8 +130,7 @@ describe('close-session kill ownership (REVIEW P1-6)', () => {
 
     expect(useSessionStore.getState().sessions).toHaveLength(0)
     const killsForS1 = kill.mock.calls.filter((c) => c[0] === 's1')
-    // DESIRED: exactly one kill per close. Currently fails with 2 —
-    // handleCloseSession kills explicitly AND removeSession kills again.
+
     expect(killsForS1).toHaveLength(1)
   })
 })

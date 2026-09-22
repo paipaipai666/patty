@@ -84,16 +84,12 @@ describe('flushNow', () => {
   })
 
   it('does not permanently stall persistence when a flush fires before the builder is configured', async () => {
-    // The real trigger: markDirty() can run before configureDirtyScheduler()
-    // (e.g. during initial load), so flushNow() executes with a null builder and
-    // early-returns WITHOUT resetting `dirty`. A later markDirty() then becomes a
-    // no-op and state is never persisted again. We need a fresh module instance
-    // to reach the unconfigured (buildPersistedState === null) state.
+
     vi.resetModules()
     const mod = await import('../dirtyScheduler')
 
     mod.markDirty()
-    vi.advanceTimersByTime(1000) // flushNow with null builder -> early return, dirty stays true
+    vi.advanceTimersByTime(1000)
     expect(mockStateSave).not.toHaveBeenCalled()
 
     mod.configureDirtyScheduler(() => ({
@@ -108,8 +104,7 @@ describe('flushNow', () => {
     mod.markDirty()
     vi.advanceTimersByTime(1000)
 
-    // BUG: this currently fails — `dirty` was never reset, so the second
-    // markDirty scheduled no flush and state is lost until beforeunload.
+
     expect(mockStateSave).toHaveBeenCalled()
   })
 })

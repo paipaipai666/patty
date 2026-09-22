@@ -108,7 +108,7 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
         moveCollection(data.id, collection.id)
       }
     } catch {
-      // ignore
+
     }
   }
 

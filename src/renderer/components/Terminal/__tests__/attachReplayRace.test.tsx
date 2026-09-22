@@ -4,21 +4,7 @@ import { act } from 'react-dom/test-utils'
 import type { TerminalAPI } from '../../../api'
 import type { TerminalSession } from '../../../store/sessionStore'
 
-// REVIEW.md P0-1 — preheat attach/replay race.
-//
-// pty.rs create() flips `attached=true` *inside* the create_pty command; from
-// that moment the reader thread emits `pty:data:{id}` events instead of
-// buffering. TerminalPane only registers its onData listener in the
-// createSession().then() callback — after the promise resolves — and Tauri
-// drops events that have no listener. Output produced by a preheated shell in
-// that window (e.g. a fast prompt redraw, a hooked rc script) is lost: not in
-// the replay buffer (attach already happened), not in xterm (no listener yet).
-//
-// This test models the backend flipping attached mid-create: the mock emits
-// terminal data *synchronously inside createSession*, i.e. after the attach
-// flip but before the renderer could possibly have subscribed. A correct
-// TerminalPane must still deliver that data to xterm (e.g. by subscribing
-// before invoking create_pty).
+
 
 interface MockTerm {
   writes: string[]
@@ -96,7 +82,7 @@ vi.mock('../../../utils/shellReadiness', () => ({ markTerminalOpen: () => {} }))
 import { TerminalPane } from '../TerminalPane'
 import { Terminal } from '@xterm/xterm'
 
-// Terminal here is the vi.mock'd MockTerminal class above, which records writes.
+
 const TerminalMock = Terminal as unknown as { instances: MockTerm[] }
 
 const session: TerminalSession = {
@@ -110,10 +96,9 @@ const session: TerminalSession = {
   collectionId: null
 }
 
-/** Subset of TerminalAPI TerminalPane touches during mount. */
+                                                               
 declare global {
-  // React act() environment flag, same as the neighboring test suites set via
-  // (globalThis as any) — declared here so the assignment stays typechecked.
+
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined
 }
 
@@ -137,7 +122,7 @@ function terminalWrites(): string {
 beforeEach(() => {
   vi.useFakeTimers()
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  // jsdom has no ResizeObserver; TerminalPane only needs the no-op surface.
+
   const StubResizeObserver = class {
     observe(): void {}
     unobserve(): void {}
@@ -149,10 +134,7 @@ beforeEach(() => {
 
   terminalAPI = {
     write: vi.fn(),
-    // The backend attaches inside create_pty; from then on output is emitted
-    // as pty:data events. Emit synchronously here — before the pane's .then()
-    // has run — to reproduce the attach/subscribe window. An emit with no
-    // registered listener is dropped, mirroring Tauri semantics.
+
     createSession: vi.fn((id: string) => {
       const cb = dataListeners[id]
       if (cb) {
@@ -175,8 +157,7 @@ beforeEach(() => {
     kill: vi.fn(),
     resize: vi.fn()
   }
-  // The mock only implements the mount-time surface; the cast is the
-  // sanctioned test-double boundary (same pattern as the neighboring suites).
+
   window.terminalAPI = terminalAPI as unknown as TerminalAPI
   document.body.innerHTML = ''
 })
@@ -194,19 +175,16 @@ describe('TerminalPane preheat attach race (REVIEW P0-1)', () => {
       root.render(<TerminalPane session={session} visible={true} />)
     })
 
-    // init timer (50ms) fires → startPty → createSession resolves.
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(50)
     })
     expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
 
-    // Control: the replay path works, proving the harness is wired correctly.
+
     expect(terminalWrites()).toContain('PREHEAT-BANNER')
 
-    // DESIRED: no output may be dropped during session start — the pane must
-    // be listening before the backend can emit live data for it.
-    // Currently fails: createSession emitted while no onData listener existed,
-    // so the attach-window output was dropped and never reached xterm.
+
     expect(droppedData).toEqual([])
     expect(terminalWrites()).toContain('ATTACH-WINDOW-OUTPUT')
 

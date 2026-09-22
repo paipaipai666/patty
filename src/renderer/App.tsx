@@ -71,8 +71,7 @@ export default function App() {
   const [promptOptions, setPromptOptions] = useState<PromptOptions | null>(null)
   const [metricsOpen, setMetricsOpen] = useState(false)
   const [sshMonitorOpen, setSshMonitorOpen] = useState(false)
-  // Queued SSH modal requests: several sessions may prompt concurrently (e.g.
-  // reconnect after an app restart) — answer them one at a time, FIFO.
+
   const [sshAuthQueue, setSshAuthQueue] = useState<Array<{ id: string; info: SshAuthRequest }>>([])
   const [sshHostkeyQueue, setSshHostkeyQueue] = useState<Array<{ id: string; info: SshHostkeyRequest }>>([])
 
@@ -105,8 +104,7 @@ export default function App() {
     })
   }, [])
 
-  // Dismiss the boot splash (rendered by index.html before the bundle loads)
-  // once React has painted. Idempotent — StrictMode double-invokes effects.
+
   useEffect(() => {
     const splash = document.getElementById('patty-splash')
     if (!splash) return
@@ -114,7 +112,7 @@ export default function App() {
     setTimeout(() => splash.remove(), 200)
   }, [])
 
-  // Initialize settings on mount
+
   useEffect(() => {
     if (perfEnabled) perfMark('renderer:settings-init-start')
     settingsInit().then(() => {
@@ -122,23 +120,20 @@ export default function App() {
     })
   }, [settingsInit])
 
-  // The hook server binds at process start; if it failed, AI attention
-  // notifications are silently dead — surface that once instead.
+
   useEffect(() => {
     void window.terminalAPI.hookServerStatus?.().then((s) => {
       if (s && !s.available) toast('AI notifications unavailable: hook server failed to start')
     })
   }, [])
 
-  // Metrics sampling spawns a powershell.exe per sample in the main process —
-  // only run it while the dashboard is open.
+
   useEffect(() => {
     window.terminalAPI.metricsSetSampling(metricsOpen)
     return () => window.terminalAPI.metricsSetSampling(false)
   }, [metricsOpen])
 
-  // Wire combined persistence: sessionStore owns sessions/sidebar/collections,
-  // workspaceStore owns workspaces[] + activeWorkspaceId.
+
   useEffect(() => {
     configureDirtyScheduler(() => {
       const sessionState = buildSessionPersistedState()
@@ -151,9 +146,7 @@ export default function App() {
     })
   }, [])
 
-  // Load session state on mount, then normalize and restore workspaces.
-  // Legacy paneTree/focusedPaneId fields are normalized into workspaces by
-  // normalizeWorkspaces so old state files upgrade seamlessly.
+
   useEffect(() => {
     let cancelled = false
     if (perfEnabled) perfMark('renderer:state-load-start')
@@ -181,12 +174,9 @@ export default function App() {
     }
   }, [loadState])
 
-  // All session lifecycle goes through the orchestrator — it owns the
-  // sessionStore/workspaceStore pairing (create/mount, close/prune, select).
+
   const handleNewTerminal = useCallback(() => {
-    // Instant create: reuse the last picked directory, or the user's home
-    // (pty.rs falls back to USERPROFILE when cwd is undefined). The native
-    // folder picker stays available as a separate menu item.
+
     const cwd = localStorage.getItem(LAST_CWD_KEY) || undefined
     createTerminal({ cwd, shell: defaultShell })
   }, [defaultShell])
@@ -214,45 +204,33 @@ export default function App() {
     closeAllSessions()
   }, [])
 
-  // Split the focused pane: the new half inherits the focused session's cwd
-  // (tmux-style) and shell. The new session becomes a leaf beside the focused
-  // one and receives focus.
+
   const handleSplit = useCallback((direction: 'horizontal' | 'vertical') => {
     createTerminalSplit(direction)
   }, [])
 
-  // Close the focused pane (not the session — the session goes to the sidebar
-  // background). Its PTY is killed when the TerminalPane unmounts.
+
   const handleClosePane = useCallback(() => {
     const focusedId = getFocusedSessionId()
     useWorkspaceStore.getState().closeFocused()
-    // Clear AI state for the closed pane. The session stays in the sidebar but
-    // its PTY is about to be killed by the unmounting TerminalPane — unmount
-    // disposes the pane's exit listener before the exit event would arrive,
-    // so the onExit cleanup path never runs for this pane; clear aiType here
-    // synchronously instead.
+
     if (focusedId) {
       useSessionStore.getState().setAiType(focusedId, null)
     }
-    // Sync sidebar highlight to whatever pane is now focused. When the last
-    // pane was closed, closeFocused() clears activeWorkspaceId, so this resolves
-    // to null and the sidebar highlight disappears.
+
     const nextFocused = getFocusedSessionId()
     const currentActive = useSessionStore.getState().activeSessionId
     if (nextFocused === currentActive) return
     if (nextFocused) {
       setActive(nextFocused)
     } else {
-      // No focused pane — clear the active session so the sidebar highlight
-      // and the terminal area both reflect the empty state.
+
       useSessionStore.setState({ activeSessionId: null })
       markDirty()
     }
   }, [setActive])
 
-  // Sidebar click on a session: make it the active session (sidebar highlight +
-  // status bar) and ensure it's visible. With workspaces, this switches to the
-  // workspace containing the session (creating one if needed) and focuses its pane.
+
   const handleSelectSession = useCallback((id: string) => {
     selectSession(id)
   }, [])
@@ -267,7 +245,7 @@ export default function App() {
     setCollectionContextMenu({ x: e.clientX, y: e.clientY, collectionId })
   }, [])
 
-  // Keyboard shortcuts
+
   useEffect(() => {
     const sc = shortcuts
 
@@ -287,7 +265,7 @@ export default function App() {
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Skip global shortcuts when focus is inside terminal or form controls
+
       const activeEl = document.activeElement
       if (activeEl?.closest('.xterm')) return
       if (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement) return
@@ -310,7 +288,7 @@ export default function App() {
         return
       }
 
-      // Ctrl+1-9 tab navigation
+
       if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
         e.preventDefault()
         navigateToIndex(parseInt(e.key) - 1)
@@ -404,9 +382,7 @@ export default function App() {
 
   const sidebarOnRight = sidebarPosition === 'right'
 
-  // Primary end signal for the sidebar width animation. The store's fallback
-  // timer only covers reduced-motion / interrupted transitions that never fire
-  // transitionend.
+
   useEffect(() => {
     const el = sidebarWrapperRef.current
     if (!el) return
@@ -429,7 +405,7 @@ export default function App() {
           className={styles.content}
           style={{ [sidebarOnRight ? 'borderRight' : 'borderLeft']: '1px solid var(--border-subtle)' }}
           onContextMenu={(e) => {
-          // Right-click on terminal area - find active session
+
           const activeId = useSessionStore.getState().activeSessionId
           if (activeId) handleContextMenu(e, activeId)
         }}>

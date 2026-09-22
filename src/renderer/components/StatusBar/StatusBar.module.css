@@ -34,7 +34,7 @@
   transition: color var(--transition-fast);
 }
 
-/* Re-keyed on session change so the info block crossfades instead of popping. */
+                                                                               
 .swap {
   display: contents;
   animation: statusSwapIn 110ms var(--ease-out);

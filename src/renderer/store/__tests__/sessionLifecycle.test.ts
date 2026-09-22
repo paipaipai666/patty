@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
-// sessionLifecycle is the only place allowed to pair sessionStore and
-// workspaceStore operations. These tests drive the real stores (with a stubbed
-// terminalAPI) and pin the pairing contract that used to be re-implemented at
-// every call site (REVIEW.md P1-6).
+
 
 const mockKill = vi.fn()
 const mockSelectDirectory = vi.fn()

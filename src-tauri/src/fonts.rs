@@ -2,12 +2,7 @@ use std::process::Command;
 use std::os::windows::process::CommandExt;
 use std::sync::{LazyLock, Mutex};
 
-// Font names from the registry come back in the console's OEM codepage, so
-// decode with the active codepage (chcp) instead of assuming UTF-8. Detected
-// fresh on each fetch: the codepage can change at runtime (e.g. `chcp 65001`)
-// and a cached encoding would decode names with the stale codepage. get_fonts
-// caches the decoded result, so this only runs on first fetch — one chcp call
-// is negligible.
+
 fn codepage_encoding() -> &'static encoding_rs::Encoding {
     let label = detect_codepage_label();
     encoding_rs::Encoding::for_label(label.as_bytes()).unwrap_or(encoding_rs::UTF_8)
@@ -18,15 +13,14 @@ fn detect_codepage_label() -> String {
         return "utf-8".into();
     };
     let stdout = String::from_utf8_lossy(&out.stdout);
-    // chcp prints the digits in ASCII, so a loose numeric match is language-safe.
+
     let cp: Option<u32> = stdout
         .chars()
         .filter(|c| c.is_ascii_digit())
         .collect::<String>()
         .parse()
         .ok();
-    // CP437/CP850 are approximated as latin1 — their extended ranges differ
-    // from ISO-8859-1, so accented glyphs may be slightly off (same as the TS版).
+
     match cp {
         Some(437) | Some(850) => "latin1".into(),
         Some(1252) => "windows-1252".into(),
@@ -45,13 +39,13 @@ fn scan_font_key(key: &str) -> Option<Vec<u8>> {
 pub fn parse_fonts(text: &str) -> Vec<String> {
     let mut fonts = std::collections::BTreeSet::new();
     for line in text.lines() {
-        // Lines look like: `    Cascadia Code (TrueType)    REG_SZ    cascadia.ttf`
+
         let marker = line
             .find(" REG_SZ ")
             .or_else(|| line.find(" REG_EXPAND_SZ "));
         let Some(idx) = marker else { continue };
         let name = line[..idx].trim();
-        // Strip the trailing "(TrueType)" / "(OpenType)" / "(All res)" suffix.
+
         let clean = match name.rfind('(') {
             Some(open) if name.ends_with(')') => name[..open].trim(),
             _ => name,
@@ -74,8 +68,7 @@ pub fn get_fonts() -> Result<Vec<String>, String> {
     let encoding = codepage_encoding();
     let hklm = scan_font_key(r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts");
     let hkcu = scan_font_key(r"HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts");
-    // Partial success counts; only if both scans fail do we error (cache stays
-    // empty so the next call retries).
+
     if hklm.is_none() && hkcu.is_none() {
         return Err("Font registry scan failed".into());
     }

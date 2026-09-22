@@ -1,11 +1,4 @@
-// In-process SSH sessions over the russh protocol stack. Replaces the old
-// "spawn ssh.exe inside ConPTY" approach: one russh connection multiplexes the
-// interactive shell channel plus periodic exec channels for the metrics
-// monitor, and credentials come from UI modals (memory only, never persisted).
-//
-// Session contract mirrors pty.rs: same id space, same event names
-// (`pty:data:<id>`, `pty:exit:<id>`), same write/resize/kill semantics, so the
-// renderer needs no SSH-specific terminal handling.
+
 
 use bytes::Bytes;
 use futures::future::{AbortHandle, Abortable};
@@ -36,14 +29,10 @@ static PENDING_HOSTKEY: LazyLock<Mutex<HashMap<String, oneshot::Sender<bool>>>> 
 static PENDING_AUTH: LazyLock<Mutex<HashMap<String, oneshot::Sender<Option<String>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-// In-flight create() calls per session id. SSH creation spans multiple UI
-// round-trips (host key, password), so a duplicate mount (React StrictMode
-// double-invokes effects in dev) or a retry would otherwise race a second
-// connection and clobber the per-id pending slots above.
+
 static CREATING: LazyLock<Mutex<HashMap<String, AbortHandle>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
-// Per-id kill counter: lets a create that is *waiting* on an in-flight create
-// notice that the pane was closed in the meantime.
+
 static KILL_EPOCH: LazyLock<Mutex<HashMap<String, u64>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -51,10 +40,7 @@ fn kill_epoch(id: &str) -> u64 {
     KILL_EPOCH.lock().unwrap().get(id).copied().unwrap_or(0)
 }
 
-// ── Event emission ──────────────────────────────────────────────────────────
-// In unit/integration tests there is no AppHandle; emitted events are captured
-// in TEST_EVENTS instead so tests can drive the auth/hostkey dialogs and read
-// terminal output.
+
 
 #[cfg(test)]
 static TEST_EVENTS: LazyLock<Mutex<Vec<(String, String)>>> =
@@ -72,7 +58,7 @@ fn emit(app: &Option<AppHandle>, event: &str, payload: impl serde::Serialize + C
     crate::pty::emit(app, event, payload);
 }
 
-// ── Handler (server key verification) ───────────────────────────────────────
+
 
 pub struct PattyHandler {
     id: String,
@@ -81,8 +67,7 @@ pub struct PattyHandler {
     port: u16,
 }
 
-/// Application-level known_hosts (user's ~/.ssh/known_hosts is consulted
-/// read-only; learned keys only ever land here).
+
 fn app_known_hosts() -> PathBuf {
     #[cfg(test)]
     if let Some(p) = KNOWN_HOSTS_OVERRIDE.lock().unwrap().clone() {
@@ -101,17 +86,14 @@ fn user_known_hosts() -> Option<PathBuf> {
         .map(|u| PathBuf::from(u).join(".ssh").join("known_hosts"))
 }
 
-// Serialize known_hosts read/learn: two panes connecting to the same new host
-// would otherwise race the append (interleaved/duplicate lines), and a second
-// connection could re-prompt before the first one's write lands.
+
 static KNOWN_HOSTS_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 impl client::Handler for PattyHandler {
     type Error = russh::Error;
 
     async fn check_server_key(&mut self, key: &ssh_key::PublicKey) -> Result<bool, Self::Error> {
-        // Lock only the file operations — never across the UI prompt's await,
-        // or a second connection would stall behind the user's decision.
+
         {
             let _guard = KNOWN_HOSTS_LOCK.lock().unwrap();
             for path in [user_known_hosts(), Some(app_known_hosts())]
@@ -138,7 +120,7 @@ impl client::Handler for PattyHandler {
             }
         }
 
-        // Unknown host: ask the UI, learn only into the app known_hosts.
+
         let (tx, rx) = oneshot::channel::<bool>();
         PENDING_HOSTKEY.lock().unwrap().insert(self.id.clone(), tx);
         emit(
@@ -155,8 +137,7 @@ impl client::Handler for PattyHandler {
         PENDING_HOSTKEY.lock().unwrap().remove(&self.id);
         if trust {
             let _guard = KNOWN_HOSTS_LOCK.lock().unwrap();
-            // Re-check under the lock: a concurrent connection may have
-            // learned this host while the user was deciding.
+
             let already = matches!(
                 keys::known_hosts::check_known_hosts_path(&self.host, self.port, key, &app_known_hosts()),
                 Ok(true)
@@ -173,7 +154,7 @@ impl client::Handler for PattyHandler {
     }
 }
 
-// ── Auth prompts (driven by renderer modals via global events) ──────────────
+
 
 pub fn hostkey_respond(id: &str, trust: bool) {
     if let Some(tx) = PENDING_HOSTKEY.lock().unwrap().remove(id) {
@@ -187,8 +168,7 @@ pub fn auth_respond(id: &str, secret: Option<String>) {
     }
 }
 
-/// Ask the UI for a secret. `None` = user cancelled (or the channel died,
-/// e.g. the session was killed mid-prompt).
+
 async fn prompt_secret(app: &Option<AppHandle>, id: &str, info: Value) -> Option<String> {
     let (tx, rx) = oneshot::channel();
     PENDING_AUTH.lock().unwrap().insert(id.to_string(), tx);
@@ -258,9 +238,7 @@ async fn try_keyboard_interactive(
             KeyboardInteractiveAuthResponse::Success => return Ok(true),
             KeyboardInteractiveAuthResponse::Failure { .. } => return Ok(false),
             KeyboardInteractiveAuthResponse::InfoRequest { prompts, .. } => {
-                // Typical servers ask for exactly one password prompt; answer
-                // every prompt with the same password (echo-less prompts are
-                // guaranteed by the modal).
+
                 let answers = prompts.iter().map(|_| password.to_string()).collect();
                 response = handle
                     .authenticate_keyboard_interactive_respond(answers)
@@ -286,7 +264,7 @@ async fn authenticate(
     {
         match try_publickey(handle, app, id, user, idf).await {
             Ok(true) => return Ok(()),
-            Ok(false) => {} // key rejected — fall through to password
+            Ok(false) => {}
             Err(e) => return Err(e),
         }
     }
@@ -312,7 +290,7 @@ async fn authenticate(
                 remaining_methods, ..
             } => {
                 if remaining_methods.contains(&MethodKind::Password) {
-                    continue; // wrong password — retry (up to 3 attempts)
+                    continue;
                 }
                 if remaining_methods.contains(&MethodKind::KeyboardInteractive)
                     && try_keyboard_interactive(handle, user, &password).await?
@@ -326,7 +304,7 @@ async fn authenticate(
     Err("Authentication failed (too many attempts)".into())
 }
 
-// ── Public session API (mirrors pty.rs) ─────────────────────────────────────
+
 
 pub fn exists(id: &str) -> bool {
     SESSIONS.read().unwrap().contains_key(id)
@@ -377,9 +355,7 @@ pub fn kill(id: &str) {
     }
 }
 
-/// Terminal-bound and backend-console failure report. `stage` identifies the
-/// phase (connect / auth / channel) so a bare transport error like
-/// "Connection closed by the remote side" stays attributable.
+
 fn fail(app: &Option<AppHandle>, id: &str, stage: &str, error: String) -> Value {
     eprintln!("[ssh] {stage} failed for {id}: {error}");
     PENDING_AUTH.lock().unwrap().remove(id);
@@ -400,10 +376,7 @@ pub async fn create(
     cols: u16,
     rows: u16,
 ) -> Value {
-    // A create for this id is already in flight: wait for it instead of
-    // racing a second connection. When it succeeds we attach to the same
-    // session; when it fails (or was killed) we retry ourselves — unless the
-    // pane was killed while we waited.
+
     let epoch = kill_epoch(id);
     let mut waited = false;
     while CREATING.lock().unwrap().contains_key(id) {
@@ -423,8 +396,7 @@ pub async fn create(
         return json!({ "pid": 0, "success": false, "error": "cancelled" });
     }
     if waited {
-        // The in-flight create settled while we waited: its session (if any)
-        // is final — attach to it; only retry ourselves when it failed.
+
         if exists(id) {
             return create_success();
         }
@@ -438,7 +410,7 @@ pub async fn create(
     CREATING.lock().unwrap().remove(id);
     match result {
         Ok(value) => value,
-        // Aborted by kill(): the pane is gone, nobody consumes this result.
+
         Err(_) => json!({ "pid": 0, "success": false, "error": "cancelled" }),
     }
 }
@@ -485,9 +457,7 @@ async fn create_inner(
         return fail(&app, id, "auth", e);
     }
 
-    // Every failure after connect() must explicitly disconnect — same as the
-    // auth path. russh tears the connection down on Handle drop too, but only
-    // disconnect() sends Disconnect::ByApplication and closes promptly.
+
     let channel = match handle.channel_open_session().await {
         Ok(c) => c,
         Err(e) => {
@@ -517,9 +487,7 @@ async fn create_inner(
     });
     SESSIONS.write().unwrap().insert(id.to_string(), session.clone());
 
-    // Read loop: forward channel output as pty:data, report pty:exit at the
-    // end. Only the still-registered session may report its exit — kill()
-    // removes the entry first and must not trigger an exit event.
+
     let loop_id = id.to_string();
     let loop_app = app.clone();
     let loop_session = session.clone();
@@ -542,7 +510,7 @@ async fn create_inner(
                 }
                 ChannelMsg::ExitStatus { exit_status: s } => exit_status = s as i64,
                 ChannelMsg::Eof | ChannelMsg::Close => break,
-                _ => {} // ChannelMsg is #[non_exhaustive]
+                _ => {}
             }
         }
         let still_registered = {
@@ -566,7 +534,7 @@ async fn create_inner(
     create_success()
 }
 
-// ── Remote metrics (exec channels multiplexed on the same connection) ───────
+
 
 const STATS_CMD: &str = "echo CPU; head -1 /proc/stat; echo MEM; grep -E '^(MemTotal|MemAvailable|SwapTotal|SwapFree):' /proc/meminfo; echo NET; awk '!/lo:/{rx+=$2;tx+=$10}END{print rx,tx}' /proc/net/dev; echo DSK; df -Pk / | awk 'NR==2{print $2,$3}'";
 
@@ -667,10 +635,7 @@ pub fn parse_stats(out: &str) -> Option<RawStats> {
     })
 }
 
-/// Total deadline for one stats collection round. A healthy round completes
-/// in well under a second; without a deadline, a remote that accepts the exec
-/// and then never answers wedges the loop in channel.wait() forever — no
-/// sample, no {stale:true}, and the channel is never released.
+
 const COLLECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 async fn collect_once(handle: &Handle<PattyHandler>) -> Result<Option<RawStats>, ()> {
@@ -696,7 +661,7 @@ pub fn metrics_start(app: Option<AppHandle>, id: &str) {
     let Some(session) = SESSIONS.read().unwrap().get(id).cloned() else {
         return;
     };
-    // Idempotent: a restart aborts the previous loop.
+
     if let Some(task) = session.metrics_task.lock().unwrap().take() {
         task.abort();
     }
@@ -706,9 +671,9 @@ pub fn metrics_start(app: Option<AppHandle>, id: &str) {
         loop {
             match collect_once(&task_session.handle).await {
                 Ok(Some(raw)) => emit(&app, &format!("ssh:metrics:{loop_id}"), raw),
-                Ok(None) => {} // unparsable (e.g. non-Linux): skip silently
+                Ok(None) => {}
                 Err(()) => {
-                    // Connection is gone: report once and stop.
+
                     emit(&app, &format!("ssh:metrics:{loop_id}"), json!({ "stale": true }));
                     break;
                 }
@@ -727,7 +692,7 @@ pub fn metrics_stop(id: &str) {
     }
 }
 
-// ── Tests ───────────────────────────────────────────────────────────────────
+
 
 #[cfg(test)]
 mod tests {
@@ -769,7 +734,7 @@ mod tests {
         assert!(parse_stats(out).is_none());
     }
 
-    // ── In-process russh server for integration tests ───────────────────────
+
 
     #[derive(Clone, Default)]
     struct TestServer;
@@ -852,14 +817,13 @@ mod tests {
             data: &[u8],
             session: &mut ServerSession,
         ) -> Result<(), Self::Error> {
-            // Echo everything back, like a shell would.
+
             session.data(channel, data.to_vec())?;
             Ok(())
         }
     }
 
-    // Integration tests share process-wide state (SESSIONS, PENDING_*, event
-    // capture, known_hosts override): serialize them.
+
     static INTEGRATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     struct TestEnv {
@@ -887,8 +851,7 @@ mod tests {
     }
 
     async fn setup(name: &str) -> TestEnv {
-        // Start the server before taking the integration lock: binding port 0
-        // is race-free, and this keeps the std MutexGuard off the await point.
+
         let port = start_test_server().await;
         let guard = INTEGRATION_LOCK.lock().unwrap();
         TEST_EVENTS.lock().unwrap().clear();
@@ -918,8 +881,7 @@ mod tests {
         }
     }
 
-    /// Wait until an event with this name has been emitted, returning its
-    /// payload. Drains nothing; repeated calls may return the same event.
+
     async fn wait_event(event: &str) -> String {
         for _ in 0..100 {
             {
@@ -933,11 +895,10 @@ mod tests {
         panic!("timed out waiting for event {event}");
     }
 
-    /// Respond to the next auth prompt with the given secret.
+
     async fn answer_auth(id: &str, secret: Option<&str>) {
         wait_event("ssh:auth").await;
-        // Wait until the request is actually registered (event precedes await
-        // by a hair in prompt_secret, but the map insert comes first).
+
         auth_respond(id, secret.map(str::to_string));
     }
 
@@ -951,7 +912,7 @@ mod tests {
         wait_event("ssh:hostkey").await;
         hostkey_respond(&env.id, true);
 
-        // Three password attempts, all wrong.
+
         for _ in 0..3 {
             wait_event("ssh:auth").await;
             auth_respond(&env.id, Some("wrong".into()));
@@ -964,7 +925,7 @@ mod tests {
         assert!(error.starts_with("auth: "), "missing stage prefix: {error}");
         assert!(error.contains("Authentication failed"), "unexpected error: {error}");
         assert!(!exists(&env.id));
-        // The failure text went to the terminal data stream.
+
         let data = wait_event(&format!("pty:data:{}", env.id)).await;
         assert!(data.contains("Connection failed"), "unexpected data: {data}");
     }
@@ -985,12 +946,11 @@ mod tests {
         assert!(result["pid"].as_u64().unwrap() > 0);
         assert!(exists(&env.id));
 
-        // Trusted host key was learned into the app known_hosts.
+
         let learned = std::fs::read_to_string(&env.known_hosts).expect("known_hosts written");
         assert!(learned.contains("127.0.0.1"), "unexpected known_hosts: {learned}");
 
-        // Terminal echo round-trip: write() goes out, server echoes, read
-        // loop forwards it as pty:data.
+
         write(&env.id, "hello-sshconn");
         let mut echoed = false;
         for _ in 0..100 {
@@ -1008,7 +968,7 @@ mod tests {
         }
         assert!(echoed, "expected echoed terminal output");
 
-        // Metrics: one collection round emits parsed RawStats.
+
         metrics_start(None, &env.id);
         let payload = wait_event(&format!("ssh:metrics:{}", env.id)).await;
         let stats: Value = serde_json::from_str(&payload).unwrap();
@@ -1016,7 +976,7 @@ mod tests {
         assert_eq!(stats["cpuJiffies"][3], 800);
         metrics_stop(&env.id);
 
-        // Kill: registry cleared, subsequent ops are no-ops.
+
         kill(&env.id);
         assert!(!exists(&env.id));
         write(&env.id, "ignored");
@@ -1034,7 +994,7 @@ mod tests {
         wait_event("ssh:hostkey").await;
         hostkey_respond(&env.id, true);
         wait_event("ssh:auth").await;
-        auth_respond(&env.id, None); // user pressed Cancel
+        auth_respond(&env.id, None);
 
         let result = task.await.unwrap();
         assert_eq!(result["success"], false);
@@ -1042,7 +1002,7 @@ mod tests {
         assert!(!exists(&env.id));
     }
 
-    // ── StrictMode / duplicate-create serialization ───────────────────────
+
 
     #[tokio::test]
     async fn kill_during_pending_create_aborts_and_recreate_succeeds() {
@@ -1051,14 +1011,14 @@ mod tests {
         let target = env.target();
         let first = tokio::spawn(async move { create(None, &id, target, 80, 24).await });
 
-        // First mount: host key prompt is pending when the "cleanup" kills.
+
         wait_event("ssh:hostkey").await;
         kill(&env.id);
         let result1 = first.await.unwrap();
         assert_eq!(result1["success"], false, "killed create must fail: {result1}");
         assert!(!exists(&env.id));
 
-        // The remount creates again: exactly one connection, one prompt flow.
+
         TEST_EVENTS.lock().unwrap().clear();
         let id2 = env.id.clone();
         let target2 = env.target();
@@ -1079,8 +1039,7 @@ mod tests {
         let target1 = env.target();
         let first = tokio::spawn(async move { create(None, &id1, target1, 80, 24).await });
 
-        // Second create while the first still waits for the host key answer:
-        // it must wait, not race a parallel connection.
+
         wait_event("ssh:hostkey").await;
         let id2 = env.id.clone();
         let target2 = env.target();
@@ -1095,7 +1054,7 @@ mod tests {
         let result2 = second.await.unwrap();
         assert_eq!(result1["success"], true, "first create failed: {result1}");
         assert_eq!(result2["success"], true, "attach failed: {result2}");
-        // One prompt sequence total — the duplicate never opened a connection.
+
         let events = TEST_EVENTS.lock().unwrap();
         assert_eq!(events.iter().filter(|(e, _)| e == "ssh:hostkey").count(), 1);
         assert_eq!(events.iter().filter(|(e, _)| e == "ssh:auth").count(), 1);
@@ -1114,13 +1073,13 @@ mod tests {
         let result = task.await.unwrap();
         assert_eq!(result["success"], false);
         assert!(!exists(&env.id));
-        // Key must NOT have been learned.
+
         assert!(!env.known_hosts.exists());
     }
 
-    // ── REVIEW P0-4: wedged-remote and channel-stage-failure probes ────────
 
-    /// Same setup as `setup()` but against an already-running server.
+
+
     async fn setup_on(name: &str, port: u16) -> TestEnv {
         let guard = INTEGRATION_LOCK.lock().unwrap();
         TEST_EVENTS.lock().unwrap().clear();
@@ -1131,8 +1090,7 @@ mod tests {
         TestEnv { _guard: guard, id, port, known_hosts }
     }
 
-    /// Like wait_event, but matches on payload content and returns None
-    /// instead of panicking, so a test can assert on a *missing* signal.
+
     async fn wait_event_payload(event: &str, needle: &str, attempts: u32) -> Option<String> {
         for _ in 0..attempts {
             {
@@ -1148,9 +1106,7 @@ mod tests {
         None
     }
 
-    /// Server whose exec channels never answer: exec_request is accepted
-    /// (channel_success) but no data/eof/close/exit-status is ever sent —
-    /// a wedged remote command.
+
     #[derive(Clone, Default)]
     struct HangExecServer;
 
@@ -1215,7 +1171,7 @@ mod tests {
             _data: &[u8],
             session: &mut ServerSession,
         ) -> Result<(), Self::Error> {
-            // Accept, then hang: no data, no eof, no close, no exit status.
+
             session.channel_success(channel)?;
             Ok(())
         }
@@ -1240,11 +1196,7 @@ mod tests {
 
     #[tokio::test]
     async fn metrics_report_stale_when_remote_exec_hangs() {
-        // REVIEW.md P0-4: collect_once awaits channel.wait() with no timeout.
-        // A remote that accepts the exec request but never answers wedges the
-        // per-session metrics loop forever: no sample, no {stale:true}, and
-        // metrics_stop()/kill() can't interrupt the wait. The renderer relies
-        // on the stale signal to mark the connection dead.
+
         let port = start_hang_server().await;
         let env = setup_on("metrics-hang", port).await;
         let id = env.id.clone();
@@ -1259,15 +1211,10 @@ mod tests {
         assert_eq!(result["success"], true, "create failed: {result}");
 
         metrics_start(None, &env.id);
-        // DESIRED: within a few collection cycles the wedged channel is
-        // abandoned and {stale:true} reaches the renderer.
-        // Currently fails: the loop is stuck in channel.wait() and no metrics
-        // event of any kind is ever emitted.
+
         let payload =
             wait_event_payload(&format!("ssh:metrics:{}", env.id), "stale", 150).await;
-        // This test is red by design until the fix lands; release the
-        // INTEGRATION_LOCK guard (held by TestEnv) BEFORE the failing assert
-        // so the panic can't poison the lock and cascade into sibling tests.
+
         drop(env);
         assert!(
             payload.is_some(),
@@ -1275,14 +1222,7 @@ mod tests {
         );
     }
 
-    /// Server that rejects channel_open_session: the channel stage of
-    /// create() errors AFTER authentication succeeded. Counts handler drops
-    /// so the test can observe server-side connection teardown.
-    ///
-    /// Note: request_pty/request_shell can't serve as the probe point —
-    /// create_inner calls them with want_reply=false, so russh never surfaces
-    /// a server-side failure for them. channel_open_session is the one
-    /// channel-stage call that actually awaits a verdict.
+
     #[derive(Clone, Default)]
     struct RejectChannelServer {
         drops: Arc<std::sync::atomic::AtomicUsize>,
@@ -1346,12 +1286,7 @@ mod tests {
 
     #[tokio::test]
     async fn channel_stage_failure_tears_down_connection() {
-        // REVIEW.md P0-4: create_inner explicitly disconnects the russh
-        // handle on the auth-failure path but NOT on the channel-stage
-        // failure paths (channel_open_session / request_pty / request_shell).
-        // This probe asserts the observable contract: after a channel-stage
-        // failure the server must see the connection torn down (its handler
-        // dropped) promptly — not linger as a half-open connection/task.
+
         let drops = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let port = start_reject_channel_server(drops.clone()).await;
         let env = setup_on("reject-channel", port).await;
@@ -1377,10 +1312,7 @@ mod tests {
             }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-        // If this fails, the missing disconnect() on the channel-stage failure
-        // paths is a real connection/task leak. If it passes, russh tears the
-        // connection down on Handle drop alone and the finding downgrades to
-        // an asymmetry (no Disconnect::ByApplication sent) without a leak.
+
         assert!(
             torn_down,
             "server never observed connection teardown after channel-stage failure"

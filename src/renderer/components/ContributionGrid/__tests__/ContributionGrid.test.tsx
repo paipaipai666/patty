@@ -22,7 +22,7 @@ beforeEach(() => {
     unobserve() {}
     disconnect() {}
   }
-  // Mock canvas context to prevent jsdom errors
+
   HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
     clearRect: vi.fn(),
     scale: vi.fn(),

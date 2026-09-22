@@ -9,20 +9,15 @@ const appWindow = getCurrentWindow()
 
 type Unsubscribe = () => void
 
-// Tauri's listen() is async; adapt to the sync unsubscribe shape the renderer
-// expects from the old preload bridge. Unsubscribing before the listener is
-// registered still tears it down once registration resolves.
+
 const asyncUnsub = (registration: Promise<Unsubscribe>): Unsubscribe => {
   return () => {
     void registration.then((unlisten) => unlisten())
   }
 }
 
-/** Event subscription whose registration can be awaited. `ready` resolves
- *  once the listener is live in the backend — a caller that is about to create
- *  the event's producer (e.g. create_pty flipping a preheated PTY to attached)
- *  must await it first, because Tauri drops events that have no registered
- *  listener. */
+
+                
 export interface ListenerHandle {
   ready: Promise<void>
   unsubscribe: Unsubscribe
@@ -34,7 +29,7 @@ const listenHandle = (registration: Promise<Unsubscribe>): ListenerHandle => ({
 })
 
 export const terminalAPI = {
-  // Session management
+
   createSession: (id: string, cwd?: string, shell?: string, cols?: number, rows?: number, ssh?: SshTarget | null) =>
     invoke<{ pid: number; success: boolean; replay?: string | null; error?: string }>(
       'create_pty',
@@ -57,7 +52,7 @@ export const terminalAPI = {
   onExit: (id: string, callback: (exitCode: number) => void): ListenerHandle =>
     listenHandle(listen<number>(`pty:exit:${id}`, (event) => callback(event.payload))),
 
-  // Attention management
+
   onAttentionChange: (
     callback: (sessionId: string, eventType: string | null, aiType?: string | null) => void
   ): Unsubscribe =>
@@ -67,11 +62,11 @@ export const terminalAPI = {
       )
     ),
 
-  // Hooks
+
   hooksClearPane: (paneId: string) => invoke<void>('hooks_clear_pane', { paneId }),
   hookServerStatus: () => invoke<{ available: boolean }>('hook_server_status'),
 
-  // Window controls
+
   windowMinimize: () => void appWindow.minimize(),
   windowMaximize: () => void appWindow.toggleMaximize(),
   windowClose: () => void appWindow.close(),
@@ -83,11 +78,11 @@ export const terminalAPI = {
       })
     ),
 
-  // SSH config import
+
   sshConfigImport: () =>
     invoke<{ success: boolean; profiles: SshProfileDraft[] }>('ssh_config_import'),
 
-  // SSH auth / host-key dialogs (russh backend, global events keyed by session id)
+
   sshAuthRespond: (id: string, secret: string | null) => {
     void invoke('ssh_auth_respond', { id, secret })
   },
@@ -107,7 +102,7 @@ export const terminalAPI = {
       )
     ),
 
-  // SSH remote metrics (exec channels on the same connection)
+
   sshMetricsStart: (id: string) => {
     void invoke('ssh_metrics_start', { id })
   },
@@ -119,24 +114,24 @@ export const terminalAPI = {
       listen<RawStats | { stale: true }>(`ssh:metrics:${id}`, (event) => callback(event.payload))
     ),
 
-  // System fonts
+
   getFonts: () => invoke<string[]>('get_fonts'),
 
-  // Theme import/export
+
   themeExport: (theme: CustomTheme) =>
     invoke<{ success: boolean; error?: string }>('theme_export', { theme }),
   themeImport: () =>
     invoke<{ success: boolean; theme?: CustomTheme; error?: string }>('theme_import'),
 
-  // Directory selection
+
   selectDirectory: () => invoke<{ canceled: boolean; directory: string | null }>('select_directory'),
 
-  // Settings
+
   settingsGetAll: () => invoke<AppSettings>('settings_get_all'),
   settingsSet: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) =>
     invoke<AppSettings>('settings_set', { key, value }),
 
-  // State persistence
+
   stateLoad: () => invoke<PersistedState>('state_load'),
   stateSave: (state: PersistedState) => {
     void invoke('state_save', { state }).catch((err) => {
@@ -144,10 +139,10 @@ export const terminalAPI = {
     })
   },
 
-  // Perf
+
   perfEnabled: import.meta.env.VITE_PATTY_PERF === '1',
 
-  // Metrics dashboard
+
   metricsHistory: () => invoke<MetricsSnapshot>('metrics_history'),
   onMetricsTick: (callback: (sample: MetricSample) => void): Unsubscribe =>
     asyncUnsub(listen<MetricSample>('metrics:tick', (event) => callback(event.payload))),

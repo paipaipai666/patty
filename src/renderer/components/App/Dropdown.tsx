@@ -4,32 +4,29 @@ import styles from './Dropdown.module.css'
 export interface DropdownOption<T extends string> {
   value: T
   label: string
-  /** Group header shown above this option when it differs from the previous one. */
+                                                                                    
   group?: string
 }
 
 interface DropdownProps<T extends string> {
-  /** Current value; its option label shows on the closed control. */
+                                                                     
   value: T
   options: DropdownOption<T>[]
   onSelect: (value: T, mouse?: { x: number; y: number }) => void
-  /** Override the closed-control text (defaults to the selected option's label). */
+                                                                                    
   display?: string
-  /** Editable input filters options by label while open. */
+                                                            
   searchable?: boolean
   searchPlaceholder?: string
   loading?: boolean
   emptyText?: string
   ariaLabel: string
-  /** Called when the dropdown opens (e.g. lazy-load the options). */
+                                                                     
   onOpen?: () => void
 }
 
-/**
- * Shared accessible dropdown: listbox semantics, arrow-key navigation,
- * Enter to select, Esc/click-outside to close. Replaces the three hand-rolled
- * pickers that each re-implemented open/click-outside state.
- */
+
+   
 export function Dropdown<T extends string>({
   value,
   options,
@@ -61,7 +58,7 @@ export function Dropdown<T extends string>({
     setOpen(!open)
   }
 
-  // Click-outside closes.
+
   useEffect(() => {
     if (!open) return
     const handleClick = (e: MouseEvent) => {
@@ -75,10 +72,10 @@ export function Dropdown<T extends string>({
     ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()))
     : options
 
-  // Keep the active option visible while navigating by keyboard.
+
   useEffect(() => {
     if (!open) return
-    // scrollIntoView is an enhancement; jsdom (tests) doesn't implement it.
+
     listRef.current
       ?.querySelector(`[data-index="${activeIndex}"]`)
       ?.scrollIntoView?.({ block: 'nearest' })
@@ -176,7 +173,7 @@ export function Dropdown<T extends string>({
                     className={`${styles.dropdownOption} ${option.value === value ? styles.dropdownOptionSelected : ''} ${i === activeIndex ? styles.dropdownOptionActive : ''}`}
                     onMouseEnter={() => setActiveIndex(i)}
                     onMouseDown={(e) => {
-                      // mousedown, not click: fires before the input's blur.
+
                       e.preventDefault()
                       pick(option, { x: e.clientX, y: e.clientY })
                     }}

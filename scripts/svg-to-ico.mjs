@@ -1,9 +1,5 @@
-/**
- * Convert SVG icon to multi-size ICO file.
- * Usage: node scripts/svg-to-ico.mjs
- * Input:  logo/patty-icon.svg
- * Output: logo/patty-icon.ico, resources/icon.ico
- */
+
+   
 
 import { readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -59,7 +55,7 @@ function buildIco(entries) {
   return buf;
 }
 
-// Write Electron render script
+
 const outDir = resolve(tmpdir(), 'patty-icon-gen');
 mkdirSync(outDir, { recursive: true });
 
@@ -111,7 +107,7 @@ try {
   process.exit(1);
 }
 
-// Build ICO from rendered PNGs
+
 console.log('\nBuilding ICO...');
 const entries = SIZES.map(size => ({
   size,

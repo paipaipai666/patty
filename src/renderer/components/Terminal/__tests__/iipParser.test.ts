@@ -8,7 +8,7 @@ import {
 
 const ESC = '\x1b'
 
-/** 1×1 PNG (89 50 4E 47 …) as base64 — same fixture as iipStreamPatcher tests. */
+                                                                                  
 const PNG_B64 = btoa(
   String.fromCharCode(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3)
 )
@@ -26,7 +26,7 @@ describe('parseIipFileHeader', () => {
     const h = parseIipFileHeader('inline=1;size=11;name=dGVzdA==;preserveAspectRatio=0;width=10px')
     expect(h.inline).toBe(1)
     expect(h.size).toBe(11)
-    expect(h.name).toBe('dGVzdA==') // decoded later by buildIipImage
+    expect(h.name).toBe('dGVzdA==')
     expect(h.preserveAspectRatio).toBe(0)
     expect(h.width).toBe('10px')
   })

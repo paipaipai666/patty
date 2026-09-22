@@ -23,25 +23,15 @@ import { markTerminalOpen } from '../../utils/shellReadiness'
 
 interface TerminalPaneProps {
   session: TerminalSession
-  /** True when this pane is a visible leaf in the pane tree. In the new
-   *  split-tree model only visible leaves mount a TerminalPane at all, so this
-   *  is effectively always true for a mounted instance — but it also gates fit
-   *  so a pane that briefly has zero size (mid-split) does not fit to 0×0. */
+
+                                                                              
   visible: boolean
   onUsed?: (id: string) => void
 }
 
 const perfEnabled = (window as any).terminalAPI?.perfEnabled === true
 
-// WebView2's GPU can be unusable even when the system Chromium is fine
-// (blocked GPU process, driver/policy issues): a context is created, lost
-// immediately, and the pane ends up with no renderer at all — every write
-// then throws on RenderService.dimensions. Detect support once, and give up
-// permanently if a live context loss never restores.
-// NOTE: the two flags below are process-global ON PURPOSE — a broken GPU
-// process is a process-level condition, so one pane's permanent context loss
-// degrades all panes to canvas. Revisit only if per-pane recovery becomes
-// worth the complexity (it has not been observed to matter in practice).
+
 let webglSupported: boolean | null = null
 let webglPermanentlyLost = false
 
@@ -53,8 +43,7 @@ function webglUsable(): boolean {
       if (!gl || gl.isContextLost()) {
         webglSupported = false
       } else {
-        // A context that is created but produces nothing must not count:
-        // force a draw and read it back.
+
         gl.clearColor(1, 0, 0, 1)
         gl.clear(gl.COLOR_BUFFER_BIT)
         const px = new Uint8Array(4)
@@ -68,29 +57,16 @@ function webglUsable(): boolean {
   return webglSupported
 }
 
-// ── 规避 @xterm/addon-webgl@0.18.0 atlas 合并 Bug ─────────────────────
-// addon-webgl 的 TextureAtlas 在页数 >= max(4, maxAtlasPages)（NVIDIA 通常
-// 16）时合并 4 页→1 页。合并会把 _requestClearModel 置 true 且永不复位，
-// 此后每帧全屏重建；合并瞬态会把 glyph→纹理页映射写错，表现为整窗字符
-// 重影/RGB 分离/上一帧残留。需要长时间高吞吐才填满，故仅长时运行后出现。
-//
-// 规避：高频探测 atlas 页数，到软上限（< 16，留余量）就 clearTextureAtlas，
-// 让页数永远到不了 16 → 合并永不触发。检查只读 _pages.length，极廉价；
-// 只有真到阈值才花成本清（一帧全量重光栅化）。
-//
-// 硬约束：阈值必须 < 16 且留足余量，间隔必须短到“两次检查间页数涨不到
-// (16 - 阈值) 页”，否则第 1 次合并会在两次检查间漏网。只读 internal，
-// 升级后字段改名最多让防护静默失效（退回不防护），不写坏状态。
-const ATLAS_PAGE_SOFT_LIMIT = 12 // < 16，留 4 页余量
-const ATLAS_CHECK_INTERVAL_MS = 2000 // 2s：远短于涨 4 页所需时间
 
-// _renderer/_charAtlas 为 addon 私有字段，无公开类型（升级后字段改名最多
-// 让防护静默失效，不写坏状态）。
+const ATLAS_PAGE_SOFT_LIMIT = 12
+const ATLAS_CHECK_INTERVAL_MS = 2000
+
+
 interface WebglAtlasInternals {
   _renderer?: { _charAtlas?: { _pages?: unknown[] } }
 }
 
-/** setInterval handle; aliased because DOM/node libs disagree on the type. */
+                                                                              
 type IntervalHandle = ReturnType<typeof setInterval>
 
 function startAtlasGuard(addonRef: RefObject<WebglAddon | null>): IntervalHandle {
@@ -101,7 +77,7 @@ function startAtlasGuard(addonRef: RefObject<WebglAddon | null>): IntervalHandle
       try {
         addonRef.current?.clearTextureAtlas()
       } catch {
-        // addon 可能已 dispose，忽略
+
       }
     }
   }, ATLAS_CHECK_INTERVAL_MS)
@@ -113,26 +89,19 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const fitAddonRef = useRef<FitAddon | null>(null)
   const webglAddonRef = useRef<WebglAddon | null>(null)
   const canvasAddonRef = useRef<CanvasAddon | null>(null)
-  // Give-up timer for WebGL context loss: if no contextrestored follows, the
-  // GPU is gone for good and the pane swaps to the canvas renderer.
+
   const contextLossTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const ptyCreatedRef = useRef(false)
-  // Interval handle for the atlas page-count guard (see webglAddon init block).
-  // Cleared on unmount.
+
   const atlasClearTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const ptyRetryCountRef = useRef(0)
   const PTY_MAX_RETRIES = 5
-  // One IIP stream patcher per terminal instance. It holds a small bounded buffer
-  // across chunks, so it must live for the lifetime of the terminal (created once,
-  // disposed when the terminal unmounts). useRef gives us a stable instance without
-  // re-creating on every render.
+
   const iipPatcherRef = useRef<((data: string) => string) | null>(null)
   if (!iipPatcherRef.current) {
     iipPatcherRef.current = createIIPStreamPatcher()
   }
-  // DOM-overlay IIP path: extract frames so we can paint them even when
-  // ImageAddon drops the sequence. Placeholder is empty — layout blank rows
-  // come from the agent's own reserved lines.
+
   const iipExtractRef = useRef<((data: string) => { out: string; images: IipImage[] }) | null>(null)
   if (!iipExtractRef.current) {
     iipExtractRef.current = createIipStreamExtractor('')
@@ -142,13 +111,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const [cellSize, setCellSize] = useState({ widthPx: 9, heightPx: 18 })
   const [iipScrollTick, setIipScrollTick] = useState(0)
 
-  // Keep overlay glued to buffer rows: poll baseY every frame while any image
-  // is mounted (omp TUI scrolling may not fire xterm onScroll). Also prune
-  // items whose slot glyph vanished: ESC[2J/3J, conversation switches and
-  // TUI erases renumber/destroy absolute anchor rows — without this, images
-  // from an older conversation paint inside the new one. A slot must be
-  // missing for a few consecutive frames before the item is dropped, so a
-  // repaint (erase old slot → decode → commit new slot) never flickers.
+
   const iipItemsRef = useRef(iipItems)
   iipItemsRef.current = iipItems
   useEffect(() => {
@@ -157,7 +120,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     let last = -1
     let lastBufLen = -1
     const slotMisses: Record<number, number> = {}
-    // Debug globals read by the CDP probes in scripts/.
+
     const w = window as unknown as { __iipLiveBaseY?: number; __iipTick?: number }
     const tick = () => {
       const term = termForIipRef.current
@@ -173,7 +136,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       }
       if (term && buf) {
         if (buf.length < lastBufLen) {
-          // Buffer cleared/trimmed: absolute rows renumbered → drop everything.
+
           lastBufLen = buf.length
           for (const k of Object.keys(slotMisses)) delete slotMisses[Number(k)]
           setIipItems([])
@@ -216,12 +179,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   }, [iipItems.length])
 
 
-  /**
-   * After the slot character is in the xterm buffer, scan for it — that cell
-   * is the image's **top-left**. Commit goes through `commitIipPlacement`:
-   * same payload with its old slot erased = repaint (reuse id, move); old slot
-   * still present = a second display of the same bytes (append a new item).
-   */
+
+     
   const placeIipImage = (term: Terminal, image: IipImage) => {
     const key =
       image.payloadBase64.length +
@@ -232,8 +191,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
     const generation = ptyGenerationRef.current
     const buf = term.buffer.active
-    // Prefer getCell().getChars() over translateToString: PUA slots must not
-    // be trimmed/replaced or findIipSlot never hits and we glue to the cursor.
+
     const lines: string[] = []
     for (let i = 0; i < buf.length; i++) {
       const line = buf.getLine(i)
@@ -263,7 +221,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         { widthPx: cellW, heightPx: cellH },
         term.cols
       )
-      // Slot is the IIP line (block bottom). Top = bottom − rows + 1.
+
       const anchor = resolveAnchor(hit, lines, cursorAbs, fit.rows)
       ;(window as unknown as { __iipLast?: unknown }).__iipLast = {
         hit,
@@ -296,29 +254,21 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     el.src = image.dataUrl
   }
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Scale-bridge snapshot captured at the start of a sidebar width animation.
-  // Keeps the already-rastered xterm canvas visually tracking the container
-  // without calling term.resize (which clears/repaints WebGL and flickers).
+
   const scaleBridgeRef = useRef<{ w: number; h: number; el: HTMLElement } | null>(null)
-  // Handle for the post-exit auto-restart timer. Tracked so unmount can cancel a
-  // retry that is still pending — otherwise an exit that lands just before
-  // unmount respawns an orphaned PTY and writes to a disposed terminal.
+
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cleanupDataRef = useRef<(() => void) | null>(null)
   const cleanupExitRef = useRef<(() => void) | null>(null)
-  // Incremented on every startPty run; stale async chains (listener-ready /
-  // createSession resolution from a superseded attempt) no-op on mismatch.
+
   const ptyGenerationRef = useRef(0)
   const firstDataReceivedRef = useRef(false)
-  // Drives the boot shimmer overlay shown until the PTY's first output lands.
+
   const [hasData, setHasData] = useState(false)
   const renderCountRef = useRef(0)
   const updatePid = useSessionStore((s) => s.updatePid)
   const updateCwd = useSessionStore((s) => s.updateCwd)
-  // Per-field selectors: subscribing to the whole settings object re-renders
-  // every mounted pane on ANY settings change (shortcuts, notifications...).
-  // updateSetting replaces the settings object but keeps unchanged fields
-  // referentially stable, so these only fire for their own key.
+
   const fontFamily = useSettingsStore((s) => s.settings.fontFamily)
   const fontSize = useSettingsStore((s) => s.settings.fontSize)
   const cursorBlink = useSettingsStore((s) => s.settings.cursorBlink)
@@ -345,7 +295,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
             window.terminalAPI.resize(session.id, term.cols, term.rows)
           }
         } catch {
-          // Ignore fit errors during transitions
+
         }
       }
     },
@@ -362,8 +312,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
     scaleBridgeRef.current = { w: rect.width, h: rect.height, el: root }
     root.style.transformOrigin = 'top left'
-    // Seed identity so the first update has a stable origin; layout may already
-    // have shifted on this frame.
+
     root.style.transform = `scale(1, 1)`
   }, [])
 
@@ -386,17 +335,13 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
   }, [])
 
-  // ── Initialize terminal ─────────────────────────────────────────────────
+
 
   useEffect(() => {
     if (!containerRef.current) return
     const container = containerRef.current
 
-    // Reset per-session refs so a session swap (replaceLeafSession keeps the
-    // pane id but changes session.id, re-running this effect) starts clean.
-    // Without this, ptyCreatedRef stays true from the previous session and the
-    // resize guard / fit logic misbehave; stale onData/onExit callbacks from
-    // the previous session could also fire against the new terminal.
+
     ptyCreatedRef.current = false
     firstDataReceivedRef.current = false
     setHasData(false)
@@ -426,9 +371,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     if (perfEnabled) perfMark('terminal:xterm-construct')
     const term = new Terminal(termOptions as ITerminalOptions)
     termForIipRef.current = term
-    // Overlay rows must track viewport scroll. xterm onScroll/onRender is not
-    // enough here (omp TUI wheels can repaint without changing baseY), so also
-    // listen on .xterm-viewport and keep a rAF loop while images are mounted.
+
     const bumpIip = () => setIipScrollTick((t) => t + 1)
     if (typeof (term as unknown as { onRender?: unknown }).onRender === 'function') {
       ;(term as unknown as { onRender: (cb: () => void) => unknown }).onRender(bumpIip)
@@ -438,7 +381,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
     if (perfEnabled) perfMeasure('terminal:xterm-construct', 'terminal:xterm-construct')
 
-    // Copy/paste
+
     term.attachCustomKeyEventHandler((e) => {
       if (!e.ctrlKey || e.altKey || e.metaKey) return true
 
@@ -498,14 +441,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     term.open(container)
     if (perfEnabled) perfMeasure('terminal:term-open', 'terminal:term-open')
 
-    // Paste guard: intercept the browser's native paste (Ctrl+V / right-click)
-    // so xterm never auto-pastes on its own. All pastes are routed through
-    // term.paste() in the key handler below, which (with bracketedPasteMode on)
-    // wraps the text in \e[200~\e[201~. This keeps a single paste path and
-    // avoids double-pasting while still giving TUIs the bracketed-paste hint.
+
     container.addEventListener('paste', (e) => { e.preventDefault(); e.stopPropagation() }, true)
 
-    // IME composition handling
+
     const textarea = container.querySelector(
       'textarea.xterm-helper-textarea'
     ) as HTMLElement | null
@@ -556,12 +495,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       textarea.addEventListener('compositionend', onCompositionEnd)
     }
 
-    // Renderer: WebGL when usable, canvas otherwise (see webglUsable).
-    // Hidden panes (non-active workspaces) keep the built-in DOM renderer:
-    // creating WebGL contexts for every restored pane at startup can exceed
-    // Chromium's live-context cap and force-lose the visible pane's context
-    // (white pane until the loss timer swaps it). The visibility effect
-    // installs a real renderer when the pane is shown.
+
     let webglAddon: WebglAddon | null = null
     let canvasAddon: CanvasAddon | null = null
     if (perfEnabled) perfMark('terminal:webgl-init')
@@ -584,14 +518,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       atlasClearTimerRef.current = startAtlasGuard(webglAddonRef)
     }
 
-    // Sixel / inline images
-    // ImageAddon's ImageRenderer creates a 2D canvas with desynchronized: true.
-    // In Electron/Chromium, desynchronized 2D canvases fail to alpha-composite
-    // over the WebGL text canvas, rendering opaque black instead of transparent.
-    // Override getContext globally — safe because only 2D+desynchronized is
-    // affected; WebGL contexts use getContext('webgl') which is untouched.
-    // Deliberately process-global (a scoped patch can't intercept the addon's
-    // internal canvas creation); re-audit when upgrading @xterm/addon-image.
+
     if (!(window as any).__imageAddonPatchApplied) {
       const _orig = HTMLCanvasElement.prototype.getContext
       HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, options?: any) {
@@ -608,14 +535,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     } catch {
       console.warn('Image addon failed to load')
     }
-    // 已知遗留（后续单独做，2026-09 chafa 图像链路上线时确认存在）：
-    // 1. DPR 模糊：ImageAddon 的图像层 canvas 按 CSS 像素建（rescaleCanvas
-    //    用 dimensions.css.canvas），不乘 devicePixelRatio；Windows 125%/150%
-    //    缩放下图像被浏览器二次放大，轻度发虚（yazi 同样受影响）。修法：
-    //    包装 ImageRenderer 让画布按 device px 建、ctx 按 dpr 缩放。
-    // 2. resize 残图：ConPTY resize 时 conhost 重绘自身 buffer，xterm 的
-    //    图像占位 tile 会被抹乱。可在 fit/resize 时主动清 ImageAddon 的
-    //    storage（clearImageStorage）避免半残画面——光标/文本不受影响。
+
     if (perfEnabled) perfMeasure('terminal:image-addon-init', 'terminal:image-addon-init')
 
     term.loadAddon(unicode11Addon)
@@ -626,26 +546,21 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     webglAddonRef.current = webglAddon
     canvasAddonRef.current = canvasAddon
 
-    // WebGL context-loss recovery. A lost GPU context (driver reset, too many
-    // live contexts, backgrounded tab) silently blanks the terminal unless we
-    // preventDefault to allow the browser to restore it — then re-create the
-    // addon against the restored context. If no restore follows, the GPU is
-    // gone permanently: swap to the canvas renderer instead of leaving the
-    // pane with no renderer (every write would throw).
+
     const onContextLost = (e: Event) => {
       e.preventDefault()
       if (contextLossTimerRef.current) clearTimeout(contextLossTimerRef.current)
       contextLossTimerRef.current = setTimeout(() => {
         contextLossTimerRef.current = null
         webglPermanentlyLost = true
-        try { webglAddonRef.current?.dispose() } catch { /* already disposed */ }
+        try { webglAddonRef.current?.dispose() } catch {                        }
         webglAddonRef.current = null
         try {
           const fallback = new CanvasAddon()
           term.loadAddon(fallback)
           canvasAddonRef.current = fallback
         } catch {
-          // Canvas unavailable too — the built-in DOM renderer keeps the pane alive.
+
         }
       }, 2000)
     }
@@ -656,7 +571,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       }
       try {
         if (webglAddonRef.current) {
-          try { webglAddonRef.current.dispose() } catch { /* already disposed */ }
+          try { webglAddonRef.current.dispose() } catch {                        }
         }
         const wgl = new WebglAddon()
         term.loadAddon(wgl)
@@ -664,19 +579,16 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         clearInterval(atlasClearTimerRef.current ?? undefined)
         atlasClearTimerRef.current = startAtlasGuard(webglAddonRef)
       } catch {
-        // WebGL unavailable — canvas fallback works fine
+
       }
     }
     container.addEventListener('webglcontextlost', onContextLost, true)
     container.addEventListener('webglcontextrestored', onContextRestored, true)
 
-    // OSC 7 — shell cwd reporting injected by pwsh.ps1 / cmd-prompt.cmd
+
     const osc7Disposable = registerOsc7Handler(term, session.id, (id, cwd) => {
       updateCwd(id, cwd)
-      // 提示符重绘 = 前台 TUI（opencode 等）已退出。opencode 1.18 退出 TUI 后
-      // 其服务器进程会存活一段时间并持续发心跳，退出事件与看门狗都无法及时
-      // 熄灭火焰；prompt 返回是"工具已退出前台"的可靠信号，立即清除火焰与
-      // 注意态，并通知后端清除租约（纯心跳不会重建它）。
+
       const store = useSessionStore.getState()
       if (store.sessions.find((s) => s.id === id)?.aiType) {
         store.setAiType(id, null)
@@ -685,19 +597,16 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       }
     })
 
-    // Keyboard input → PTY + mark used
+
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
       useSessionStore.getState().resetAttention(session.id)
       onUsed?.(session.id)
     })
 
-    // PTY lifecycle
+
     ptyRetryCountRef.current = 0
-    // SSH creation is async across user dialogs (host key, password): this
-    // effect can be torn down (StrictMode remount, pane closed) while the
-    // createSession promise is still pending. A late resolution must not
-    // toast, update state, or wire listeners onto the disposed terminal.
+
     let effectDisposed = false
     const startPty = () => {
       if (retryTimerRef.current) {
@@ -708,16 +617,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       cleanupExitRef.current?.()
       if (perfEnabled) perfMark('terminal:create-session-ipc-start')
       const generation = ++ptyGenerationRef.current
-      // New PTY / possibly a new term buffer: drop anchors from the old one.
+
       setIipItems([])
 
-      // Subscribe BEFORE invoking create_pty: the backend flips a preheated
-      // PTY to "attached" inside create_pty, and from then on the reader
-      // thread only emits pty:data events — and Tauri drops events with no
-      // registered listener. The subscription must also be *ready* (listen()
-      // registration is itself async IPC) before the invoke, hence the await.
-      // Live data arriving before the replay write is queued and flushed
-      // right after it, preserving replay → live ordering.
+
       let replayWritten = false
       const liveQueue: string[] = []
       const writeLive = (data: string) => {
@@ -750,9 +653,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         if (effectDisposed || generation !== ptyGenerationRef.current) return
         ptyCreatedRef.current = false
         term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
-        // Attention/aiType cleanup used to hang off a global 'pty:exit'
-        // listener that never fired (the backend only emits per-session
-        // 'pty:exit:{id}') — it lives here now.
+
         const store = useSessionStore.getState()
         store.setAttention(session.id, null)
         store.setAiType(session.id, null)
@@ -776,8 +677,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
             if (!result.success || !result.pid) {
               const message = result.error ?? 'unknown error'
               toast(`Failed to start terminal: ${message}`)
-              // Subscribe-first means the backend's failure text (pty:data)
-              // actually lands now — flush it before the highlighted summary.
+
               flushQueue()
               term.write(`\r\n\x1b[31m[Connection failed: ${message}]\x1b[0m\r\n`)
               setHasData(true)
@@ -787,9 +687,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
             ptyCreatedRef.current = true
             ptyRetryCountRef.current = 0
             if (result.replay) {
-              // A preheated PTY already produced its initial output (banner,
-              // prompt) before we attached — replay it before the queued live
-              // data so ordering is preserved.
+
               const extractedReplay = iipExtractRef.current!(result.replay)
               const placeReplay = () => {
                 for (const image of extractedReplay.images) placeIipImage(term, image)
@@ -803,8 +701,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       })
     }
 
-    // Start the PTY immediately. The container is already laid out by the time
-    // this effect runs, and preheated sessions are ready to attach.
+
     if (perfEnabled) perfMeasure('terminal:mount-to-init-timer', 'terminal:mount')
     fitAddon.fit()
     startPty()
@@ -840,13 +737,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       webglAddonRef.current = null
       canvasAddonRef.current = null
     }
-  }, [session.id]) // Only re-run if session ID changes (shouldn't happen)
+  }, [session.id])
 
-  // ── WebGL context lifecycle: release when hidden ──────────────────────
-  // Non-active workspaces use display:none, keeping the xterm instance and
-  // PTY alive but wasting a WebGL context. Dispose the WebGL addon when the
-  // pane is not visible and re-create it on re-activation so the browser's
-  // WebGL context cap (typically ~16) is never hit.
+
 
   useEffect(() => {
     const term = termRef.current
@@ -866,39 +759,33 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
             canvasAddonRef.current = fallback
           }
         } catch {
-          // GPU renderer unavailable — canvas fallback works fine
+
         }
       }
     } else {
-      // Only WebGL is released when hidden: it holds a real GPU context,
-      // the canvas renderer has nothing scarce worth freeing.
+
       if (atlasClearTimerRef.current) {
         clearInterval(atlasClearTimerRef.current)
         atlasClearTimerRef.current = null
       }
       if (webglAddonRef.current) {
-        try { webglAddonRef.current.dispose() } catch { /* already disposed */ }
+        try { webglAddonRef.current.dispose() } catch {                        }
         webglAddonRef.current = null
       }
     }
-    // Cleanup on unmount: dispose if still alive (handled by main effect below)
+
   }, [visible])
 
-  // ── Fit when becoming visible / mounted ─────────────────────────────────
+
 
   useEffect(() => {
     if (visible) {
-      // Slight delay so the flex layout has settled after a split/insert.
+
       setTimeout(() => fitTerminal(!ptyCreatedRef.current), 10)
     }
   }, [visible, fitTerminal])
 
-  // ── Sidebar slide: scale-bridge then one final fit ───────────────────────
-  // During the CSS width animation we never term.resize (that clears WebGL).
-  // Instead the .xterm root is CSS-scaled so the already-rastered canvas
-  // tracks the container. After transitionend the store flips the flag, we
-  // drop the transform and fit once to the final size in the same turn so the
-  // intermediate unscaled layout never paints.
+
 
   const sidebarTransitioning = useSessionStore((s) => s.sidebarTransitioning)
   const wasTransitioningRef = useRef(false)
@@ -914,15 +801,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     wasTransitioningRef.current = sidebarTransitioning
   }, [sidebarTransitioning, fitTerminal, beginScaleBridge, updateScaleBridge, endScaleBridge])
 
-  // ── Resize observer ─────────────────────────────────────────────────────
+
 
   useEffect(() => {
     if (!containerRef.current) return
 
     const observer = new ResizeObserver(() => {
       if (!visible) return
-      // While the sidebar is sliding, only re-apply the CSS scale bridge —
-      // fitting every intermediate frame clears/repaints WebGL and flickers.
+
       if (useSessionStore.getState().sidebarTransitioning) {
         updateScaleBridge()
         return
@@ -942,10 +828,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
   }, [visible, fitTerminal, updateScaleBridge, endScaleBridge])
 
-  // ── Settings changes ────────────────────────────────────────────────────
 
-  // Visual-only options (colors, cursor, theme) apply immediately and never
-  // change the terminal's geometry, so updating them must NOT trigger a re-fit.
+
+
   useEffect(() => {
     const term = termRef.current
     if (!term) return
@@ -957,9 +842,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     term.options.theme = getThemeColors(theme, customThemes).terminal
   }, [fontFamily, fontSize, cursorBlink, cursorStyle, theme, customThemes])
 
-  // Only a geometry-affecting change (font family / size alters cell
-  // dimensions → column/row count) needs a re-fit. Splitting this out keeps
-  // visual tweaks like theme or cursor style from forcing a costly WebGL refit.
+
   useEffect(() => {
     if (!termRef.current) return
     setTimeout(() => fitTerminal(), 20)
@@ -975,8 +858,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       <IipOverlay
         items={iipItems.map((item) => {
           void iipScrollTick
-          // Viewport-relative row. Must be viewportY, not baseY: baseY stays
-          // at its max when scrolled up (ydisp lags); scrollTop == viewportY*cellH.
+
           const viewportY = termForIipRef.current?.buffer.active.viewportY ?? 0
           return { ...item, row: item.bufferY - viewportY }
         })}

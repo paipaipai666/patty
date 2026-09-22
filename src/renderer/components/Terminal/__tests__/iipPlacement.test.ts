@@ -23,7 +23,7 @@ describe('IIP slot markers', () => {
     expect(images).toHaveLength(2)
     expect(images[0].slot).not.toBe(images[1].slot)
     expect(images[0].slot).toHaveLength(1)
-    // slots sit exactly where the IIP sequences were
+
     expect(out).toBe(`X${images[0].slot}Y${images[1].slot}Z`)
   })
 
@@ -44,27 +44,25 @@ describe('fitIipToCells for omp width=51 height=auto (1254×1033 webp)', () => {
     const cell = { widthPx: 9, heightPx: 18 }
     const fit = fitIipToCells(img, { widthPx: 1254, heightPx: 1033 }, cell, 120)
     expect(fit.cols).toBe(51)
-    // 51 * 9 = 459px wide; 1254:1033 → height = 459 * 1033/1254 ≈ 378px → 21 rows
+
     expect(fit.rows).toBe(21)
   })
 })
 
 describe('top-left anchor from slot position', () => {
   it('slot row/col IS the image top-left (not the bottom)', () => {
-    // Regression: after ESC7+CUU+IIP+ESC8 the slot sits at the TOP of the
-    // reserved block. Overlay top = slot.row, not slot.row - rows + 1.
+
     const extract = createIipStreamExtractor()
     const frame = `${ESC}]1337;File=inline=1;width=51;height=auto:${PNG_B64}\x07`
-    // Simulate omp first-paint tail: reserved rows already written, then
-    // save, move up 20, emit IIP, restore.
+
     const stream = `${ESC}7${ESC}[20A${frame}${ESC}8`
     const { out, images } = extract(stream)
     expect(images).toHaveLength(1)
     const slot = images[0].slot
-    // After stripping IIP the slot is where CUU left the cursor (top of block).
+
     expect(out).toBe(`${ESC}7${ESC}[20A${slot}${ESC}8`)
     const lines = [`${'x'.repeat(10)}${' '.repeat(100)}`, 'painted line', `col16${slot}`]
-    // If the renderer landed the slot on line 2 col 5, that IS the top-left.
+
     const hit = findIipSlot(lines, slot)
     expect(hit).toEqual({ row: 2, col: 5 })
   })

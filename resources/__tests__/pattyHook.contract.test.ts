@@ -1,16 +1,5 @@
-/**
- * Contract tests: Claude Code / Codex raw stdin payloads → normalized Patty
- * hook events, driven through the real resources/patty-hook.ps1 in powershell.
- *
- * patty-hook.ps1 is the translation boundary for Claude Code and Codex CLI:
- * it reads the tool's JSON payload on stdin and POSTs a normalized
- * {paneId, event, source, secret} envelope to Patty. Claude Code 2.x changed
- * the payload shape once already (hook_event_name + notification_type) and the
- * flames silently stayed dark until fixed — these fixtures pin both the 1.x
- * and 2.x shapes so the next upstream change fails here instead.
- *
- * Windows-only by design (the app is Windows-only); CI runs windows-latest.
- */
+
+   
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import { spawn } from 'node:child_process'
@@ -24,7 +13,7 @@ let port: number
 let inbox: Array<{ paneId?: string; event?: string; source?: string; secret?: string }>
 let waiter: ((value: unknown) => void) | null = null
 
-// Executor form throughout: Promise.withResolvers needs Node 22, CI pins Node 20.
+
 function nextPost(): Promise<unknown> {
   return new Promise((resolvePromise) => {
     waiter = resolvePromise
@@ -48,11 +37,7 @@ beforeAll(async () => {
   const address = server.address()
   if (address === null || typeof address === 'string') throw new Error('no server address')
   port = address.port
-  // Warm up powershell.exe before the first test: a cold binary start can
-  // exceed the 10s per-test POST timeout on a busy machine (observed 2026-09:
-  // the first two spawns each took >10s, timed out, and their late POSTs
-  // poisoned later tests' inboxes — a cascade of confusing off-by-one
-  // failures). One throwaway launch puts the image in the OS cache.
+
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const warmup = spawn('powershell.exe', ['-NoProfile', '-Command', '$null'], {
       stdio: 'ignore',
@@ -66,11 +51,8 @@ afterAll(async () => {
   await new Promise((resolvePromise) => server.close(resolvePromise))
 })
 
-/**
- * Run the hook script with `stdinPayload` on stdin and return the envelope it
- * POSTed. Fails after 10s if no request arrives (the script exits 0 even on
- * internal errors, so only the POST itself is observable).
- */
+
+   
 async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<{
   paneId?: string
   event?: string
@@ -94,27 +76,21 @@ async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<
   )
   child.stdin.write(stdinPayload)
   child.stdin.end()
-  // Real wall-clock timeout is intentional: the script exits 0 even when it
-  // fails internally, so a missing POST is only observable as the absence of
-  // an event — deterministic timer control cannot detect "nothing happened".
+
   const timeout = new Promise<never>((_resolve, reject) => {
     setTimeout(() => {
-      // Kill the timed-out spawn so its late POST cannot land in the NEXT
-      // test's inbox (the inbox resets per test; a late arrival from a
-      // timed-out spawn is indistinguishable from this test's own result and
-      // cascades into off-by-one failures across the file).
+
       child.kill()
       reject(new Error(`no POST received for payload: ${stdinPayload}`))
     }, 10_000)
   })
   await Promise.race([posted, timeout])
-  // 每个用例的载荷都越过真实 powershell 进程：在这里统一钉词汇表，
-  // 任何 stdin 形状产出的 envelope 都必须落在共享规范内。
+
   expect(isCanonicalEvent(inbox[0]?.event), inbox[0]?.event).toBe(true)
   return inbox[0]
 }
 
-// Each PowerShell spawn costs ~0.5-1s; give the file room.
+
 const T = { timeout: 20_000 }
 
 describe('patty-hook.ps1 contract', () => {
@@ -144,8 +120,7 @@ describe('patty-hook.ps1 contract', () => {
   })
 
   it('Claude 2.x Notification: hook_event_name + notification_type wins', T, async () => {
-    // The 2.x regression: reading only hook_event_name degrades this to a
-    // meaningless "notification" and permission prompts never light up.
+
     const body = await runHook(JSON.stringify({ hook_event_name: 'Notification', notification_type: 'permission_prompt' }))
     expect(body.event).toBe('permission_prompt')
   })
@@ -181,9 +156,7 @@ describe('patty-hook.ps1 contract', () => {
   })
 
   it('Codex PascalCase lifecycle events normalize to canonical names', T, async () => {
-    // Codex 以 PascalCase hook_event_name 上报。不归一化则退化为 default
-    // 透传的 "pretooluse"，与 Claude 侧 -EventType 显式传入的 pre_tool_use
-    // 词汇表漂移。
+
     for (const [hookName, event] of [
       ['PreToolUse', 'pre_tool_use'],
       ['PostToolUse', 'post_tool_use'],

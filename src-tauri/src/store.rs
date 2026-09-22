@@ -3,9 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
-// Same directory the Electron build used for userData (%APPDATA%\Patty), so
-// existing installs keep their settings.json / state.json after the switch.
-// Windows-only crate: %APPDATA% is exactly what dirs::config_dir() returns here.
+
 pub fn data_dir() -> PathBuf {
     TEST_DATA_DIR
         .lock()
@@ -25,9 +23,7 @@ pub fn set_data_dir_for_test(dir: PathBuf) {
     *SETTINGS_CACHE.lock().unwrap() = None;
 }
 
-/// Serializes tests that mutate or read process env vars (USERPROFILE/HOME) —
-/// home_dir() and friends read them, so an env-mutating test running in
-/// parallel with a path-asserting test flakes otherwise.
+
 #[doc(hidden)]
 pub static TEST_ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -62,9 +58,7 @@ pub fn default_settings() -> Value {
 }
 
 pub fn default_state() -> Value {
-    // Note: no paneTree/focusedPaneId — those legacy pre-workspace fields are
-    // only READ (from old state files, for migration) and must not be written
-    // into new files.
+
     json!({
         "sessions": [],
         "collections": [],
@@ -86,9 +80,7 @@ fn deep_merge_subobject(defaults: &Value, parsed: &Value, target: &mut Value, ke
     target[key] = Value::Object(merged);
 }
 
-// Shallow-merge persisted keys over defaults, then fix up: deep_keys get a
-// per-key merge (so a partial "shortcuts" object keeps unspecified defaults),
-// force_arrays are reset to [] when the persisted value isn't an array.
+
 fn merge_json(parsed: &Value, defaults: &Value, deep_keys: &[&str], force_arrays: &[&str]) -> Value {
     let mut merged = defaults.clone();
     let obj = merged.as_object_mut().expect("defaults is an object");
@@ -137,7 +129,7 @@ pub(crate) fn save_atomic_to(path: &Path, data: &Value) -> Result<(), String> {
     Ok(())
 }
 
-// One-time migration from the pre-rename app directory (sibling of data_dir).
+
 fn migrate_old_data_from(user_data: &Path, file_name: &str, old_app_name: &str) {
     let current = user_data.join(file_name);
     if current.exists() {
@@ -151,8 +143,7 @@ fn migrate_old_data_from(user_data: &Path, file_name: &str, old_app_name: &str) 
     }
 }
 
-// In-memory cache so repeated settings reads don't re-read and re-merge the
-// JSON file. Invalidated whenever we persist (mirrors the old TS handler).
+
 static SETTINGS_CACHE: LazyLock<Mutex<Option<Value>>> = LazyLock::new(|| Mutex::new(None));
 
 fn load_settings_uncached() -> Value {
@@ -177,11 +168,7 @@ pub fn save_settings(settings: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Load-modify-save a single key under the cache lock: two concurrent
-/// settings_set commands otherwise race (load → modify → save with no mutual
-/// exclusion) and the later writer silently drops the earlier one's key.
-/// Unknown keys (absent from defaults) are rejected — the defaults double as
-/// the settable-keys whitelist.
+
 pub fn update_settings(key: &str, value: Value) -> Result<Value, String> {
     let mut cache = SETTINGS_CACHE.lock().unwrap();
     if !default_settings().as_object().unwrap().contains_key(key) {
@@ -204,8 +191,7 @@ pub fn save_state(state: &Value) -> Result<(), String> {
     save_atomic_to(&data_dir().join("state.json"), state)
 }
 
-// Guard against a malformed/partial state payload being written over good
-// persisted state (same checks as the old validatePersistedState).
+
 pub fn validate_state(state: &Value) -> Result<(), String> {
     let obj = state.as_object().ok_or("Invalid state payload: not an object")?;
     if !obj.get("sessions").is_some_and(Value::is_array) {
@@ -220,9 +206,7 @@ pub fn validate_state(state: &Value) -> Result<(), String> {
     if !obj.get("sidebarVisible").is_some_and(Value::is_boolean) {
         return Err("Invalid state: sidebarVisible must be a boolean".into());
     }
-    // Workspaces carry the split layout; a malformed tree would surface only
-    // at renderer restore time, after the corrupt state already overwrote the
-    // good one. Validate the shape here instead (REVIEW.md P1-8b).
+
     if let Some(workspaces) = obj.get("workspaces") {
         let list = workspaces
             .as_array()
@@ -240,8 +224,7 @@ pub fn validate_state(state: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Shape-check a persisted pane tree: leaves carry id+sessionId, splits carry
-/// id+direction+ratio and two valid children. Anything else is corrupt.
+
 fn validate_pane_tree(tree: &Value) -> bool {
     match tree.get("type").and_then(Value::as_str) {
         Some("leaf") => {
@@ -277,12 +260,11 @@ mod tests {
 
     #[test]
     fn merge_settings_backfills_ssh_profiles() {
-        // A settings.json written before the SSH feature has no sshProfiles
-        // key; loading must backfill the default instead of dropping it.
+
         let parsed = json!({ "theme": "light" });
         let merged = merge_settings(&parsed, &default_settings());
         assert_eq!(merged["sshProfiles"], json!([]));
-        // Existing profiles survive the merge untouched.
+
         let parsed = json!({ "sshProfiles": [{ "id": "p1", "name": "prod", "host": "10.0.0.5" }] });
         let merged = merge_settings(&parsed, &default_settings());
         assert_eq!(merged["sshProfiles"][0]["host"], "10.0.0.5");
@@ -308,10 +290,7 @@ mod tests {
 
     #[test]
     fn validate_state_rejects_malformed_workspaces() {
-        // REVIEW.md P1-8b: validate_state only checks 4 top-level keys; a
-        // state file with a garbage paneTree passes validation and overwrites
-        // good persisted state — the renderer only discovers the corruption
-        // at restore time. Workspaces/paneTree shape must be validated too.
+
         let mut state = json!({
             "sessions": [],
             "collections": [],
@@ -324,7 +303,7 @@ mod tests {
             "workspace with non-object paneTree must be rejected"
         );
 
-        // A split node missing its children is equally malformed.
+
         state["workspaces"] = json!([{ "id": "w1", "paneTree": { "type": "split" } }]);
         assert!(
             validate_state(&state).is_err(),
@@ -359,7 +338,7 @@ mod tests {
         let file = dir.join("settings.json");
         let data = json!({ "theme": "nord", "fontSize": 16 });
         save_atomic_to(&file, &data).unwrap();
-        // Second save must succeed too (rename over existing target).
+
         save_atomic_to(&file, &json!({ "theme": "light" })).unwrap();
         let loaded = load_json_from(&file, &default_settings(), merge_settings);
         assert_eq!(loaded["theme"], "light");
@@ -392,11 +371,11 @@ mod tests {
         let parsed = json!({"a": 99, "nested": {"x": 100}});
         let mut target = defaults.clone();
         deep_merge_subobject(&defaults, &parsed, &mut target, "nested");
-        // parsed overrides default values for nested keys
+
         assert_eq!(target["nested"]["x"], 100);
-        // default values preserved for keys not in parsed
+
         assert_eq!(target["nested"]["y"], 20);
-        // top-level keys not in nested are untouched by the helper
+
         assert_eq!(target["a"], 1);
         assert_eq!(target["b"], 2);
     }
@@ -468,7 +447,7 @@ mod tests {
         migrate_old_data_from(&user_data, "state.json", "terminal-sidebar");
         assert!(user_data.join("state.json").exists());
 
-        // Existing file is never overwritten by migration.
+
         fs::write(user_data.join("state.json"), r#"{"sessions":[2]}"#).unwrap();
         migrate_old_data_from(&user_data, "state.json", "terminal-sidebar");
         assert_eq!(

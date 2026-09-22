@@ -114,7 +114,7 @@ describe('SshMonitorPanel', () => {
     useRemoteMetricsStore.getState().ingest('s1', raw(), 10_000)
     const { container } = render()
     expect(container.textContent).toContain('SSH Monitor — deploy@10.0.0.5')
-    expect(container.textContent).toContain('50.0%') // memPct
+    expect(container.textContent).toContain('50.0%')
     expect(container.textContent).toContain('no swap')
     expect(container.textContent).toContain('Disk /')
   })
@@ -159,10 +159,7 @@ describe('SshMonitorPanel', () => {
     expect(useRemoteMetricsStore.getState().byId.s1.stale).toBe(true)
   })
 
-  // ── BUG: closing the panel / switching focus leaves the backend metrics
-  // loop running on the old session. The effect cleanup only unsubscribes the
-  // event listener — it must also call ssh_metrics_stop for the session it was
-  // bound to.
+
 
   it('stops remote metrics when the panel is closed while running', () => {
     setSessions([sshSession])

@@ -24,9 +24,8 @@ function fieldsFromProfile(p: SshProfile): DraftFields {
   }
 }
 
-/** Normalize raw form fields into a profile payload. Port 22/blank is the ssh
- *  default and stored as undefined; blank optional strings become undefined;
- *  a blank name derives from user@host so the list stays readable. */
+
+                                                                      
 function normalizeDraft(fields: DraftFields): Omit<SshProfile, 'id'> {
   const host = fields.host.trim()
   const user = fields.user.trim() || undefined
@@ -45,7 +44,7 @@ function normalizeDraft(fields: DraftFields): Omit<SshProfile, 'id'> {
 export function SshSettingsPanel() {
   const profiles = useSettingsStore((s) => s.settings.sshProfiles)
   const updateSetting = useSettingsStore((s) => s.updateSetting)
-  // editingId: profile id being edited, 'new' for the add form, null for list view.
+
   const [editingId, setEditingId] = useState<string | 'new' | null>(null)
   const [draft, setDraft] = useState<DraftFields>(EMPTY_DRAFT)
   const [importing, setImporting] = useState(false)

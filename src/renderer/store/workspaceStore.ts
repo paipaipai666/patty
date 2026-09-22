@@ -23,10 +23,10 @@ interface WorkspaceStore {
   workspaces: Workspace[]
   activeWorkspaceId: string | null
 
-  /** Restore workspaces from normalized data (called by App after loadState). */
+                                                                                 
   loadFromPersisted: (workspaces: Workspace[], activeId: string | null) => void
 
-  // ── Workspace management ────────────────────────────────────────────
+
 
   createWorkspace: (sessionId: string, collectionId?: string | null) => string
   switchWorkspace: (id: string) => void
@@ -34,7 +34,7 @@ interface WorkspaceStore {
   renameWorkspace: (id: string, name: string) => void
   moveWorkspaceToCollection: (id: string, collectionId: string | null) => void
 
-  // ── Tree ops (scoped to active workspace) ───────────────────────────
+
 
   splitFocused: (newSessionId: string, direction: SplitDirection, side?: 'first' | 'second') => void
   insertNeighborAt: (paneId: string, sessionId: string, direction: SplitDirection, side: 'first' | 'second') => void
@@ -45,12 +45,12 @@ interface WorkspaceStore {
   focusPane: (paneId: string) => void
   ensureVisible: (sessionId: string) => boolean
 
-  // ── Persistence ─────────────────────────────────────────────────────
+
 
   toPersisted: () => { workspaces: PersistedWorkspace[]; activeWorkspaceId: string | null }
 }
 
-/** Update a single workspace in the list immutably. Returns a new array. */
+                                                                            
 function patchWorkspace(
   workspaces: Workspace[],
   id: string,
@@ -64,14 +64,14 @@ function patchWorkspace(
   return next
 }
 
-/** Find the leaf id holding a given session id, or null. */
+                                                            
 function findLeafIdBySession(tree: PaneTree | null, sessionId: string): string | null {
   if (!tree) return null
   if (tree.type === 'leaf') return tree.sessionId === sessionId ? tree.id : null
   return findLeafIdBySession(tree.first, sessionId) ?? findLeafIdBySession(tree.second, sessionId)
 }
 
-/** Ensure the active workspace exists, creating one if necessary. Returns null if one was created (caller should stop). */
+                                                                                                                           
 function getActiveWsOrCreate(sessionId: string): { ws: Workspace; workspaces: Workspace[]; activeWorkspaceId: string } | null {
   const state = useWorkspaceStore.getState()
   if (!state.activeWorkspaceId) {
@@ -86,9 +86,7 @@ function getActiveWsOrCreate(sessionId: string): { ws: Workspace; workspaces: Wo
   return { ws, workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId }
 }
 
-// Remove every leaf of `sessionId` from all workspaces, pruning workspaces
-// that become empty and fixing up their focus. Pure helper for the move
-// semantics in insertNeighborAt / replaceLeafAt.
+
 function pruneSessionFromTrees(workspaces: Workspace[], sessionId: string): Workspace[] {
   return workspaces
     .map((w) => {
@@ -112,7 +110,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     set({ workspaces, activeWorkspaceId: activeId })
   },
 
-  // ── Workspace management ────────────────────────────────────────────
+
 
   createWorkspace: (sessionId, collectionId = null) => {
     const id = newWorkspaceId()
@@ -166,7 +164,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     markDirty()
   },
 
-  // ── Tree ops ────────────────────────────────────────────────────────
+
 
   splitFocused: (newSessionId, direction, side = 'second') => {
     const { workspaces, activeWorkspaceId } = get()
@@ -187,17 +185,13 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   insertNeighborAt: (paneId, sessionId, direction, side) => {
     const r = getActiveWsOrCreate(sessionId)
     if (!r) return
-    // Dropping a session onto its own pane is a no-op.
+
     if (findLeaf(r.ws.paneTree, paneId)?.sessionId === sessionId) return
-    // Move semantics: a session must live in exactly one leaf across all
-    // workspaces. Prune it from every tree before re-inserting, or the
-    // sidebar's workspace groups would render it once per tree.
+
     const pruned = pruneSessionFromTrees(r.workspaces, sessionId)
     const targetTree = pruned.find((w) => w.id === r.activeWorkspaceId)?.paneTree ?? null
     if (!targetTree || !findLeaf(targetTree, paneId)) {
-      // Target pane didn't exist or didn't survive pruning (e.g. it was the
-      // auto-created leaf for this very session) — fall back to a fresh
-      // single-pane workspace.
+
       set({ workspaces: pruned })
       get().createWorkspace(sessionId)
       return
@@ -239,10 +233,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const ws = workspaces.find((w) => w.id === activeWorkspaceId)
     if (!ws || !ws.focusedPaneId) return
     const { tree: next, nextFocusId } = removeLeaf(ws.paneTree, ws.focusedPaneId)
-    // Removing the last leaf yields a null tree — remove the workspace and
-    // drop the active workspace id so the terminal area shows the empty
-    // state and the sidebar highlight clears. Other workspaces remain in
-    // the sidebar and can be re-entered by clicking their sessions.
+
     if (!next) {
       const nextWorkspaces = workspaces.filter((w) => w.id !== activeWorkspaceId)
       set({ workspaces: nextWorkspaces, activeWorkspaceId: null })
@@ -325,7 +316,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     return false
   },
 
-  // ── Persistence ─────────────────────────────────────────────────────
+
 
   toPersisted: () => {
     const { workspaces, activeWorkspaceId } = get()
@@ -342,10 +333,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   }
 }))
 
-/**
- * Read the sessionId of the currently focused leaf in the active workspace,
- * or null if there is no active workspace / no focused leaf.
- */
+
+   
 export function getFocusedSessionId(): string | null {
   const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()
   if (!activeWorkspaceId) return null

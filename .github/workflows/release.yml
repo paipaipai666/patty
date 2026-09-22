@@ -37,6 +37,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: No explanatory comments
+        run: npm run check:comments
+
       - name: Test (backend)
         run: cargo test --all-targets
         working-directory: src-tauri

@@ -15,7 +15,7 @@ export interface TerminalSession {
   createdAt: number
   collectionId: string | null
   aiType?: 'claude' | 'opencode' | 'codex' | 'omp' | 'qwen' | 'copilot' | null
-  /** Snapshot of the SSH target for shell === 'ssh' sessions. */
+                                                                 
   ssh?: SshTarget | null
 }
 
@@ -40,14 +40,13 @@ interface SessionStore {
   activeSessionId: string | null
   sidebarVisible: boolean
   sidebarWidth: number
-  /** True while the sidebar width is mid-transition (CSS animated). Terminal
-   *  panes read this to skip resize-fitting during the slide so the WebGL
-   *  canvas isn't cleared/repainted on every animation frame. */
+
+                                                                 
   sidebarTransitioning: boolean
   loaded: boolean
   attentionMap: Record<string, string | null>
-  /** Session being dragged from the sidebar (HTML5 DnD), or null. Panes read
-   *  this to show their drop-zone hints while any drag is in flight. */
+
+                                                                        
   draggingSessionId: string | null
 
   addSession: (opts?: { cwd?: string; shell?: string; collectionId?: string | null; title?: string; ssh?: SshTarget | null }) => string
@@ -66,9 +65,8 @@ interface SessionStore {
   moveCollection: (collectionId: string, newParentId: string | null) => void
 
   toggleSidebar: () => void
-  /** Clear sidebarTransitioning after the CSS width animation ends. Called from
-   *  the wrapper's transitionend; the fallback timer covers reduced-motion /
-   *  interrupted transitions. */
+
+                                 
   endSidebarTransition: () => void
   setSidebarWidth: (width: number) => void
   navigateNext: () => void
@@ -84,16 +82,13 @@ interface SessionStore {
 }
 
 let ipcCleanup: (() => void) | null = null
-// Fallback only: primary end signal is transitionend on the sidebar wrapper.
-// Must exceed --transition-normal (250ms) with enough headroom for a janky
-// frame; 450ms is well past a 250ms ease without locking fits for long.
+
 const SIDEBAR_TRANSITION_FALLBACK_MS = 450
 let sidebarTransitionTimer: ReturnType<typeof setTimeout> | null = null
 
 export function teardownSessionIPC() {
   if (ipcCleanup) ipcCleanup()
-  // Reset the module-level sidebar timer so tests and StrictMode remounts
-  // don't inherit stale timer state from a previous mount.
+
   if (sidebarTransitionTimer) {
     clearTimeout(sidebarTransitionTimer)
     sidebarTransitionTimer = null
@@ -113,10 +108,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   loadState: async () => {
     try {
-      // Listen for attention changes from hook server.
-      // Registered BEFORE awaiting stateLoad: the hook server starts before
-      // the webview, so events arriving during the await would be lost.
-      // Guard against duplicate registration (e.g. React StrictMode remount)
+
       if (ipcCleanup) ipcCleanup()
       const offAttention = window.terminalAPI.onAttentionChange((sessionId, eventType, aiType) => {
         get().setAttention(sessionId, eventType)
@@ -125,11 +117,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }
       })
 
-      // PTY-exit attention cleanup lives in TerminalPane's per-session onExit
-      // handler — there is no global 'pty:exit' event (the backend only emits
-      // per-session 'pty:exit:{id}'), so a store-level listener never fired.
-      // The session itself is never auto-removed — the user closes it
-      // manually.
+
 
       ipcCleanup = () => {
         offAttention()
@@ -146,9 +134,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         loaded: true
       })
 
-      // Return the raw persisted state so the caller (App) can forward the
-      // workspaces/activeWorkspaceId to workspaceStore without a second IPC
-      // or a cross-store import. sessionStore does not own workspace state.
+
       return state
     } catch (err) {
       console.error('Failed to load state:', err)
@@ -181,9 +167,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   removeSession: (id: string) => {
-    // Tear down the live PTY for this session, not just the store entry —
-    // otherwise the shell process and its GPU/PTY resources leak until the app
-    // exits. Guarded so it's a no-op outside the renderer (e.g. node tests).
+
     const api = (window as any)?.terminalAPI
     if (api && typeof api.kill === 'function') {
       api.kill(id)
@@ -339,7 +323,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-    // No CSS width animation → ResizeObserver fits normally; skip the flag.
+
     if (prefersReduced) {
       set((state) => ({ sidebarVisible: !state.sidebarVisible }))
       markDirty()
@@ -366,7 +350,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setSidebarWidth: (width: number) => {
-    // Keep in sync with --sidebar-min-width / --sidebar-max-width in variables.css
+
     const clamped = Math.min(320, Math.max(160, width))
     set({ sidebarWidth: clamped })
     markDirty()
@@ -399,10 +383,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   },
 
   setAttention: (id: string, eventType: string | null) => {
-    // Latest event wins, applied immediately.
+
     set((state) => {
       if (eventType === null) {
-        // Remove the key entirely so cleared entries don't linger in the map
+
         if (!(id in state.attentionMap)) return state
         const next = { ...state.attentionMap }
         delete next[id]
@@ -426,8 +410,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   }
 }))
 
-/** Build the session-owned part of persisted state. Workspace fields are
- *  filled by the dirtyScheduler coordinator via workspaceStore. */
+
+                                                                   
 export function buildSessionPersistedState(): Pick<PersistedState, 'sessions' | 'collections' | 'activeSessionId' | 'sidebarVisible' | 'sidebarWidth'> {
   const state = useSessionStore.getState()
   return {

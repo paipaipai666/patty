@@ -4,8 +4,7 @@ import { Dropdown } from '../../App/Dropdown'
 import type { SectionProps } from './AppearanceSection'
 import styles from '../SettingsModal.module.css'
 
-// Default-shell picker excludes 'ssh' — SSH sessions are created from hosts,
-// not chosen as a local default. Object.entries loses the key type; restored here.
+
 const SHELL_OPTIONS: { value: ShellType; label: string }[] = (
   Object.entries(SHELL_LABELS) as [ShellType, string][]
 )

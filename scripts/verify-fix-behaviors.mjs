@@ -1,10 +1,5 @@
-/**
- * Fixed-behavior verification, plain pwsh:
- *  A) emit image deep in buffer        -> item placed, visible
- *  B) 2J3J clear                        -> item pruned (leak fix)
- *  C) same payload displayed twice      -> two items (issue-1 fix)
- *  D) same payload with erase+repaint   -> one item, relocated
- */
+
+   
 const CDP_HTTP = 'http://127.0.0.1:9223'
 const PNG = 'D:\\code\\terminal\\terminal-sidebar\\tmp-test-image.png'
 const list = await (await fetch(CDP_HTTP + '/json/list')).json()
@@ -62,25 +57,24 @@ await send('Page.enable'); await send('Runtime.enable')
 await ev(`document.querySelector('.xterm-helper-textarea')?.focus(); 'ok'`)
 
 console.log('A0 items:', await items())
-// A) scroll deep, emit once.
+
 await type('1..60 | ForEach-Object { Write-Host \"\" }'); await enter(); await sleep(1200)
 await type(iip('')); await enter(); await sleep(1800)
 console.log('A1 placed:', await items())
 
-// B) clear screen+scrollback.
+
 await type(`[Console]::Write([char]27 + '[2J' + [char]27 + '[3J' + [char]27 + '[H')`); await enter()
 await sleep(1200)
 console.log('B1 after 3J (expect []):', await items())
 
-// C) two displays of the same payload, no erase between.
+
 await type('Write-Host one'); await enter(); await sleep(400)
 await type(iip('')); await enter(); await sleep(1500)
 await type('Write-Host two'); await enter(); await sleep(400)
 await type(iip('')); await enter(); await sleep(1500)
 console.log('C1 two displays (expect 2):', await items())
 
-// D) repaint of the SECOND display: CUP to its slot row, erase line, re-emit
-//    the same payload there. Expect: still 2 items; second relocated.
+
 const before = JSON.parse(await items())
 const second = before[1]
 const vpRow = JSON.parse(await ev(`JSON.stringify((document.querySelector('.xterm-viewport')?.scrollTop ?? 0) / 24)`))

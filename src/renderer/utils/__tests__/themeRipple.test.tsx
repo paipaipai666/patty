@@ -8,8 +8,7 @@ describe('themeRipple', () => {
   beforeEach(() => {
     document.body.innerHTML = ''
     triggerFinish = () => {}
-    // themeRipple only assigns .onfinish on the returned Animation; the rest
-    // of the WAAPI surface is unused here, hence the narrow double cast.
+
     Element.prototype.animate = function (): Animation {
       const anim = { onfinish: null as (() => void) | null }
       triggerFinish = () => { anim.onfinish?.() }

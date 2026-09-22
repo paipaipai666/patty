@@ -37,8 +37,8 @@
   color: var(--fg-dim);
 }
 
-/* Ghost autocomplete overlay: mirrors the input's font/padding exactly so the
- * invisible typed prefix aligns the visible suggestion suffix with the caret. */
+
+                                                                                 
 .ghost {
   position: absolute;
   inset: 0;

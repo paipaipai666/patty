@@ -10,17 +10,12 @@ fn home_dir() -> Option<PathBuf> {
         .or_else(|_| std::env::var("HOME"))
         .ok()
         .map(PathBuf::from)
-        // Never fall back to ".": a missing home dir means the user's config
-        // location is unknowable, and writing into the process CWD would plant
-        // hooks in a random repository (REVIEW.md P2).
+
         .filter(|p| !p.as_os_str().is_empty())
 }
 
 pub fn claude_settings_path() -> Option<PathBuf> {
-    // Hooks must live in the user-level settings.json: Claude Code's
-    // localSettings source only reads <project>/.claude/settings.local.json —
-    // a user-level ~/.claude/settings.local.json is never loaded, so hooks
-    // installed there silently never fire.
+
     home_dir().map(|h| h.join(".claude").join("settings.json"))
 }
 
@@ -95,7 +90,7 @@ pub fn ensure_hook_script_exists() -> PathBuf {
     dest
 }
 
-// ── Hook entry builders ─────────────────────────────────────────────────────
+
 
 fn cmd_hook(matcher: &str, command: String) -> Value {
     json!({
@@ -104,8 +99,7 @@ fn cmd_hook(matcher: &str, command: String) -> Value {
     })
 }
 
-// Test-only helper for the legacy exec/args hook form, kept so tests can
-// verify that old args-form installs are still matched and replaced.
+
 #[cfg(test)]
 fn args_hook(matcher: &str, extra_args: &[&str], hook_script_path: &str) -> Value {
     let mut args = vec![
@@ -125,7 +119,7 @@ fn args_hook(matcher: &str, extra_args: &[&str], hook_script_path: &str) -> Valu
     })
 }
 
-// Replace an existing Patty-matching hook entry or append a new one.
+
 fn upsert_hook(hooks: &mut Value, key: &str, entry: Value, is_patty: fn(&Value) -> bool) {
     let list = hooks
         .as_object_mut()
@@ -146,10 +140,7 @@ fn command_contains(h: &Value, needle: &str) -> bool {
         .is_some_and(|c| c.contains(needle))
 }
 
-// Unified Patty-entry predicate: matches both the shell form (full command
-// string containing the script path) and the legacy 2.0.x args form (script
-// path inside the args array), so old installs are replaced in place instead
-// of duplicated on upgrade.
+
 fn is_patty_hook(n: &Value) -> bool {
     n.get("hooks")
         .and_then(Value::as_array)
@@ -192,8 +183,7 @@ fn is_patty_source_hook(n: &Value, source: &str) -> bool {
 fn apply_claude_hooks(settings: &mut Value, hook_script_path: &str) {
     let obj = settings.as_object_mut().expect("settings object");
     let hooks = obj.entry("hooks".to_string()).or_insert_with(|| json!({}));
-    // Shell form (same shape as the codex hooks) — verified end-to-end; the
-    // exec/args form was never proven to spawn in the user's environment.
+
     let base = format!("powershell -ExecutionPolicy Bypass -File \"{hook_script_path}\"");
     let with_event = |event: &str| format!("{base} -EventType {event}");
 
@@ -245,8 +235,7 @@ fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_
         {
             Some(s) => s,
             None => {
-                // Leave the file untouched rather than wiping the user's
-                // theme/model/permissions/other hooks on the next install.
+
                 eprintln!("[installer] failed to parse, leaving untouched: {}", settings_path.display());
                 return;
             }
@@ -257,15 +246,13 @@ fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_
 
     apply(&mut settings, hook_script_path);
 
-    // Atomic tmp+rename: these are the user's own config files (claude
-    // settings.json, codex hooks.json) — a direct fs::write truncates first,
-    // so a crash mid-write would destroy them.
+
     if let Err(e) = crate::store::save_atomic_to(settings_path, &settings) {
         eprintln!("[installer] failed to write {}: {e}", settings_path.display());
     }
 }
 
-// ── Public installers (gated by notification settings at the call site) ─────
+
 
 pub fn ensure_claude_code_hook() {
     let Some(settings_path) = claude_settings_path() else {
@@ -273,17 +260,14 @@ pub fn ensure_claude_code_hook() {
         return;
     };
     let hook_script = ensure_hook_script_exists();
-    // Drop Patty entries from settings.local.json (the broken 2.0.x install
-    // location that Claude never reads) so stale copies can't confuse anyone.
+
     if let Some(legacy) = claude_legacy_local_settings_path() {
         strip_patty_hooks(&legacy);
     }
     install_at(&settings_path, apply_claude_hooks, &hook_script.to_string_lossy());
 }
 
-/// Remove Patty-managed hook entries from a settings file, leaving all other
-/// entries (user hooks, rtk hooks) untouched. Writes only when something
-/// actually changed.
+
 fn strip_patty_hooks(path: &PathBuf) {
     let Ok(raw) = fs::read_to_string(path) else { return };
     let Ok(mut settings) = serde_json::from_str::<Value>(&raw) else { return };
@@ -346,8 +330,7 @@ fn strip_source_hooks(path: &PathBuf, source: &str) {
     }
 }
 
-/// Build the single-file Copilot CLI hooks document Patty owns.
-/// Copilot loads every `*.json` under the hooks dir; we only touch patty-notifier.json.
+
 fn apply_copilot_hooks_file(hook_script_path: &str) -> Value {
     let ps = format!("powershell -NoProfile -ExecutionPolicy Bypass -File \"{hook_script_path}\" -Source \"copilot-cli\"");
     let with_event = |event: &str| format!("{ps} -EventType {event}");
@@ -390,9 +373,7 @@ pub fn remove_copilot_hook() {
     }
 }
 
-/// Remove Patty's hook entries from the Claude settings files (both the live
-/// settings.json and the legacy settings.local.json), leaving the user's own
-/// hooks untouched. No-op when absent or unparseable.
+
 pub fn remove_claude_code_hook() {
     if let Some(p) = claude_settings_path() {
         strip_patty_hooks(&p);
@@ -434,10 +415,7 @@ pub fn remove_omp_hook() {
     }
 }
 
-/// Sync external AI-tool hook installations with the notifications settings:
-/// enabled tools get the hook ensured, disabled tools get it REMOVED — a
-/// toggle-off must not leave residue that keeps spawning the hook script on
-/// every AI tool event (REVIEW.md P1-10).
+
 pub fn sync_notification_tools(settings: &Value) {
     let on = |key: &str| settings["notifications"][key].as_bool().unwrap_or(true);
     if on("claudeCode") { ensure_claude_code_hook() } else { remove_claude_code_hook() }
@@ -471,9 +449,7 @@ pub fn ensure_opencode_plugin() {
 
 pub fn ensure_omp_hook() {
     let source = omp_hook_source();
-    // Install target is the extensions dir, NOT hooks/: hook-factory discovery
-    // exposes only the legacy HookAPI, which lacks session_stop,
-    // tool_approval_requested and ctx.setInterval.
+
     let Some(home) = home_dir() else {
         eprintln!("[installer] no home directory (USERPROFILE/HOME unset) — skipping omp hook install");
         return;
@@ -504,7 +480,7 @@ mod tests {
         upsert_hook(&mut hooks, "Stop", entry.clone(), is_patty_hook);
         assert_eq!(hooks["Stop"].as_array().unwrap().len(), 1);
 
-        // An unrelated user hook is preserved; ours is replaced, not duplicated.
+
         hooks["Stop"].as_array_mut().unwrap().push(cmd_hook("", "echo hi".into()));
         let updated = cmd_hook("m", "powershell -File \"Y/patty-hook.ps1\"".into());
         upsert_hook(&mut hooks, "Stop", updated, is_patty_hook);
@@ -516,8 +492,7 @@ mod tests {
 
     #[test]
     fn upsert_replaces_legacy_args_form_entry() {
-        // 2.0.x installs used the exec/args form; the unified predicate must
-        // still match it so upgrades replace in place instead of duplicating.
+
         let mut hooks = json!({});
         hooks["Stop"] = json!([args_hook("", &[], "X/patty-hook.ps1")]);
         upsert_hook(&mut hooks, "Stop", cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into()), is_patty_hook);
@@ -535,13 +510,13 @@ mod tests {
         }
         assert_eq!(settings["model"], "opus");
         assert_eq!(settings["hooks"]["Notification"][0]["matcher"], HOOK_MATCHER);
-        // All claude hooks use the shell form (full command string).
+
         let cmd = settings["hooks"]["SessionStart"][0]["hooks"][0]["command"].as_str().unwrap();
         assert!(cmd.starts_with("powershell -ExecutionPolicy Bypass -File "));
         assert!(cmd.contains("patty-hook.ps1"));
         assert!(cmd.ends_with("-EventType session_start"));
         assert!(settings["hooks"]["SessionStart"][0]["hooks"][0].get("args").is_none());
-        // Events parsed from stdin carry no -EventType argument.
+
         let stop = settings["hooks"]["Stop"][0]["hooks"][0]["command"].as_str().unwrap();
         assert!(!stop.contains("-EventType"));
     }
@@ -621,7 +596,7 @@ mod tests {
         assert_eq!(written["hooks"]["Stop"].as_array().unwrap().len(), 1);
         assert_eq!(written["hooks"]["Stop"][0]["hooks"][0]["command"], "rtk hook claude");
         assert_eq!(written["hooks"]["SessionStart"].as_array().unwrap().len(), 0);
-        // No Patty entries left: second call must not rewrite the file.
+
         strip_patty_hooks(&file);
         let _ = fs::remove_dir_all(&dir);
     }
@@ -658,8 +633,7 @@ mod tests {
 
     #[test]
     fn home_dir_is_none_without_env() {
-        // Unset USERPROFILE and HOME: no fallback to "." — writing hooks into
-        // the process CWD is worse than skipping the install.
+
         let _env_guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
         let old_u = std::env::var("USERPROFILE").ok();
         let old_h = std::env::var("HOME").ok();
@@ -689,9 +663,7 @@ mod tests {
 
     #[test]
     fn claude_hooks_install_to_user_settings() {
-        // Regression guard: Claude Code's localSettings source only reads
-        // <project>/.claude/settings.local.json — a user-level
-        // settings.local.json is never loaded, so hooks there never fire.
+
         let _env_guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
         assert_eq!(
             claude_settings_path().unwrap().file_name().unwrap(),
@@ -701,9 +673,7 @@ mod tests {
 
     #[test]
     fn hook_clients_authenticate_with_secret() {
-        // Regression guard: the hook server 401s any POST without the
-        // per-process secret. Both hook clients must send it — the opencode
-        // plugin shipped without it once and every event was silently dropped.
+
         let plugin = fs::read_to_string(opencode_plugin_source()).unwrap();
         assert!(plugin.contains("PATTY_HOOK_SECRET"), "opencode plugin must send the hook secret");
         let ps1 = fs::read_to_string(hook_script_source()).unwrap();
@@ -722,12 +692,7 @@ mod tests {
     }
     #[test]
     fn install_codex_preserves_corrupt_settings() {
-        // REVIEW.md P0-3 regression guard: codex installs used to pass
-        // reset_on_corrupt=true, silently resetting an unparseable
-        // ~/.codex/hooks.json to {} and rewriting it with only Patty hooks —
-        // destroying whatever the file contained. install_at no longer has a
-        // reset path at all: corrupt files are always left untouched (same as
-        // the claude case pinned by install_leaves_corrupt_claude_settings_untouched).
+
         let dir = std::env::temp_dir().join(format!("patty-installer-corrupt-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();

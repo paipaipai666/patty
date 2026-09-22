@@ -12,7 +12,7 @@ import type { PaneTree } from '../../../shared/paneTypes'
 
 const collectSessionIds = (tree: PaneTree | null): string[] => [...collectTreeSessionIds(tree)]
 
-/** All leaf pane ids in document order. Test-local helper. */
+                                                              
 const collectLeafIds = (tree: PaneTree | null): string[] => {
   if (!tree) return []
   if (tree.type === 'leaf') return [tree.id]
@@ -27,7 +27,7 @@ describe('splitLeaf', () => {
     expect(next.type).toBe('split')
     if (next.type !== 'split') return
     expect(next.direction).toBe('horizontal')
-    // New session on `second`; original on `first`.
+
     expect(next.first).toEqual(expect.objectContaining({ type: 'leaf', sessionId: 's1' }))
     expect(next.second).toEqual(expect.objectContaining({ type: 'leaf', sessionId: 's2' }))
     expect(next.ratio).toBe(0.5)
@@ -40,14 +40,14 @@ describe('splitLeaf', () => {
     if (next.type !== 'split') return
     expect(next.first).toEqual(expect.objectContaining({ sessionId: 's2' }))
     expect(next.second).toEqual(expect.objectContaining({ sessionId: 's1' }))
-    // side=first → ratio becomes 1 - origRatio (first subtree share = new leaf)
+
     expect(next.ratio).toBeCloseTo(0.7, 10)
   })
 
   it('is a no-op when the target id is a split, not a leaf', () => {
     const tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
     const again = splitLeaf(tree, 'p1', 's3', 'horizontal')
-    // p1 is now a split id; splitting it should not change the tree.
+
     expect(again).toBe(tree)
   })
 
@@ -62,7 +62,7 @@ describe('splitLeaf', () => {
     const tree = singleLeafTree('s1', 'p1')
     const next = splitLeaf(tree, 'p1', 's2', 'horizontal', 'second', 0.001)
     if (next.type !== 'split') return
-    // MIN is 0.1; the original session is on `first` so its share is clamped.
+
     expect(next.ratio).toBeGreaterThanOrEqual(0.1)
     expect(next.ratio).toBeLessThanOrEqual(0.9)
   })
@@ -71,7 +71,7 @@ describe('splitLeaf', () => {
 describe('removeLeaf (collapse)', () => {
   it('collapses a split to the surviving sibling', () => {
     const tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
-    // Find the new leaf's id (session s2), then remove it.
+
     const s2Leaf = findLeaf(tree, collectLeafIds(tree).find((id) => {
       const l = findLeaf(tree, id)
       return l?.sessionId === 's2'
@@ -79,7 +79,7 @@ describe('removeLeaf (collapse)', () => {
     expect(s2Leaf).not.toBeNull()
 
     const { tree: next, nextFocusId } = removeLeaf(tree, s2Leaf!.id)
-    // After removing s2's leaf, the split collapses back to the s1 leaf.
+
     expect(next?.type).toBe('leaf')
     expect((next as any)?.sessionId).toBe('s1')
     expect(nextFocusId).not.toBeNull()
@@ -100,13 +100,13 @@ describe('removeLeaf (collapse)', () => {
   })
 
   it('collapses recursively: removing a deeply nested leaf unwinds parents', () => {
-    // p1 split → (p1 split → s1, s2), s3
-    let tree = singleLeafTree('s1', 'p1')
-    tree = splitLeaf(tree, 'p1', 's2', 'horizontal') // p1 split: s1 | s2
-    const s2LeafId = collectLeafIds(tree).find((id) => findLeaf(tree, id)?.sessionId === 's2')!
-    tree = splitLeaf(tree, s2LeafId, 's3', 'vertical') // s2 split: s2 / s3
 
-    // Remove s3 → s2 split collapses to s2 → top split becomes s1 | s2
+    let tree = singleLeafTree('s1', 'p1')
+    tree = splitLeaf(tree, 'p1', 's2', 'horizontal')
+    const s2LeafId = collectLeafIds(tree).find((id) => findLeaf(tree, id)?.sessionId === 's2')!
+    tree = splitLeaf(tree, s2LeafId, 's3', 'vertical')
+
+
     const s3LeafId = collectLeafIds(tree).find((id) => findLeaf(tree, id)?.sessionId === 's3')!
     const { tree: next } = removeLeaf(tree, s3LeafId)
 
@@ -132,7 +132,7 @@ describe('replaceLeafSession', () => {
 describe('setRatio', () => {
   it('updates a split ratio and clamps it', () => {
     const tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
-    const next = setRatio(tree, 'p1', 5) // way out of range
+    const next = setRatio(tree, 'p1', 5)
     if (next.type !== 'split') return
     expect(next.ratio).toBeLessThanOrEqual(0.9)
   })
@@ -241,7 +241,7 @@ describe('removeLeavesBySession', () => {
 })
 
 describe('navigation helpers', () => {
-  // tree: split(p1) → [ s1, split → [ s2, s3 ] ]
+
   function buildTree(): PaneTree {
     let t = singleLeafTree('s1', 'p1')
     t = splitLeaf(t, 'p1', 's2', 'horizontal')

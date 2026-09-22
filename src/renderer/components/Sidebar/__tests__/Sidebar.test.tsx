@@ -48,8 +48,7 @@ import { useSessionStore } from '../../../store/sessionStore'
 import { useSettingsStore } from '../../../store/settingsStore'
 import type { SshProfile } from '../../../../shared/settingsTypes'
 
-// The mocked useSettingsStore is untyped (vi.mock factory); assert the slice
-// shape this suite mutates. Runtime value is the mock defined above.
+
 interface SettingsMockState {
   settings: { sshProfiles: SshProfile[] }
   openSettings: Mock

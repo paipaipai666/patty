@@ -41,7 +41,7 @@ body::before {
   z-index: 1;
 }
 
-/* Scrollbar styling */
+                     
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -61,13 +61,13 @@ body::before {
   background: var(--accent);
 }
 
-/* Firefox scrollbar styling */
+                             
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
-/* Reset button styles */
+                       
 button {
   border: none;
   background: none;
@@ -85,7 +85,7 @@ input {
   outline: none;
 }
 
-/* xterm.js container */
+                      
 .xterm {
   padding: 8px;
 }
@@ -99,16 +99,10 @@ input {
   border-radius: 2px;
 }
 
-/*
- * IME helper textarea positioning (xterm v5.5)
- *
- * Do NOT use !important on left/top — the browser's IME reads the CSS layout
- * position (not transforms) to decide where to render composition text.
- * xterm.js sets inline left/top to the cursor position; during composition,
- * Object.defineProperty blocks further writes to freeze the IME position.
- */
 
-/* Reduced motion */
+   
+
+                  
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

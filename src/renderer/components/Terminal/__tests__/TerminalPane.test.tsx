@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
-// ── xterm mocks ──────────────────────────────────────────────────────────
-// A fake Terminal that records a `disposed` flag and throws if written to
-// after dispose — so we can detect the "writes to a disposed terminal" half of
-// the C5 bug, not just the orphaned-PTY half.
+
 vi.mock('@xterm/xterm', () => {
   class MockTerminal {
     static instances: MockTerminal[] = []
@@ -42,7 +39,7 @@ vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: class { dispose() {} clearTex
 vi.mock('@xterm/addon-image', () => ({ ImageAddon: class { dispose() {} } }))
 vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class { dispose() {} } }))
 
-// ── store / util mocks (isolate TerminalPane logic + window.terminalAPI) ──
+
 vi.mock('../../../store/sessionStore', () => {
   const state = {
     sidebarTransitioning: false,
@@ -80,7 +77,7 @@ vi.mock('../../../utils/shellReadiness', () => ({ markTerminalOpen: () => {} }))
 import { TerminalPane } from '../TerminalPane'
 import { useSessionStore } from '../../../store/sessionStore'
 
-// Captures the callbacks TerminalPane registers with the main process.
+
 let lastOnExit: (() => void) | undefined
 
 const terminalAPI = {
@@ -131,35 +128,33 @@ describe('TerminalPane PTY lifecycle (C5)', () => {
   it('does not spawn an orphaned PTY or reattach to a disposed terminal after unmount-during-retry', async () => {
     const { root } = render()
 
-    // init timer (50ms) fires → fit + startPty → createSession #1 resolves.
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(50)
     })
     expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
 
-    // The shell process exits → TerminalPane schedules a 500ms auto-restart.
+
     act(() => {
       lastOnExit!()
     })
 
-    // The pane unmounts before the 500ms retry fires.
+
     act(() => {
       root.unmount()
     })
-    // Pre-condition: only the mount spawn happened, and the PTY was killed.
+
     expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
     expect(terminalAPI.kill).toHaveBeenCalledTimes(1)
 
-    // The 500ms retry fires after unmount — this is the leak.
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500)
     })
 
-    // DESIRED behavior: the pending retry timer must have been cleared on
-    // unmount, so no second PTY is spawned and no terminal I/O is reattached
-    // to the now-disposed xterm instance.
-    expect(terminalAPI.createSession).toHaveBeenCalledTimes(1) // <-- fails on current code (gets 2)
-    expect(terminalAPI.onData).toHaveBeenCalledTimes(1) // <-- fails on current code (gets 2)
+
+    expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
+    expect(terminalAPI.onData).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -176,28 +171,24 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
       () => new Promise<CreateResult>((resolve) => { resolveCreate = resolve })
     )
     const { root } = render()
-    // Subscribe-first: createSession is invoked only after the listener
-    // registrations resolve, so flush the microtask queue first.
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
 
-    // Pane unmounts while the (SSH) connection is still being established.
+
     act(() => { root.unmount() })
     expect(terminalAPI.kill).toHaveBeenCalledTimes(1)
 
-    // The aborted create resolves late with a failure: no toast, no state
-    // updates, no listeners re-wired onto the disposed terminal. (MockTerminal
-    // throws on write-after-dispose, so a late write would fail this test.)
+
     await act(async () => {
       resolveCreate({ success: false, pid: 0, error: 'cancelled' })
       await Promise.resolve()
     })
     expect(useToastStore.getState().toasts).toHaveLength(0)
     expect(useSessionStore.getState().updatePid).not.toHaveBeenCalled()
-    // Listeners were subscribed eagerly at mount — exactly once, not again by
-    // the late resolution.
+
     expect(terminalAPI.onData).toHaveBeenCalledTimes(1)
     expect(terminalAPI.onExit).toHaveBeenCalledTimes(1)
   })
@@ -214,8 +205,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
       error: 'auth: Authentication failed'
     })
     render()
-    // Subscribe-first: listener-ready microtask → createSession → its .then —
-    // two promise hops before the failure text lands.
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
@@ -225,10 +215,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
   })
 
   it('clears attention and aiType when the PTY exits', async () => {
-    // REVIEW.md P0-2: this cleanup used to hang off a global 'pty:exit'
-    // listener that never fired (the backend only emits per-session
-    // 'pty:exit:{id}') — it lives in the per-session onExit path now.
-    // (useSessionStore is the vi.mock above; static import sees the mock.)
+
     render()
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
@@ -245,8 +232,7 @@ describe('TerminalPane WebGL context loss (M1)', () => {
   it('registers a context-loss handler so the WebGL addon can be re-created', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
-    // Listeners attach to the inner xterm container, not the test root, so spy
-    // on the prototype to capture every addEventListener call during mount.
+
     const addSpy = vi.spyOn(Element.prototype, 'addEventListener')
     const root = createRoot(container)
     act(() => {
@@ -254,9 +240,7 @@ describe('TerminalPane WebGL context loss (M1)', () => {
     })
     const events = addSpy.mock.calls.map((c) => String(c[0]))
     addSpy.mockRestore()
-    // DESIRED: a context-loss listener exists so a lost WebGL context is
-    // recovered. Currently only 'paste' / composition listeners are added,
-    // so this fails.
+
     expect(events.some((e) => /contextlost/i.test(e))).toBe(true)
     act(() => root.unmount())
   })

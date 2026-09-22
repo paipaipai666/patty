@@ -1,18 +1,5 @@
-/**
- * Startup benchmark: launches Patty like the smoke test and reports
- * wall-clock milestones for the launch → first-terminal-ready path.
- *
- *   spawn → webview attach → sidebar → (click New Terminal) → xterm mounted
- *   → PTY spawned (PID in status bar) → exit processed
- *
- * If the app was built with perf marks enabled (VITE_PATTY_PERF=1 vite dev /
- * build — see src/shared/perf.ts), the renderer's [perf] console lines are
- * harvested and printed after the external milestones. Note that a debug exe
- * needs vite running (devUrl); a release exe embeds out/renderer.
- *
- * Usage:  node scripts/benchmark-startup.mjs
- * Numbers are for comparison across runs on the same machine, not absolutes.
- */
+
+   
 import { launchApp, waitForProcessDeath } from '../e2e/harness.mjs'
 
 const NEW_BTN = 'button[aria-label="New terminal or collection"]'
@@ -29,7 +16,7 @@ async function main() {
   const { cdp, close } = await launchApp()
   mark('webview attached + DOM ready')
 
-  // Harvest [perf] console lines when the build has perf marks enabled.
+
   const perfEnabled = await cdp.evaluate(`window.terminalAPI?.perfEnabled === true`)
   if (perfEnabled) {
     await cdp.send('Runtime.enable')
@@ -55,8 +42,7 @@ async function main() {
     mark('PTY spawned (PID visible)')
     const shellPid = Number(await cdp.evaluate(`document.body.innerText.match(/PID (\\d+)/)[1]`))
 
-    // Sessions persist after exit by design ("[Process exited]"); the
-    // end-to-end completion signal is the OS process dying.
+
     await cdp.evaluate(`document.querySelector('.xterm-helper-textarea').focus()`)
     await cdp.insertText('exit')
     await cdp.pressEnter()

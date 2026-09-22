@@ -15,24 +15,20 @@ pub fn resource_dir() -> PathBuf {
     APP_RESOURCE_DIR.get().cloned().unwrap_or_default()
 }
 
-// ── Session registry ────────────────────────────────────────────────────────
+
 
 pub struct Shared {
     attached: AtomicBool,
-    /// Output produced before the renderer attaches (preheat replay).
+
     buffer: Mutex<ReplayBuffer>,
     app: Option<AppHandle>,
-    /// Inline-image rows the shell still needs to compensate for (ConPTY
-    /// cursor repair). Credited at image-terminator time; claimed by the
-    /// shell-integration prompt hook via take_image_rows().
+
     image_rows: AtomicU32,
-    /// True while an IIP image is mid-stream — lets the hook endpoint tell the
-    /// shell to retry shortly instead of consuming a partial row count.
+
     image_pending: AtomicBool,
 }
 
-/// Pre-attach output buffer with a running byte total — push/pop are O(1)
-/// instead of re-summing every chunk on each push.
+
 #[derive(Default)]
 struct ReplayBuffer {
     chunks: std::collections::VecDeque<String>,
@@ -52,11 +48,7 @@ pub struct Session {
 static SESSIONS: LazyLock<RwLock<HashMap<String, Arc<Session>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-// Per-id spawn guards: serialize the check-then-spawn sequence in create() and
-// warm() for the SAME id only. Startup warming runs on a background thread, so
-// without this a renderer create() and a warm() for the same id could both
-// pass the map check and spawn two PTYs — the loser leaks and duplicates
-// output onto the shared event channel. Unrelated ids spawn concurrently.
+
 static SPAWNING: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 struct SpawnGuard(String);
@@ -93,7 +85,7 @@ pub(crate) fn emit(app: &Option<AppHandle>, event: &str, payload: impl serde::Se
     }
 }
 
-// ── Shell resolution ────────────────────────────────────────────────────────
+
 
 fn shell_paths(name: &str) -> Option<&'static str> {
     match name {
@@ -104,8 +96,7 @@ fn shell_paths(name: &str) -> Option<&'static str> {
     }
 }
 
-// Same probe-once policy as find_pwsh. Git Bash has no fixed install root —
-// where.exe finds git.exe wherever it is, and bash.exe lives next to it.
+
 fn find_gitbash() -> Option<PathBuf> {
     static GITBASH: OnceLock<Option<PathBuf>> = OnceLock::new();
     GITBASH
@@ -113,7 +104,7 @@ fn find_gitbash() -> Option<PathBuf> {
             if let Ok(out) = Command::new("where.exe").arg("git").creation_flags(0x08000000).output() {
                 if out.status.success() {
                     let stdout = String::from_utf8_lossy(&out.stdout);
-                    // ...\Git\cmd\git.exe → ...\Git\bin\bash.exe
+
                     if let Some(git) = stdout.lines().next().map(str::trim) {
                         let bash = PathBuf::from(git)
                             .parent()
@@ -140,8 +131,7 @@ fn find_gitbash() -> Option<PathBuf> {
         .clone()
 }
 
-// ponytail: the TS version re-probed when the cached path vanished (pwsh
-// uninstalled mid-session); we probe once per process.
+
 fn find_pwsh() -> Option<PathBuf> {
     static PWSH: OnceLock<Option<PathBuf>> = OnceLock::new();
     PWSH.get_or_init(|| {
@@ -216,7 +206,7 @@ pub fn shell_spawn_args(shell_path: &str) -> Vec<String> {
         .map(|s| s.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 
-    // Shell integration loaded via -Command so it runs after $PROFILE.
+
     if stem.starts_with("pwsh") || stem.starts_with("powershell") {
         let script = script_path("pwsh.ps1");
         return vec![
@@ -231,13 +221,11 @@ pub fn shell_spawn_args(shell_path: &str) -> Vec<String> {
     if stem == "cmd" {
         return vec!["/k".into(), script_path("cmd-prompt.cmd").to_string_lossy().into_owned()];
     }
-    // gitbash / wsl / other — no injection, same as before.
+
     Vec::new()
 }
 
-// ── UTF-8 incremental decoding ──────────────────────────────────────────────
-// node-pty handed us JS strings; portable-pty gives raw bytes. ConPTY output
-// can split a multi-byte sequence across reads, so carry the incomplete tail.
+
 
 pub fn decode(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
     carry.extend_from_slice(chunk);
@@ -258,7 +246,7 @@ pub fn decode(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
                         carry.drain(..valid + len);
                     }
                     None => {
-                        // Incomplete trailing sequence — wait for more bytes.
+
                         carry.drain(..valid);
                         break;
                     }
@@ -269,16 +257,10 @@ pub fn decode(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
     out
 }
 
-// ── ConPTY startup DSR handshake ────────────────────────────────────────────
-// ConPTY opens every session with a cursor-position query (ESC[6n) and stalls
-// until the terminal answers. node-pty answers this itself
-// (conptyInheritCursor:false); portable-pty passes it through, where it can be
-// emitted before the renderer subscribes and get lost — leaving the shell
-// stuck forever. Answer it here instead and strip it from the stream,
-// reporting a fresh-terminal cursor at 1;1.
+
 
 pub enum DsrState {
-    /// Candidate prefix of the query seen so far.
+
     Pending(String),
     Done,
 }
@@ -286,9 +268,7 @@ pub enum DsrState {
 const DSR_QUERY: &str = "\x1b[6n";
 const DSR_REPLY: &[u8] = b"\x1b[1;1R";
 
-/// Returns the text to forward (None = hold for the next chunk) and whether to
-/// send the reply. Only inspects the stream start: a chunk that isn't a prefix
-/// of the query ends interception.
+
 pub fn dsr_filter(state: &mut DsrState, text: &str) -> (Option<String>, bool) {
     let DsrState::Pending(holdback) = state else {
         return (Some(text.to_string()), false);
@@ -307,38 +287,7 @@ pub fn dsr_filter(state: &mut DsrState, text: &str) -> (Option<String>, bool) {
     (Some(combined), false)
 }
 
-// ── Inline-image row tracking (ConPTY cursor repair) ───────────────────────
-//
-// OSC 1337 (iTerm2 inline image) passes through ConPTY without touching the
-// console's cursor model: conhost never advances past the image, while
-// xterm.js's ImageAddon advances its own cursor by the image's row count. The
-// next absolute-positioned output (e.g. PSReadLine's input redraw) then lands
-// inside the image. The shell integration claims the owed row count at every
-// prompt via the hook endpoint and repairs conhost's cursor with an absolute
-// SetConsoleCursorPosition; we supply the row count by scanning the PTY
-// output stream for IIP headers here.
-//
-// Counting rules:
-// - only cell-valued `height=N` fields (chafa always sends cells); `px`/`auto`/
-//   `%` heights are skipped — we can't map them to rows without cell metrics.
-// - rows are credited only when the image's terminator (BEL or ST) is seen, so
-//   a querying shell never acts on a half-streamed image; `pending` tells it
-//   to retry instead.
-// - alt-screen output (fullscreen TUIs like yazi, which manage their own
-//   layout) is not counted.
-//
-// 已知限制与后续方向（2026-09 上线时记录）：
-// - 动图/监控类输出（chafa --watch、GIF 动画）：每一帧都算一次图像行，
-//   行数会持续累积；传送门在命令结束后的首个 prompt 一次结清并 clamp 到
-//   buffer 底部。静态图是正确路径；动图如需支持，应先在前端限制为静态帧
-//   或按帧去重，再谈光标补偿。
-// - 根治不在我们手里：conhost 侧认图像行才是任意裸跑工具都对的前提。
-//   实测 in-box conhost 会吃掉 sixel DCS（不透传也不出图），sixel 路线已死；
-//   剩下两条是自带 patched OpenConsole（ConPTY 握手是个真项目）或推
-//   microsoft/terminal 上游（sixel 的 cursor tracking 是现成先例）。
-// - chafa 在 Windows 从不等待探测回复，单元格像素恒为 10×20 回退值，
-//   烘焙分辨率 = 列数×10。默认字号下相对显示尺寸是降采样（清晰）；
-//   字号调很大时会变升采样发虚——属 chafa 上游限制，不绕道修。
+
 
 const IIP_MARKER: &[u8] = b"\x1b]1337;File=";
 const ALT_ENTER: &[u8] = b"\x1b[?1049h";
@@ -346,7 +295,7 @@ const ALT_LEAVE: &[u8] = b"\x1b[?1049l";
 const ALT_ENTER_47: &[u8] = b"\x1b[?1047h";
 const ALT_LEAVE_47: &[u8] = b"\x1b[?1047l";
 const NEEDLES: [&[u8]; 5] = [IIP_MARKER, ALT_ENTER, ALT_LEAVE, ALT_ENTER_47, ALT_LEAVE_47];
-const MAX_NEEDLE_LEN: usize = 12; // IIP_MARKER.len()
+const MAX_NEEDLE_LEN: usize = 12;
 const IIP_HEADER_LIMIT: usize = 1024;
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -357,8 +306,7 @@ enum ImageScanState {
     Payload,
 }
 
-/// Longest suffix of `tail` that is a prefix of any needle (0 = none). Lets us
-/// hold a split `\x1b]1337;File=` / `\x1b[?1049h` across chunk boundaries.
+
 fn needle_prefix_len(tail: &[u8]) -> usize {
     let max = (MAX_NEEDLE_LEN - 1).min(tail.len());
     for len in (1..=max).rev() {
@@ -373,30 +321,24 @@ fn needle_prefix_len(tail: &[u8]) -> usize {
 #[derive(Default)]
 struct ImageRowTracker {
     state: ImageScanState,
-    /// Header bytes accumulated between the marker and its terminating ':'.
+
     header: Vec<u8>,
-    /// Held bytes that may be a needle prefix split across chunks (always
-    /// ASCII escape-sequence prefixes, so String is lossless).
+
     carry: String,
     alt_screen: bool,
-    /// Parsed height of the in-flight image (0 = skip / not counted).
+
     pending_rows: u32,
 }
 
 impl ImageRowTracker {
-    /// True while an IIP image is mid-stream (header or payload incomplete) —
-    /// the hook endpoint uses it to tell the shell to retry instead of acting
-    /// on a partial row count.
+
     fn is_pending(&self) -> bool {
         self.state != ImageScanState::Idle
     }
 
-    /// Feed one decoded output chunk; returns rows credited by this chunk.
-    /// Rows are credited only at the image terminator, and only outside the
-    /// alt screen.
+
     fn feed(&mut self, text: &str) -> u32 {
-        // Fast path: base64 image payloads contain no ESC, so the bulk of an
-        // image stream skips scanning entirely.
+
         if self.state == ImageScanState::Idle && self.carry.is_empty() && !text.contains('\x1b') {
             return 0;
         }
@@ -430,7 +372,7 @@ impl ImageRowTracker {
                     }
                     if !matched {
                         if needle_prefix_len(&bytes[p..]) > 0 && p + MAX_NEEDLE_LEN > bytes.len() {
-                            hold_from = Some(p); // possible needle split across chunks
+                            hold_from = Some(p);
                             break;
                         }
                         i = p + 1;
@@ -440,7 +382,7 @@ impl ImageRowTracker {
                     let Some(rel) = bytes[i..].iter().position(|&b| b == b':') else {
                         self.header.extend_from_slice(&bytes[i..]);
                         if self.header.len() > IIP_HEADER_LIMIT {
-                            self.state = ImageScanState::Idle; // malformed; drop
+                            self.state = ImageScanState::Idle;
                         }
                         break;
                     };
@@ -451,14 +393,13 @@ impl ImageRowTracker {
                     i = colon + 1;
                 }
                 ImageScanState::Payload => {
-                    // base64 contains neither BEL nor ESC, so the first BEL or
-                    // ESC\ after the payload is the image terminator.
+
                     let bel = bytes[i..].iter().position(|&b| b == 0x07).map(|r| i + r);
                     let st = bytes[i..]
                         .windows(2)
                         .position(|w| w == b"\x1b\\")
                         .map(|r| i + r);
-                    // An ESC as the final byte may be half of a split ST.
+
                     let esc_tail = bytes.last() == Some(&0x1b);
                     match (bel, st) {
                         (None, None) => {
@@ -489,7 +430,7 @@ impl ImageRowTracker {
         }
 
         self.carry = match hold_from {
-            // hold_from is always at an ASCII ESC byte, so slicing is safe
+
             Some(p) => combined[p..].to_string(),
             None => String::new(),
         };
@@ -497,8 +438,7 @@ impl ImageRowTracker {
     }
 }
 
-/// Parse `height=N` from an IIP header; returns 0 (skip) for px/auto/percent
-/// heights or a missing field — only cell counts map to terminal rows.
+
 fn parse_iip_cell_height(header: &[u8]) -> u32 {
     let header = String::from_utf8_lossy(header);
     let Some(pos) = header.find("height=") else {
@@ -509,8 +449,7 @@ fn parse_iip_cell_height(header: &[u8]) -> u32 {
     if digits == 0 {
         return 0;
     }
-    // A bare number is a cell count only when the field ends right after the
-    // digits (`;` or header end); a suffix like `px`/`%` disqualifies it.
+
     match rest.as_bytes()[digits..].first() {
         None | Some(b';') => {}
         _ => return 0,
@@ -518,10 +457,7 @@ fn parse_iip_cell_height(header: &[u8]) -> u32 {
     rest[..digits].parse().unwrap_or(0)
 }
 
-/// Shell-integration hook support: (rows, pending) for the pane's
-/// uncompensated inline-image rows. The counter is cleared only when no image
-/// is mid-stream — while pending, the count is still growing and the shell
-/// retries instead of consuming a partial count.
+
 pub fn take_image_rows(id: &str) -> Option<(u32, bool)> {
     let session = SESSIONS.read().unwrap().get(id).cloned()?;
     let shared = &session.shared;
@@ -534,7 +470,7 @@ pub fn take_image_rows(id: &str) -> Option<(u32, bool)> {
     Some((rows, pending))
 }
 
-// ── Reader / waiter threads ─────────────────────────────────────────────────
+
 
 fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
     let shared = session.shared.clone();
@@ -583,17 +519,14 @@ fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
             match child.try_wait() {
                 Ok(Some(status)) => break i64::from(status.exit_code()),
                 Ok(None) => {}
-                // A wait error is not a clean exit — report -1 so the
-                // renderer's auto-retry path treats it as a failure, not as
-                // "exited 0".
+
                 Err(_) => break -1,
             }
         }
         thread::sleep(Duration::from_millis(150));
     };
 
-    // Only the session still registered under this id may report its exit —
-    // a replaced pty must not delete its successor or emit a stale event.
+
     let app = {
         let mut map = SESSIONS.write().unwrap();
         let Some(session) = map.get(&id) else { return };
@@ -607,19 +540,14 @@ fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
     emit(&app, &format!("pty:exit:{id}"), code);
 }
 
-// ── Spawn ───────────────────────────────────────────────────────────────────
 
-/// Empty strings and directories deleted since the state was saved mean "no
-/// opinion" — normalize to None so they hit the home fallback instead of
-/// leaking into ConPTY as Some("") (renderer sessions persist cwd: '').
+
+
 fn normalize_cwd(cwd: Option<&str>) -> Option<&str> {
     cwd.filter(|c| !c.is_empty() && Path::new(c).is_dir())
 }
 
-/// Host identity env vars that leak from the process hosting Patty (Windows
-/// Terminal, VS Code, kitty, …). Children inherit them via ConPTY, and oh-my-pi
-/// trusts them over our IIP advertising — e.g. `WT_SESSION` can flip omp onto
-/// Sixel (dead on in-box ConPTY) and `VSCODE_PID` forces `imageProtocol: null`.
+
 fn terminal_identity_envs_to_strip() -> &'static [&'static str] {
     &[
         "WT_SESSION",
@@ -648,24 +576,14 @@ fn terminal_identity_envs_to_strip() -> &'static [&'static str] {
     ]
 }
 
-/// Terminal identity and image-capability env for child shells.
-///
-/// `TERM_PROGRAM=vscode` is kept for tools that special-case VS Code (and
-/// `LC_TERMINAL=iTerm2` for chafa/yazi IIP). oh-my-pi hardcodes
-/// `vscode → imageProtocol: null` and will only emit a text fallback, so:
-/// - `ITERM_SESSION_ID` makes omp detect `iterm2` (checked before TERM_PROGRAM)
-/// - `PI_FORCE_IMAGE_PROTOCOL=iterm2` pins the protocol even if detection drifts
-///
-/// Together these land on OSC 1337 IIP — the one pixel-graphics path this
-/// terminal actually renders (ImageAddon + iipStreamPatcher). Sixel dies on
-/// Windows ConPTY; Kitty graphics is not implemented in ImageAddon.
+
 fn terminal_capability_envs() -> [(&'static str, &'static str); 6] {
     [
         ("TERM", "xterm-256color"),
         ("COLORTERM", "truecolor"),
         ("TERM_PROGRAM", "vscode"),
         ("LC_TERMINAL", "iTerm2"),
-        // Any non-empty value is enough for omp's detectTerminalId.
+
         ("ITERM_SESSION_ID", "patty:0:0"),
         ("PI_FORCE_IMAGE_PROTOCOL", "iterm2"),
     ]
@@ -705,9 +623,7 @@ fn spawn_inner(
     for (key, value) in terminal_capability_envs() {
         cmd.env(key, value);
     }
-    // Only inject the hook channel when the hook server actually started —
-    // otherwise every shell would pointlessly POST to port 0 (and a stale
-    // PATTY_PORT from the environment could hit an unrelated listener).
+
     let hook_port = crate::hooks::hook_port();
     if hook_port != 0 {
         cmd.env("PATTY_PANE_ID", id);
@@ -765,14 +681,10 @@ fn take_buffer(shared: &Shared) -> Option<String> {
     }
 }
 
-/// Cap on total bytes buffered while a preheated session is unattached.
-/// Output past the cap drops oldest-chunks-first: the replay only needs the
-/// tail, and a chatty preheat must not grow without bound.
+
 const PREHEAT_BUFFER_CAP: usize = 256 * 1024;
 
-/// Buffer pre-attach output for replay, dropping oldest chunks once the cap
-/// is exceeded. At least one chunk is always kept (a single oversized read
-/// still replays).
+
 fn buffer_push(shared: &Shared, text: String) {
     let mut buf = shared.buffer.lock().unwrap();
     buf.total += text.len();
@@ -784,7 +696,7 @@ fn buffer_push(shared: &Shared, text: String) {
     }
 }
 
-// ── Public API (called from commands) ───────────────────────────────────────
+
 
 pub fn create(
     app: &AppHandle,
@@ -796,7 +708,7 @@ pub fn create(
 ) -> Value {
     let _spawn_guard = begin_spawn(id);
     let cwd = normalize_cwd(cwd);
-    // Reattach to a preheated session when cwd/shell match.
+
     let mut map = SESSIONS.write().unwrap();
     if let Some(existing) = map.get(id) {
         let matches = existing.cwd.as_deref() == cwd
@@ -812,8 +724,7 @@ pub fn create(
             });
             return json!({ "pid": existing.pid, "success": true, "replay": replay });
         }
-        // Mismatched preheat or a reused id: kill the old process so it can't
-        // leak or deliver duplicate output.
+
         let victim = map.remove(id).unwrap();
         let _ = victim.child.lock().unwrap().kill();
     }
@@ -828,10 +739,9 @@ pub fn create(
     }
 }
 
-/// Pre-spawn a PTY for a session expected to mount soon; early output is
-/// buffered and replayed on attach.
+
 pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>) {
-    // A spawn for this id is already in flight — this warm is redundant.
+
     let Some(_spawn_guard) = try_begin_spawn(id) else {
         return;
     };
@@ -844,9 +754,7 @@ pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>) {
     }
 }
 
-/// The (leaf_id, cwd, shell) candidates startup pre-warming should spawn local
-/// shells for. Pure and exported so the ssh-exclusion rule is unit-testable
-/// without an AppHandle.
+
 pub fn warm_startup_targets(state: &Value) -> Vec<(String, Option<String>, Option<String>)> {
     let Some(active_id) = state.get("activeWorkspaceId").and_then(Value::as_str) else {
         return Vec::new();
@@ -868,9 +776,7 @@ pub fn warm_startup_targets(state: &Value) -> Vec<(String, Option<String>, Optio
                 .iter()
                 .find(|s| s.get("id").and_then(Value::as_str) == Some(leaf_id.as_str()))?;
             let shell = found.get("shell").and_then(Value::as_str).map(String::from);
-            // SSH sessions run on a remote russh connection (sshconn.rs), not a
-            // local PTY — pre-warming one here would spawn a leaked local shell
-            // that kill_pty (which routes to sshconn) never reaps.
+
             if shell.as_deref() == Some("ssh") {
                 return None;
             }
@@ -880,8 +786,7 @@ pub fn warm_startup_targets(state: &Value) -> Vec<(String, Option<String>, Optio
         .collect()
 }
 
-/// Warm the active workspace's pane-tree leaves at startup (mirrors the
-/// Electron boot sequence).
+
 pub fn warm_startup(app: &AppHandle) {
     let state = crate::store::load_state();
     for (leaf_id, cwd, shell) in warm_startup_targets(&state) {
@@ -910,7 +815,7 @@ pub fn write(id: &str, data: &str) {
     let session = SESSIONS.read().unwrap().get(id).cloned();
     if let Some(session) = session {
         let mut writer = session.writer.lock().unwrap();
-        // PTY may have exited; ignore write errors (EPIPE), same as before.
+
         let _ = writer.write_all(data.as_bytes());
         let _ = writer.flush();
     }
@@ -944,7 +849,7 @@ pub fn session_exists(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // ── ImageRowTracker (ConPTY inline-image cursor repair) ─────────────
+
 
     fn iip_image(height_cells: u32) -> String {
         format!("\x1b]1337;File=inline=1;width=87;height={height_cells};preserveAspectRatio=0:QUJDRA==\x07")
@@ -955,7 +860,7 @@ mod tests {
         let mut t = ImageRowTracker::default();
         let img = iip_image(23);
         let colon = img.find(':').unwrap();
-        // header alone credits nothing and reports pending
+
         assert_eq!(t.feed(&img[..colon]), 0);
         assert!(t.is_pending());
         assert_eq!(t.feed(&img[colon..]), 23);
@@ -965,7 +870,7 @@ mod tests {
     #[test]
     fn image_rows_survive_split_marker_header_and_terminator() {
         let img = iip_image(15);
-        // split at every byte position; each split must credit exactly 15
+
         for split in 1..img.len() {
             let mut t = ImageRowTracker::default();
             let got = t.feed(&img[..split]) + t.feed(&img[split..]);
@@ -986,7 +891,7 @@ mod tests {
         assert_eq!(t.feed("\x1b]1337;File=height=200px;:QQ==\x07"), 0);
         assert_eq!(t.feed("\x1b]1337;File=height=auto;:QQ==\x07"), 0);
         assert_eq!(t.feed("\x1b]1337;File=height=50%;:QQ==\x07"), 0);
-        // a following cell-height image still counts
+
         assert_eq!(t.feed(&iip_image(7)), 7);
     }
 
@@ -994,9 +899,9 @@ mod tests {
     fn image_rows_suppressed_in_alt_screen() {
         let mut t = ImageRowTracker::default();
         assert_eq!(t.feed("\x1b[?1049h"), 0);
-        assert_eq!(t.feed(&iip_image(10)), 0); // yazi-style fullscreen image
+        assert_eq!(t.feed(&iip_image(10)), 0);
         assert_eq!(t.feed("\x1b[?1049l"), 0);
-        assert_eq!(t.feed(&iip_image(10)), 10); // back in the main screen
+        assert_eq!(t.feed(&iip_image(10)), 10);
     }
 
     #[test]
@@ -1023,7 +928,7 @@ mod tests {
 
     #[test]
     fn image_rows_pending_false_after_payload_only_chunk() {
-        // payload chunks (pure base64, no ESC) must not stall the pending flag
+
         let mut t = ImageRowTracker::default();
         let img = iip_image(3);
         let colon = img.find(':').unwrap();
@@ -1032,7 +937,7 @@ mod tests {
         let rest = &img[colon..];
         let bel = rest.find('\x07').unwrap();
         assert_eq!(t.feed(&rest[..bel]), 0);
-        assert!(t.is_pending()); // still no terminator
+        assert!(t.is_pending());
         assert_eq!(t.feed(&rest[bel..]), 3);
         assert!(!t.is_pending());
     }
@@ -1040,7 +945,7 @@ mod tests {
     #[test]
     fn decode_handles_split_multibyte_sequence() {
         let mut carry = Vec::new();
-        // '火' = E7 81 AB — split across two reads.
+
         let first = decode(&mut carry, &[0xE7, 0x81]);
         assert_eq!(first, "");
         assert_eq!(carry, vec![0xE7, 0x81]);
@@ -1132,19 +1037,19 @@ mod tests {
     fn terminal_capability_envs_force_itm2_for_omp_images() {
         let envs = terminal_capability_envs();
         let get = |k: &str| envs.iter().find(|(key, _)| *key == k).map(|(_, v)| *v);
-        // oh-my-pi disables images for TERM_PROGRAM=vscode unless forced.
+
         assert_eq!(get("PI_FORCE_IMAGE_PROTOCOL"), Some("iterm2"));
         assert_eq!(get("TERM_PROGRAM"), Some("vscode"));
-        // omp's detectTerminalId checks ITERM_SESSION_ID before TERM_PROGRAM.
+
         assert_eq!(get("ITERM_SESSION_ID"), Some("patty:0:0"));
-        // chafa/yazi IIP path stays advertised.
+
         assert_eq!(get("LC_TERMINAL"), Some("iTerm2"));
     }
 
     #[test]
     fn terminal_identity_envs_strip_host_leaks() {
         let strip = terminal_identity_envs_to_strip();
-        // Windows Terminal / VS Code / kitty markers must not reach omp.
+
         for key in ["WT_SESSION", "VSCODE_PID", "KITTY_WINDOW_ID", "ITERM_SESSION_ID"] {
             assert!(strip.contains(&key), "{key} should be stripped");
         }
@@ -1170,7 +1075,7 @@ mod tests {
         let (forward, reply) = dsr_filter(&mut state, "\x1b[6nrest");
         assert!(reply);
         assert_eq!(forward.as_deref(), Some("rest"));
-        // After answering, everything passes through untouched.
+
         let (forward, reply) = dsr_filter(&mut state, "abc");
         assert!(!reply);
         assert_eq!(forward.as_deref(), Some("abc"));
@@ -1222,13 +1127,13 @@ mod tests {
     #[test]
     fn write_to_unknown_session_is_noop() {
         write("no-such-session", "data");
-        // Should not panic.
+
     }
 
     #[test]
     fn resize_unknown_session_is_noop() {
         resize("no-such-session", 80, 24);
-        // Should not panic.
+
     }
 
     #[test]
@@ -1287,8 +1192,7 @@ mod tests {
 
     #[test]
     fn spawn_echo_and_exit_cleanup() {
-        // Real ConPTY round-trip: unattached session buffers output; exit
-        // removes the session from the registry.
+
         let id = format!("test-{}", std::process::id());
         let pid = spawn_inner(None, &id, None, Some("cmd"), None, None, false)
             .expect("spawn cmd");
@@ -1300,8 +1204,7 @@ mod tests {
             let buffered = session.shared.buffer.lock().unwrap().chunks.iter().cloned().collect::<String>();
             assert!(!buffered.is_empty(), "expected some shell banner output");
         }
-        // ConPTY's startup DSR query is answered by dsr_filter internally;
-        // `exit` then ends cmd and the wait loop must evict the session.
+
         write(&id, "exit\r");
         let mut gone = false;
         for _ in 0..40 {
@@ -1316,24 +1219,12 @@ mod tests {
 
     #[test]
     fn write_to_non_reading_child_does_not_block_the_caller() {
-        // REVIEW.md P0-5: write_pty is a SYNC tauri command (main thread) and
-        // pty::write does a blocking write_all while holding the writer lock.
-        // The review hypothesized that a child that never reads stdin lets the
-        // ConPTY input pipe fill and write_all then blocks — a full UI freeze.
-        //
-        // EMPIRICAL RESULT (2026-08-26, Win11 + ConPTY, cmd child flooded with
-        // 8 MiB of '\r'-less input): the freeze claim did NOT reproduce —
-        // conhost keeps draining the pipe, every single write returned in
-        // ≤ 54ms, all 512 chunks landed. The observable cost is throughput
-        // (~0.5 MiB/s while flooding), not blockage. This test now pins the
-        // measured contract so a platform/ConPTY behavior change that DOES
-        // apply hard backpressure shows up red instead of freezing a user's
-        // window first.
+
         let id = format!("test-write-block-{}", std::process::id());
         spawn_inner(None, &id, None, Some("cmd"), None, None, true).expect("spawn cmd");
         thread::sleep(Duration::from_millis(500));
 
-        const CHUNKS: usize = 512; // 512 × 16 KiB = 8 MiB of unread input
+        const CHUNKS: usize = 512;
         let chunk = "x".repeat(16 * 1024);
         let written = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let max_write_ms = Arc::new(std::sync::atomic::AtomicU64::new(0));
@@ -1349,9 +1240,7 @@ mod tests {
             }
         });
 
-        // Generous deadline: at the measured ~0.5 MiB/s flood throughput the
-        // full 8 MiB takes ~16s. The deadline exists only so a genuinely
-        // wedged pipe can't hang the suite forever.
+
         let deadline = std::time::Instant::now() + Duration::from_secs(60);
         let mut completed = false;
         while std::time::Instant::now() < deadline {
@@ -1362,16 +1251,14 @@ mod tests {
             thread::sleep(Duration::from_millis(100));
         }
         if !completed {
-            // Unblock the worker: killing the child breaks the pipe, write_all
-            // errors out, and pty::write swallows the error.
+
             kill(&id);
         }
         let _ = worker.join();
         let _ = kill(&id);
         let delivered = written.load(std::sync::atomic::Ordering::SeqCst);
         let max_ms = max_write_ms.load(std::sync::atomic::Ordering::SeqCst);
-        // The freeze contract: no single write may block long enough to hang
-        // the UI (2s is already user-visible; measured reality is ≤ 54ms).
+
         assert!(
             completed && max_ms < 2000,
             "pty::write against a non-reading child: {delivered}/{CHUNKS} chunks \

@@ -8,9 +8,8 @@
       content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-swE018xOIYI928RWKL5w+RmVVUJ7mYzsNVkIEBkRKIk='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:"
     />
     <link rel="icon" type="image/x-icon" href="./public/icon.ico" />
-    <!-- Paint the splash/html background in the persisted theme's color before
-         first render. The value is written by settingsStore on every load and
-         theme change; the CSP hash for this script is in script-src above. -->
+
+                                                                               
     <script>try{var c=localStorage.getItem('patty-boot-bg');if(c){document.documentElement.style.setProperty('--patty-boot-bg',c)}}catch(e){}</script>
     <style>
       html,

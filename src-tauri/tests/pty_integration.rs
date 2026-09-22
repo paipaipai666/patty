@@ -201,11 +201,7 @@ fn leaf_session_ids_mixed_missing_session() {
 
 #[test]
 fn warm_startup_targets_skips_ssh_sessions() {
-    // BUG: warm_startup pre-spawns a local PTY for every leaf in the active
-    // workspace. An SSH session persists `shell: "ssh"`, which shell_path()
-    // cannot resolve, so it falls back to the default shell (pwsh) — spawning a
-    // leaked local pwsh process that kill_pty never reaps (kill routes to
-    // sshconn). The warm targets must exclude ssh leaves entirely.
+
     let state = serde_json::json!({
         "activeWorkspaceId": "w1",
         "workspaces": [{

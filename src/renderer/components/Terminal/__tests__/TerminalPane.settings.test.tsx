@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
-// xterm mocks
+
 vi.mock('@xterm/xterm', () => {
   class MockTerminal {
     options: Record<string, unknown> = {}
@@ -34,7 +34,7 @@ vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: class { dispose() {} clearTex
 vi.mock('@xterm/addon-image', () => ({ ImageAddon: class { dispose() {} } }))
 vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class { dispose() {} } }))
 
-// Use the REAL settings store so changing a setting triggers a real re-render.
+
 vi.mock('../../../store/sessionStore', () => {
   const state = {
     sidebarTransitioning: false,
@@ -100,15 +100,13 @@ describe('TerminalPane settings reactivity (M4)', () => {
   it('does not re-fit panes when a non-layout setting changes', async () => {
     const a = render()
     const b = render()
-    // Let both panes finish their initial mount fits.
+
     await act(async () => {
       await vi.advanceTimersByTimeAsync(100)
     })
     const before = terminalAPI.resize.mock.calls.length
 
-    // Changing only `theme` must NOT trigger a terminal re-fit (it has no
-    // effect on columns/rows). Currently every pane re-fits on any settings
-    // change, so this fails.
+
     const settings = useSettingsStore.getState().settings
     act(() => {
       useSettingsStore.setState({ settings: { ...settings, theme: 'light' } })
@@ -118,7 +116,7 @@ describe('TerminalPane settings reactivity (M4)', () => {
     })
 
     const delta = terminalAPI.resize.mock.calls.length - before
-    expect(delta).toBe(0) // <-- fails on current code (gets 2)
+    expect(delta).toBe(0)
 
     a.root.unmount()
     b.root.unmount()

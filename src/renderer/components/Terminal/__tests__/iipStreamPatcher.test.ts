@@ -18,16 +18,14 @@ describe('createIIPStreamPatcher', () => {
 
   it('injects real decoded size into an IIP header missing size (omp/yazi PNG)', () => {
     const patcher = createIIPStreamPatcher()
-    // "base64data" is 10 b64 chars → 7 decoded bytes (atob fails on unpadded
-    // length; the formula still yields the size IIPHandler needs).
+
     const input = `${ESC}]1337;File=name=test.png;:base64data${ESC}\\`
     const output = patcher(input)
     expect(output).toBe(`${ESC}]1337;File=inline=1;size=7;name=test.png;:base64data${ESC}\\`)
   })
 
   it('accepts omp encodeITerm2 shape: inline=1 width=N height=auto, no size', () => {
-    // Mirrors packages/tui/src/terminal-capabilities.ts encodeITerm2() from
-    // oh-my-pi: `File=inline=1;width=…;height=auto:base64` + BEL, no size.
+
     const pngB64 = b64encode(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]))
     const input = `${ESC}]1337;File=inline=1;width=20;height=auto:${pngB64}\x07`
     const output = createIIPStreamPatcher()(input)
@@ -48,7 +46,7 @@ describe('createIIPStreamPatcher', () => {
     const patcher = createIIPStreamPatcher()
     const input = `${ESC}]1337;File=name=a.png;width=100;:data${ESC}\\`
     const output = patcher(input)
-    // "data" decodes to 3 bytes
+
     expect(output).toBe(`${ESC}]1337;File=inline=1;size=3;name=a.png;width=100;:data${ESC}\\`)
   })
 
@@ -64,7 +62,7 @@ describe('createIIPStreamPatcher', () => {
     const chunk2 = `1337;File=name=test.png;:data${ESC}\\`
 
     const out1 = patcher(chunk1)
-    // First chunk holds the partial marker
+
     expect(out1).toBe('')
     const out2 = patcher(chunk2)
     expect(out2).toBe(`${ESC}]1337;File=inline=1;size=3;name=test.png;:data${ESC}\\`)
@@ -93,7 +91,7 @@ describe('createIIPStreamPatcher', () => {
 
   it('handles the partial marker `\\x1b` at end of chunk', () => {
     const patcher = createIIPStreamPatcher()
-    expect(patcher('hello\x1b')).toBe('hello') // emits text, holds \x1b
+    expect(patcher('hello\x1b')).toBe('hello')
     expect(patcher(']1337;File=name=t.png;:data\x07')).toBe(
       '\x1b]1337;File=inline=1;size=3;name=t.png;:data\x07'
     )
@@ -101,7 +99,7 @@ describe('createIIPStreamPatcher', () => {
 
   it('handles varying partial marker suffixes', () => {
     const patcher = createIIPStreamPatcher()
-    expect(patcher(`${ESC}]1`)).toBe('') // holds \x1b]1
+    expect(patcher(`${ESC}]1`)).toBe('')
     expect(patcher(`337;File=name=t.png;:data\x07`)).toBe(
       `${ESC}]1337;File=inline=1;size=3;name=t.png;:data\x07`
     )
@@ -130,7 +128,7 @@ describe('createIIPStreamPatcher', () => {
     const patcher = createIIPStreamPatcher()
     const longGarbage = `${ESC}]1337;` + 'A'.repeat(2000)
     const output = patcher(longGarbage)
-    // Once the held data exceeds 1024 bytes, it should emit the raw data
+
     expect(output).toBe(longGarbage)
   })
 
@@ -138,13 +136,11 @@ describe('createIIPStreamPatcher', () => {
     const patcher = createIIPStreamPatcher()
     const input = `${ESC}]1337;File=name=a.png;:data${ESC}`
     const output = patcher(input)
-    // Holds the whole missing-size image (no terminator yet) including the trailing \x1b
+
     expect(output).toBe('')
 
     const out2 = patcher(']1337;File=name=b.png;:data2\x07')
-    // First image gets no terminator of its own here — the next IIP marker is
-    // not a terminator, so both images are measured and re-emitted once the
-    // stream settles. In real IIP every image ends with BEL/ST.
+
     expect(out2).toContain(`${ESC}]1337;File=inline=1;size=3;name=a.png;:data${ESC}`)
     expect(out2).toContain(`${ESC}]1337;File=inline=1;size=3;name=b.png;:data2\x07`)
   })
@@ -158,7 +154,7 @@ describe('createIIPStreamPatcher', () => {
 
   it('handles consecutive chunks each ending with a possible marker prefix', () => {
     const patcher = createIIPStreamPatcher()
-    // Each chunk: emit text before the trailing partial marker, hold the marker
+
     expect(patcher('a\x1b')).toBe('a')
     expect(patcher('b\x1b')).toBe('\x1bb')
     expect(patcher('c\x1b')).toBe('\x1bc')
@@ -166,23 +162,21 @@ describe('createIIPStreamPatcher', () => {
 
   it('flushes held partial marker when next chunk does not continue it', () => {
     const patcher = createIIPStreamPatcher()
-    expect(patcher('\x1b')).toBe('')          // holds \x1b
-    expect(patcher('\n')).toBe('\x1b\n')       // \n doesn't continue marker → flush both
+    expect(patcher('\x1b')).toBe('')
+    expect(patcher('\n')).toBe('\x1b\n')
   })
 
   it('holds payload tail that is entirely a marker prefix for next chunk', () => {
     const patcher = createIIPStreamPatcher()
     const input = `${ESC}]1337;File=name=a.png;:\x1b`
-    // Payload is a lone `\x1b` (start of the next marker): held until the
-    // following chunk decides the boundary. The first image ends up with an
-    // empty payload (size=0, ImageAddon drops it); the second renders.
+
     expect(patcher(input)).toBe('')
     expect(patcher(']1337;File=name=b.png;:data\x07')).toBe(
       `${ESC}]1337;File=inline=1;size=0;name=a.png;:${ESC}]1337;File=inline=1;size=3;name=b.png;:data\x07`
     )
   })
 })
-// ── TIFF → PNG transcode ─────────────────────────────────────────────
+
 
 function b64encode(bytes: Uint8Array): string {
   let bin = ''
@@ -199,20 +193,20 @@ function b64decode(b64: string): Uint8Array {
   return out
 }
 
-/** Build a TIFF in the fixed layout chafa uses for IIP (LE, RGBA8, one strip). */
+                                                                                  
 function makeChafaTiffB64(width: number, height: number, rgba: Uint8Array): string {
   const imageBytes = width * height * 4
   const ifdOffset = 8 + imageBytes
   const tags: Array<[number, number, number, number]> = [
-    [256, 4, 1, width], // ImageWidth
-    [257, 4, 1, height], // ImageLength
-    [259, 3, 1, 1], // Compression: none
-    [262, 3, 1, 2], // Photometric: RGB
-    [273, 4, 1, 8], // StripOffsets: right after the 8-byte header
-    [277, 3, 1, 4], // SamplesPerPixel: RGBA
-    [278, 4, 1, height], // RowsPerStrip
-    [279, 4, 1, imageBytes], // StripByteCounts
-    [284, 3, 1, 1] // PlanarConfiguration: contiguous
+    [256, 4, 1, width],
+    [257, 4, 1, height],
+    [259, 3, 1, 1],
+    [262, 3, 1, 2],
+    [273, 4, 1, 8],
+    [277, 3, 1, 4],
+    [278, 4, 1, height],
+    [279, 4, 1, imageBytes],
+    [284, 3, 1, 1]
   ]
   const buf = new Uint8Array(ifdOffset + 2 + tags.length * 12 + 4)
   const dv = new DataView(buf.buffer)
@@ -227,11 +221,11 @@ function makeChafaTiffB64(width: number, height: number, rgba: Uint8Array): stri
     dv.setUint32(off + 4, count, true)
     dv.setUint32(off + 8, val, true)
   })
-  dv.setUint32(ifdOffset + 2 + tags.length * 12, 0, true) // next IFD: none
+  dv.setUint32(ifdOffset + 2 + tags.length * 12, 0, true)
   return b64encode(buf)
 }
 
-/** Assert the PNG is structurally valid and pixel-exact against the source RGBA. */
+                                                                                    
 function expectPngRoundTrip(pngB64: string, width: number, height: number, rgba: Uint8Array): void {
   const png = b64decode(pngB64)
   const dv = new DataView(png.buffer)
@@ -240,15 +234,15 @@ function expectPngRoundTrip(pngB64: string, width: number, height: number, rgba:
   expect(String.fromCharCode(...png.subarray(12, 16))).toBe('IHDR')
   expect(dv.getUint32(16)).toBe(width)
   expect(dv.getUint32(20)).toBe(height)
-  expect(png[24]).toBe(8) // bit depth
-  expect(png[25]).toBe(6) // color type: RGBA
+  expect(png[24]).toBe(8)
+  expect(png[25]).toBe(6)
 
   const idatLen = dv.getUint32(33)
   expect(String.fromCharCode(...png.subarray(37, 41))).toBe('IDAT')
-  expect(png[41]).toBe(0x78) // zlib CMF
-  expect(png[42]).toBe(0x01) // zlib FLG
+  expect(png[41]).toBe(0x78)
+  expect(png[42]).toBe(0x01)
 
-  // Walk the stored deflate blocks and reassemble the filtered scanlines.
+
   const rowBytes = width * 4
   const rawLen = height * (1 + rowBytes)
   const raw = new Uint8Array(rawLen)
@@ -265,13 +259,13 @@ function expectPngRoundTrip(pngB64: string, width: number, height: number, rgba:
     if (bfinal === 1) break
   }
   expect(off).toBe(rawLen)
-  expect(p).toBe(41 + idatLen - 4) // the trailing 4 bytes are the adler32
+  expect(p).toBe(41 + idatLen - 4)
 
-  expect(dv.getUint32(45 + idatLen)).toBe(0) // IEND length
+  expect(dv.getUint32(45 + idatLen)).toBe(0)
   expect(String.fromCharCode(...png.subarray(49 + idatLen, 53 + idatLen))).toBe('IEND')
 
   for (let y = 0; y < height; y++) {
-    expect(raw[y * (1 + rowBytes)]).toBe(0) // filter: none
+    expect(raw[y * (1 + rowBytes)]).toBe(0)
     expect(Array.from(raw.subarray(y * (1 + rowBytes) + 1, (y + 1) * (1 + rowBytes)))).toEqual(
       Array.from(rgba.subarray(y * rowBytes, (y + 1) * rowBytes))
     )
@@ -280,23 +274,23 @@ function expectPngRoundTrip(pngB64: string, width: number, height: number, rgba:
 
 describe('TIFF transcode', () => {
   it('transcodes a chafa TIFF payload to PNG, preserving pixels and header fields', () => {
-    // 2x2: red, green / blue, yellow
+
     const rgba = new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255])
     const input = `${ESC}]1337;File=inline=1;width=2;height=1;preserveAspectRatio=0:${makeChafaTiffB64(2, 2, rgba)}\x07`
     const out = createIIPStreamPatcher()(input)
     const m = out.match(/^\x1b\]1337;File=(.*):([A-Za-z0-9+/=]+)\x07$/)
     expect(m).not.toBeNull()
-    // the injected size is the real decoded PNG length (addon-image aborts on 0)
+
     const declared = Number(m![1].match(/(?:^|;)size=(\d+)/)![1])
     expect(declared).toBe(b64decode(m![2]).length)
     expect(declared).toBeGreaterThan(0)
-    expect(m![1]).toContain('width=2') // cell dims preserved
+    expect(m![1]).toContain('width=2')
     expect(m![1]).toContain('preserveAspectRatio=0')
     expectPngRoundTrip(m![2], 2, 2, rgba)
   })
 
   it('round-trips a payload large enough to span multiple deflate stored blocks', () => {
-    // 130x130x4 + 130 filter bytes = 67730 raw bytes > 65535 → two blocks
+
     const width = 130
     const height = 130
     const rgba = new Uint8Array(width * height * 4)
@@ -331,24 +325,21 @@ describe('TIFF transcode', () => {
   it('passes non-TIFF payloads (PNG) through byte-identically', () => {
     const pngB64 = b64encode(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]))
     const input = `${ESC}]1337;File=inline=1;size=100;:${pngB64}\x07`
-    // size already present + non-TIFF → nothing to do at all
+
     expect(createIIPStreamPatcher()(input)).toBe(input)
   })
 
   it('re-emits a malformed TIFF payload unchanged (stream stays valid)', () => {
-    const badTiffB64 = b64encode(new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0xff, 0xff, 0xff, 0xff])) // bad IFD offset
+    const badTiffB64 = b64encode(new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0xff, 0xff, 0xff, 0xff]))
     const input = `${ESC}]1337;File=inline=1;:${badTiffB64}\x07tail`
     const out = createIIPStreamPatcher()(input)
-    // base64 decoded fine (8 bytes) but TIFF parse failed → raw payload, real size
+
     expect(out).toBe(`${ESC}]1337;File=size=8;inline=1;:${badTiffB64}\x07tail`)
   })
 })
 describe('chunk boundary regression', () => {
   it('does not re-emit the image when the BEL terminator is the last byte of a chunk', () => {
-    // Regression: after a successful TIFF emit the held buffer was not cleared,
-    // so when BEL arrived as a chunk's final byte, the next chunk re-processed
-    // the whole image and a later OSC's ST became a phantom terminator —
-    // emitting a corrupt second copy that swallowed the shell prompt.
+
     const rgba = new Uint8Array([10, 20, 30, 40])
     const imageChunk = `${ESC}]1337;File=inline=1;:${makeChafaTiffB64(1, 1, rgba)}\x07`
     const nextChunk = `\r\n${ESC}]7;file://localhost/x${ESC}\\prompt$ `
@@ -356,7 +347,7 @@ describe('chunk boundary regression', () => {
     const out1 = patcher(imageChunk)
     const out2 = patcher(nextChunk)
     expect((out1 + out2).match(/\x1b\]1337/g)!.length).toBe(1)
-    expect(out2).toBe(nextChunk) // tail flows through untouched
+    expect(out2).toBe(nextChunk)
     const m = out1.match(/:([A-Za-z0-9+/=]+)\x07$/)
     expect(m).not.toBeNull()
     expectPngRoundTrip(m![1], 1, 1, rgba)

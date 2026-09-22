@@ -6,13 +6,13 @@ import nordJson from '../themes/nord.json'
 import tokyoNightJson from '../themes/tokyo-night.json'
 import solarizedLightJson from '../themes/solarized-light.json'
 
-// Primary: from JSON files
+
 export const DARK_UI: UITheme = darkJson.ui as UITheme
 export const LIGHT_UI: UITheme = lightJson.ui as UITheme
 export const DARK_XTERM: XtermTheme = darkJson.terminal as XtermTheme
 export const LIGHT_XTERM: XtermTheme = lightJson.terminal as XtermTheme
 
-// All built-in themes (key = theme id used in settings)
+
 export const BUILTIN_THEMES: Record<string, { name: string; ui: UITheme; terminal: XtermTheme }> = {
   dark: { name: darkJson.name, ui: DARK_UI, terminal: DARK_XTERM },
   light: { name: lightJson.name, ui: LIGHT_UI, terminal: LIGHT_XTERM },
@@ -22,7 +22,7 @@ export const BUILTIN_THEMES: Record<string, { name: string; ui: UITheme; termina
   'solarized-light': { name: solarizedLightJson.name, ui: solarizedLightJson.ui as UITheme, terminal: solarizedLightJson.terminal as XtermTheme }
 }
 
-// Fallback defaults (covers any field missing from imported JSON)
+
 const UI_DEFAULTS = { ...DARK_UI } as UITheme
 const XTERM_DEFAULTS = { ...DARK_XTERM } as XtermTheme
 
@@ -186,14 +186,14 @@ export function getThemeColors(theme: string, customThemes: CustomTheme[] = []):
   }
 }
 
-// Module-level cache to diff against previous theme application
+
 const _appliedThemeCache = new Map<string, string>()
 
 export function applyTheme(theme: string, customThemes: CustomTheme[] = []): void {
   const { ui } = getThemeColors(theme, customThemes)
   const root = document.documentElement
 
-  // Apply only changed or new properties
+
   for (const [key, value] of Object.entries(ui)) {
     if (_appliedThemeCache.get(key) !== value) {
       root.style.setProperty(key, value)
@@ -201,7 +201,7 @@ export function applyTheme(theme: string, customThemes: CustomTheme[] = []): voi
     }
   }
 
-  // Remove properties that existed in the old theme but not in the new one
+
   for (const key of _appliedThemeCache.keys()) {
     if (!(key in ui)) {
       root.style.removeProperty(key)

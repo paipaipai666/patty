@@ -3,8 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import { Dropdown } from '../../App/Dropdown'
 
-// Interaction contract for the shared dropdown: listbox semantics, keyboard
-// navigation, mouse selection, click-outside dismissal.
+
 
 const OPTIONS = [
   { value: 'a', label: 'Alpha' },
@@ -62,11 +61,11 @@ describe('Dropdown', () => {
   })
 
   it('keyboard: ArrowDown moves active, Enter selects', () => {
-    keydown('ArrowDown') // opens
-    keydown('ArrowDown') // active → Beta
+    keydown('ArrowDown')
+    keydown('ArrowDown')
     keydown('Enter')
     expect(onSelect).toHaveBeenCalledWith('b', undefined)
-    // closed again
+
     expect(container.querySelector('[role="listbox"]')).toBeNull()
   })
 

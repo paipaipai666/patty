@@ -1,23 +1,16 @@
-/**
- * Minimal CDP client for driving Patty's WebView2 over
- * --remote-debugging-port. Only what the smoke/benchmark scripts need:
- * target discovery, Runtime.evaluate (with in-page async polling), and raw
- * Input dispatch. No framework — the whole WebDriver/CDP stack is overkill
- * for DOM clicks and text insertion.
- */
+
+   
 import http from 'node:http'
 import WebSocket from 'ws'
 
-/** Poll the debugger's target list until the app page shows up. */
+                                                                   
 export async function waitForPageTarget(port, timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs
   let lastError
   while (Date.now() < deadline) {
     try {
       const targets = await getJson(port, '/json/list')
-      // Tauri on Windows serves the UI from https://tauri.localhost; an early
-      // about:blank page target appears first and navigating away from it
-      // destroys any attached execution context, so hold out for the real URL.
+
       const page = targets.find((t) => t.type === 'page' && /^https?:\/\//.test(t.url))
       if (page) return page
     } catch (e) {
@@ -82,7 +75,7 @@ export class Cdp {
     })
   }
 
-  /** Subscribe to CDP events (e.g. 'Runtime.consoleAPICalled'). */
+                                                                   
   on(method, cb) {
     if (!this.listeners.has(method)) this.listeners.set(method, [])
     this.listeners.get(method).push(cb)
@@ -90,13 +83,12 @@ export class Cdp {
 
   send(method, params = {}, timeoutMs = 10_000) {
     const id = this.nextId++
-    // Executor form: Promise.withResolvers needs Node 22, CI pins Node 20.
+
     let settle
     const promise = new Promise((resolvePromise, reject) => {
       settle = { resolve: resolvePromise, reject }
     })
-    // A dead navigation context never answers; fail the call instead of
-    // hanging the whole script on it. Page-side waits pass a longer budget.
+
     const timer = setTimeout(() => {
       if (this.pending.delete(id)) {
         settle.reject(new Error(`CDP call timed out after ${timeoutMs}ms: ${method}`))
@@ -110,10 +102,8 @@ export class Cdp {
     return promise
   }
 
-  /**
-   * Evaluate an expression in the page, awaiting promises, returning the
-   * value by copy. Throws on page-side exceptions.
-   */
+
+     
   async evaluate(expression, timeoutMs = 10_000) {
     const result = await this.send('Runtime.evaluate', {
       expression,
@@ -126,12 +116,8 @@ export class Cdp {
     return result.result.value
   }
 
-  /**
-   * Poll inside the page until `conditionExpr` is truthy. The polling loop
-   * lives page-side for speed; a node-side retry absorbs the transient CDP
-   * -32000 errors (context destroyed / not yet created) that WebView2 throws
-   * while it is still navigating to the real page after attach.
-   */
+
+     
   async waitFor(conditionExpr, timeoutMs = 15_000) {
     const deadline = Date.now() + timeoutMs
     for (;;) {
@@ -143,7 +129,7 @@ export class Cdp {
             await new Promise(r => setTimeout(r, 200))
           }
           return false
-        })()`, timeoutMs + 5_000) // outlive the page-side loop
+        })()`, timeoutMs + 5_000)
         if (found) return
       } catch (e) {
         if (!/context was destroyed|Cannot find default execution context/i.test(e.message)) throw e
@@ -155,7 +141,7 @@ export class Cdp {
     }
   }
 
-  /** Insert text as if typed (drives xterm's textarea input path). */
+                                                                      
   insertText(text) {
     return this.send('Input.insertText', { text })
   }

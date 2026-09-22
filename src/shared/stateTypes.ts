@@ -20,7 +20,7 @@ export interface PersistedSession {
   shell: ShellType
   createdAt: number
   collectionId: string | null
-  /** Snapshot of the SSH target for shell === 'ssh' sessions; null/absent for local shells. */
+                                                                                               
   ssh?: SshTarget | null
 }
 
@@ -30,9 +30,9 @@ export interface PersistedState {
   activeSessionId: string | null
   sidebarVisible: boolean
   sidebarWidth: number
-  /** Workspace list (post-migration). Each owns its sessions and pane tree. */
+                                                                               
   workspaces: PersistedWorkspace[]
-  /** Currently active workspace id, or null if no workspaces exist. */
+                                                                       
   activeWorkspaceId: string | null
   paneTree?: PersistedPaneTree | null
   focusedPaneId?: string | null

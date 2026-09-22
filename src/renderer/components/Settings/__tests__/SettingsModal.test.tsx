@@ -27,8 +27,7 @@ const { mockUpdateSetting, mockCloseSettings, settingsState } = vi.hoisted(() =>
         splitVertical: 'Ctrl+Shift+E',
         closePane: 'Ctrl+Shift+W'
       },
-      // Mock state uses partial theme objects; the real CustomTheme requires
-      // full UITheme/XtermTheme keysets the component never reads here.
+
       customThemes: [] as Array<{ id: string; name: string; ui: Record<string, string>; terminal: Record<string, string> }>,
       notifications: { claudeCode: true, openCode: true, codex: true, ohMyPi: true, qwenCode: true, copilotCli: true },
       sshProfiles: []

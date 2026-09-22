@@ -65,15 +65,15 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
 
   const filteredCollections = useMemo(() => {
     if (!searchQuery?.trim()) return collections
-    // Only show collections that contain matching sessions or have matching child collections
+
     const matchingCollectionIds = new Set<string>()
 
-    // Find collections that directly contain matching sessions
+
     filteredSessions.forEach((s) => {
       if (s.collectionId) matchingCollectionIds.add(s.collectionId)
     })
 
-    // Include parent collections of matching collections
+
     const addParents = (id: string) => {
       const col = collections.find((c) => c.id === id)
       if (col?.parentId) {
@@ -89,7 +89,7 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
   const topLevelCollections = filteredCollections.filter((c) => c.parentId === null)
   const topLevelSessions = filteredSessions.filter((s) => s.collectionId === null)
 
-  // Group top-level sessions by workspace when workspaces exist.
+
   const topLevelWorkspaceGroups = useMemo(() => {
     if (workspaces.length === 0) return null
     const groups: { wsId: string; wsName: string; sessions: TerminalSession[] }[] = []
@@ -104,9 +104,7 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
     return groups
   }, [workspaces, topLevelSessions])
 
-  // Background sessions: top-level and not in any workspace's pane tree
-  // (e.g. after Close Pane, which keeps the session alive). Without this they
-  // would vanish from the sidebar entirely whenever workspaces exist.
+
   const backgroundSessions = useMemo(() => {
     if (!topLevelWorkspaceGroups) return []
     const inTrees = new Set<string>()
@@ -117,7 +115,7 @@ export function SessionList({ onClose, onSelect, onCollectionContextMenu, search
     return topLevelSessions.filter((s) => !inTrees.has(s.id))
   }, [workspaces, topLevelSessions, topLevelWorkspaceGroups])
 
-  // While loading from disk, render nothing to avoid flashing the empty state
+
   if (!loaded) return null
 
   if (filteredSessions.length === 0 && filteredCollections.length === 0) {

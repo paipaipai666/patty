@@ -1,16 +1,8 @@
-/**
- * Contract tests: opencode raw event payloads → normalized Patty hook events.
- *
- * The plugin is the translation boundary between opencode's event stream and
- * Patty's normalized {paneId, event, source, secret} envelope. If an opencode
- * upgrade renames event types or moves payload fields (as opencode 1.18 did by
- * dropping session.deleted), these tests fail instead of the flames silently
- * going dark.
- */
+
+   
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// The plugin delivers session_deleted via a detached curl process (fire-and-
-// forget fetch would not survive opencode's exit). Mock spawn to capture it.
+
 const spawnCalls: { cmd: string; args: string[] }[] = []
 vi.mock('node:child_process', () => ({
   spawn: vi.fn((cmd: string, args: string[]) => {
@@ -29,11 +21,11 @@ interface CapturedPost {
 
 const captured: CapturedPost[] = []
 
-// opencode event shapes as observed by the plugin (properties.info / sessionID).
+
 const mainSession = { info: { id: 's1' } }
 const subSession = { info: { id: 's2', parentID: 's1' } }
 
-// One instance per test: mainSessions tracking lives inside the closure.
+
 let hook: Awaited<ReturnType<typeof PattyNotifier>>
 
 async function drive(event: Record<string, unknown>) {
@@ -43,7 +35,7 @@ async function drive(event: Record<string, unknown>) {
 beforeEach(async () => {
   captured.length = 0
   spawnCalls.length = 0
-  process.env.PATTY_PORT = '1' // unroutable port; fetch is stubbed anyway
+  process.env.PATTY_PORT = '1'
   process.env.PATTY_PANE_ID = 'pane-1'
   process.env.PATTY_HOOK_SECRET = 'secret-1'
   vi.useFakeTimers()
@@ -57,9 +49,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  // Each PattyNotifier() call registers a process 'exit' listener; dropping
-  // them keeps listener-leak warnings out of the suite. Vitest does not rely
-  // on 'exit' listeners mid-run.
+
   process.removeAllListeners('exit')
   delete process.env.PATTY_PORT
   delete process.env.PATTY_PANE_ID
@@ -89,8 +79,7 @@ describe('PattyNotifier (opencode plugin)', () => {
   })
 
   it('subagent session.created 仍转发，但携带 role: subagent', async () => {
-    // 子 agent 创建不代表顶层任务开始/结束：插件上报角色，入口层据此把它
-    // 降为纯租约证据（不点火、零 emit）。
+
     await drive({ type: 'session.created', properties: mainSession })
     captured.length = 0
     await drive({ type: 'session.created', properties: subSession })
@@ -140,7 +129,7 @@ describe('PattyNotifier (opencode plugin)', () => {
     await drive({ type: 'session.created', properties: mainSession })
     captured.length = 0
     await drive({ type: 'session.deleted', properties: mainSession })
-    expect(captured).toHaveLength(0) // detached path bypasses fetch
+    expect(captured).toHaveLength(0)
     expect(spawnCalls).toHaveLength(1)
     expect(spawnCalls[0].cmd).toBe('curl')
     const body = JSON.parse(spawnCalls[0].args[spawnCalls[0].args.length - 1])
@@ -152,16 +141,14 @@ describe('PattyNotifier (opencode plugin)', () => {
     await drive({ type: 'session.created', properties: subSession })
     captured.length = 0
     spawnCalls.length = 0
-    // Subagent deletion goes through the detached path only for main sessions;
-    // for subagents it must be dropped entirely.
+
     await drive({ type: 'session.deleted', properties: subSession })
     expect(captured).toHaveLength(0)
     expect(spawnCalls).toHaveLength(0)
   })
 
   it('every emitted event stays within the canonical hook vocabulary', async () => {
-    // 驱动插件会发通知的全部路径（含子 agent 触发的 session.created 透传与
-    // main session.deleted 的 detached 投递），事件名必须落在共享词汇表内。
+
     await drive({ type: 'session.created', properties: mainSession })
     await drive({ type: 'session.created', properties: subSession })
     await drive({ type: 'permission.asked', properties: {} })

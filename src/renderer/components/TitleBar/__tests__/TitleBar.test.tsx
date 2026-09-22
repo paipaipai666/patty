@@ -63,9 +63,9 @@ describe('TitleBar', () => {
   })
 
   it('settings button is hidden when onOpenSettings is not provided', () => {
-    // Pass explicit null to skip the default in render()
+
     render({ onOpenSettings: null })
-    // Also call the test via a different approach: mount with undefined explicitly
+
     document.body.innerHTML = ''
     const altContainer = document.createElement('div')
     document.body.appendChild(altContainer)

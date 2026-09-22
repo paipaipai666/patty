@@ -143,8 +143,7 @@ export function MetricsDashboard({ open, onClose }: MetricsDashboardProps) {
     }
   }, [open])
 
-  // Memoized chart inputs: without this, every render rebuilds all series
-  // arrays, defeating HistoryChart's memo.
+
   const cpuSeries = useMemo(
     () => [
       { data: samples.map((s) => s.systemCpu), color: 'var(--cyan)', label: 'System CPU load' },

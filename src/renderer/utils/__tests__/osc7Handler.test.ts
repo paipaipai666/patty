@@ -15,10 +15,8 @@ function createMockTerminal() {
   } as any
 }
 
-/**
- * Tests normalizeCwdFromOsc behavior through the public registerOsc7Handler API.
- * The pure function is tested indirectly by checking what onCwd receives.
- */
+
+   
 describe('registerOsc7Handler', () => {
   let term: ReturnType<typeof createMockTerminal>
   let onCwd: Mock<(sessionId: string, cwd: string) => void>

@@ -10,7 +10,7 @@ describe('fitIipToCells', () => {
     const img = buildIipImage('inline=1;width=20;height=auto', PNG_B64)
     const fit = fitIipToCells(img, { widthPx: 400, heightPx: 200 }, cell, 80)
     expect(fit.cols).toBe(20)
-    // 20 cols * 10px = 200px wide; 2:1 image → 100px tall → 5 rows
+
     expect(fit.rows).toBe(5)
   })
 

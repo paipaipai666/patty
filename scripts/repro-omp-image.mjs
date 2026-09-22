@@ -1,11 +1,5 @@
-/**
- * Repro: omp TUI in Patty -> ask agent to read an image -> spy on the
- * overlay pipeline. Answers, per failure class:
- *   A) extractor never fires        -> omp never emitted IIP (read path)
- *   B) Image created, octet-stream  -> TIFF sniff miss (chafa payload)
- *   C) onerror                      -> data URL undecodable
- *   D) onload + DOM img but unseen  -> geometry / stacking
- */
+
+   
 const CDP_HTTP = 'http://127.0.0.1:9223'
 
 const list = await (await fetch(CDP_HTTP + '/json/list')).json()
@@ -49,7 +43,7 @@ const key = async (k, vk) => {
 }
 const enter = () => key('Enter', 13)
 
-// 1) Install spy BEFORE any IIP can land.
+
 await send('Page.enable'); await send('Runtime.enable')
 await ev(`(() => {
   window.__iipSpy = { created: [], results: [], domImgs: [] }
@@ -71,7 +65,7 @@ await ev(`(() => {
   return 'spy-installed'
 })()`)
 
-// 2) Focus terminal, cd, start omp.
+
 await ev(`document.querySelector('.xterm-helper-textarea')?.focus(); 'focused'`)
 await type('cd D:\\code\\AgentNexus'); await enter()
 await sleep(800)
@@ -80,7 +74,7 @@ console.log('omp starting, waiting for TUI…')
 await sleep(9000)
 await shot('output/playwright/repro-1-omp-tui.png')
 
-// 3) Ask the agent to read the test image with the read tool.
+
 const ask = '请用 read 工具读取 D:\\code\\terminal\\terminal-sidebar\\tmp-test-image.png 这张图，然后用 display 把它显示出来'
 await type(ask)
 await enter()
@@ -88,7 +82,7 @@ console.log('request sent, waiting for agent…')
 await sleep(25000)
 await shot('output/playwright/repro-2-after-read.png')
 
-// 4) Dump evidence.
+
 const report = await ev(`JSON.stringify({
   spy: window.__iipSpy,
   iipLast: window.__iipLast ?? null,

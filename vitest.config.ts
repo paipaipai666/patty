@@ -4,9 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   test: {
     globals: false,
-    // Two projects: pure node unit tests, and React/renderer tests that need a
-    // DOM (jsdom) and JSX transform. The renderer project only picks up .tsx/.ts
-    // under src/renderer so existing main/shared unit tests are unaffected.
+
     projects: [
       {
         test: {

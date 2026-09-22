@@ -242,7 +242,7 @@ describe('collections', () => {
       ]
     })
     useSessionStore.getState().moveCollection('c1', 'c2')
-    // Should not set because c2 is descendant of c1
+
     expect(useSessionStore.getState().collections.find(c => c.id === 'c1')?.parentId).toBeNull()
   })
 
@@ -356,9 +356,7 @@ describe('attention', () => {
   it('setAttention latest call wins within the coalesce window', () => {
     useSessionStore.getState().setAttention('s1', 'start')
     useSessionStore.getState().setAttention('s1', 'permission')
-    // The most recent event type wins: the user may jump to a different pane
-    // before the 1s coalesce timer fires, and that latest attention is what
-    // should be flushed, not the first.
+
     expect(useSessionStore.getState().attentionMap['s1']).toBe('permission')
   })
 
@@ -438,9 +436,7 @@ describe('loadState / saveState', () => {
     })
     await useSessionStore.getState().loadState()
     await useSessionStore.getState().loadState()
-    // onAttentionChange should have been called twice (each load), but
-    // the ipcCleanup from the first load should have unregistered old ones.
-    // The important thing is no crash / no duplicate registrations.
+
     expect(mockOnAttentionChange).toHaveBeenCalledTimes(2)
   })
 
@@ -474,11 +470,11 @@ describe('loadState / saveState', () => {
 
     expect(capturedAttentionCallback).not.toBeNull()
 
-    // Simulate an IPC attention event WITHOUT aiType (aiType undefined)
+
     capturedAttentionCallback!('s1', 'start')
 
     expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
-    // aiType stays null (loadState added it) because setAiType was not called
+
     expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
   })
 })

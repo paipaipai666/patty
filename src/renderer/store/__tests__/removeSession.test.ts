@@ -30,8 +30,7 @@ describe('removeSession kills its PTY (low)', () => {
     const id = useSessionStore.getState().addSession({ cwd: 'C:\\', shell: 'powershell' })
     kill.mockClear()
     useSessionStore.getState().removeSession(id)
-    // DESIRED: removing a session tears down its PTY. Currently removeSession
-    // only mutates the store and never kills the PTY — this fails.
+
     expect(kill).toHaveBeenCalledWith(id)
   })
 })

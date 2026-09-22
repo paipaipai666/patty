@@ -5,9 +5,7 @@ import { useRemoteMetricsStore } from '../../store/remoteMetricsStore'
 import { HistoryChart, formatPercent } from '../MetricsDashboard/MetricsDashboard'
 import styles from './SshMonitorPanel.module.css'
 
-// SSH monitor: CPU/mem/swap/net/disk sampled over exec channels multiplexed
-// on the session's own SSH connection (sshconn.rs). No terminal injection —
-// starting/stopping collection never echoes into the shell.
+
 
 interface SshMonitorPanelProps {
   open: boolean
@@ -23,7 +21,7 @@ function formatRate(kbps: number): string {
 }
 
 export function SshMonitorPanel({ open, onClose }: SshMonitorPanelProps) {
-  // Follow the focused pane (same dual-store pattern as CommandBar).
+
   useWorkspaceStore((s) => s.workspaces)
   useWorkspaceStore((s) => s.activeWorkspaceId)
   const sessionId = getFocusedSessionId()
@@ -34,10 +32,7 @@ export function SshMonitorPanel({ open, onClose }: SshMonitorPanelProps) {
   const isSsh = !!session && session.shell === 'ssh'
   const running = entry?.running ?? false
 
-  // Live metrics subscription, bound to the focused ssh session. Cleanup stops
-  // the backend collection loop: closing the panel, switching focus, or the
-  // session turning non-ssh must not leave a 2s exec loop running on the
-  // remote connection.
+
   useEffect(() => {
     if (!open || !isSsh || !sessionId) return
     const boundId = sessionId

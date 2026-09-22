@@ -3,22 +3,17 @@ import type { AppSettings } from '../../shared/settingsTypes'
 import { DEFAULT_SETTINGS } from '../../shared/defaultSettings'
 import { applyTheme, applyFontSettings, getThemeColors } from '../styles/themes'
 
-// Persist the resolved theme background so the next launch can paint the
-// window (Rust) and the boot splash (inline script in index.html) in the
-// right color before any JS/settings load. localStorage, not sessionStorage:
-// WebView2 clears sessionStorage on app exit, so the cache would always miss
-// exactly when it's needed — at cold start.
+
 function cacheBootTheme(theme: string, customThemes: AppSettings['customThemes']) {
   try {
     const colors = getThemeColors(theme, customThemes)
     localStorage.setItem('patty-theme', theme)
     localStorage.setItem('patty-boot-bg', colors.ui['--bg-app'])
-    // The full resolved var map lets main.tsx paint the whole theme before the
-    // settings IPC round trip — not just the splash background.
+
     localStorage.setItem('patty-boot-ui', JSON.stringify(colors.ui))
     document.documentElement.dataset.theme = theme
   } catch {
-    // ignore localStorage failures
+
   }
 }
 
@@ -26,7 +21,7 @@ interface SettingsStore {
   settings: AppSettings
   loaded: boolean
   settingsOpen: boolean
-  /** Category the settings modal should open to, or null for the default. */
+                                                                             
   settingsCategory: string | null
 
   init: () => Promise<void>
@@ -77,9 +72,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     } catch (err) {
       console.error('Failed to save setting:', err)
       set({ settings: prev })
-      // Roll back the side effects too: the optimistic apply already touched
-      // the DOM (CSS variables) and the patty-theme/patty-boot-bg localStorage
-      // entries the next launch's boot splash reads (REVIEW.md P1-15a).
+
       applyTheme(prev.theme, prev.customThemes)
       cacheBootTheme(prev.theme, prev.customThemes)
       applyFontSettings(prev.fontFamily, prev.fontSize)

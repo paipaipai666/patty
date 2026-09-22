@@ -67,7 +67,7 @@ function inputOf(container: HTMLElement): HTMLInputElement {
 }
 
 function typeValue(input: HTMLInputElement, value: string) {
-  // Controlled input: go through the native setter so React sees the change.
+
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
   act(() => {
     setter.call(input, value)

@@ -1,7 +1,5 @@
-/**
- * Lightweight performance instrumentation, gated behind PATTY_PERF=1.
- * Zero overhead in production — all functions are no-ops when the env var is unset.
- */
+
+   
 
 const enabled =
   (typeof window !== 'undefined' && window.terminalAPI?.perfEnabled === true) ||

@@ -46,8 +46,7 @@ describe('remoteMetricsStore', () => {
   it('second sample computes cpuPct and network rates from deltas', () => {
     const { ingest } = useRemoteMetricsStore.getState()
     ingest(ID, raw(), 10_000)
-    // +100 total jiffies (Σ 1000 → 1100), +60 idle+iowait (810 → 870),
-    // +204800 bytes rx over 2s = 100 KB/s, tx unchanged.
+
     ingest(
       ID,
       raw({ cpuJiffies: [140, 0, 60, 850, 20, 5, 5, 20], rxBytes: 1024 * 1024 + 204800 }),
@@ -62,10 +61,10 @@ describe('remoteMetricsStore', () => {
   it('drops samples with non-positive dt', () => {
     const { ingest } = useRemoteMetricsStore.getState()
     ingest(ID, raw(), 10_000)
-    ingest(ID, raw({ rxBytes: 9999999 }), 10_000) // same timestamp
+    ingest(ID, raw({ rxBytes: 9999999 }), 10_000)
     const entry = useRemoteMetricsStore.getState().byId[ID]
     expect(entry.samples).toHaveLength(1)
-    // Base preserved: next delta still measured against the first round.
+
     expect(entry.lastRaw?.rxBytes).toBe(1024 * 1024)
   })
 

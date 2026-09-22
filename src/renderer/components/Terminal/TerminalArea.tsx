@@ -3,13 +3,8 @@ import { useWorkspaceStore } from '../../store/workspaceStore'
 import { PaneTreeRoot } from '../Pane/PaneTree'
 import styles from './Terminal.module.css'
 
-/**
- * Terminal area: renders the pane split tree.
- *
- * Shows the empty state when there are no sessions OR no active workspace
- * (e.g. the last pane was just closed — its session stays in the sidebar
- * but nothing is rendered in the terminal area).
- */
+
+   
 export function TerminalArea() {
   const sessions = useSessionStore((s) => s.sessions)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)

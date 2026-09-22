@@ -69,13 +69,13 @@
   color: var(--text-muted);
 }
 
-/* ImageAddon: overlay canvas must not intercept events or block the WebGL layer */
+                                                                                 
 .pane :global(.xterm-image-layer) {
   pointer-events: none;
 }
 
-/* Shown until the PTY's first output lands — a soft sweep so a cold-spawned
-   shell reads as "starting" instead of a dead black pane. */
+
+                                                             
 .bootShimmer {
   position: absolute;
   inset: 0;

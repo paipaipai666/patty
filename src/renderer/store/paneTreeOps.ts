@@ -1,18 +1,13 @@
-/**
- * Pure, immutable tree operations for the pane split tree.
- *
- * Every function returns a new tree (or a result object) and never mutates
- * its input. Kept dependency-free so it can be unit-tested in isolation and
- * reused by workspaceStore without pulling in zustand/React.
- */
+
+   
 import type { PaneTree, PaneLeaf, PaneSplit, SplitDirection } from '../../shared/paneTypes'
 import { clampRatio } from '../../shared/paneTypes'
 import { newPaneId, firstLeafId as normalizeFirstLeafId, findLeaf } from '../../shared/paneTreeNormalize'
 
-/** A update applied to the node whose id == targetId. Returns the new subtree. */
+                                                                                  
 type NodeUpdate = (node: PaneTree) => PaneTree
 
-/** Recursively rebuild the tree, replacing the node with id `targetId` via `update`. */
+                                                                                        
 function updateNode(tree: PaneTree, targetId: string, update: NodeUpdate): PaneTree {
   if (tree.id === targetId) return update(tree)
   if (tree.type === 'split') {
@@ -21,15 +16,8 @@ function updateNode(tree: PaneTree, targetId: string, update: NodeUpdate): PaneT
   return tree
 }
 
-/**
- * Split a leaf node into a split holding the original session and a new leaf.
- * The new leaf's sessionId is `newSessionId`. `side` controls which side the
- * NEW session lands on; the original session takes the other side. Ratio is
- * the original session's share after split.
- *
- * If `targetId` points at a split (already divided), this is a no-op — only
- * leaves can be split. The caller is expected to split the focused leaf.
- */
+
+   
 export function splitLeaf(
   tree: PaneTree,
   targetLeafId: string,
@@ -42,15 +30,13 @@ export function splitLeaf(
   const origRatio = clampRatio(ratio)
 
   return updateNode(tree, targetLeafId, (node) => {
-    if (node.type !== 'leaf') return node // only leaves split
+    if (node.type !== 'leaf') return node
     const origLeaf: PaneLeaf = { id: newPaneId(), type: 'leaf', sessionId: node.sessionId }
-    // Re-id the original leaf so the focused-pane tracking moves to the
-    // surviving original rather than the stale parent. The new leaf keeps
-    // its fresh id.
+
     const first = side === 'first' ? newLeaf : origLeaf
     const second = side === 'first' ? origLeaf : newLeaf
     const split: PaneSplit = {
-      id: node.id, // reuse the leaf's id as the split id (focus stays put)
+      id: node.id,
       type: 'split',
       direction,
       ratio: side === 'first' ? 1 - origRatio : origRatio,
@@ -61,31 +47,22 @@ export function splitLeaf(
   })
 }
 
-/**
- * Remove the leaf with id `leafId`. If it was half of a split, the sibling
- * subtree takes the parent's place (collapse). Recurses upward: when a split
- * collapses to one child, that child replaces the split, preserving depth.
- *
- * Returns the new tree, or null if the tree becomes empty (the only leaf was
- * removed). Also returns the id of the pane that should receive focus next
- * (the nearest preceding leaf in document order), or null if none.
- */
+
+   
 export interface RemoveResult {
   tree: PaneTree | null
   nextFocusId: string | null
 }
 
 export function removeLeaf(tree: PaneTree, leafId: string): RemoveResult {
-  // Find the leaf to confirm it exists; if not, no-op.
+
   const target = findLeaf(tree, leafId)
   if (!target) return { tree, nextFocusId: null }
 
   const after = removeNode(tree, leafId)
   if (after === null) return { tree: null, nextFocusId: null }
 
-  // Choose focus: the first leaf of the collapsed result. This is a stable,
-  // predictable choice (top-left-most pane) and avoids tracking the sibling
-  // explicitly through the recursion.
+
   const next = normalizeFirstLeafId(after)!
   return { tree: after, nextFocusId: next }
 }
@@ -95,12 +72,8 @@ export interface RemoveManyResult {
   removedCount: number
 }
 
-/**
- * Remove every leaf whose sessionId matches `sessionId` in a single
- * traversal. Collapsing propagates upward naturally: a split whose both
- * children vanish simply returns null itself. When no leaf matches, the
- * original tree reference is returned unchanged.
- */
+
+   
 export function removeLeavesBySession(tree: PaneTree, sessionId: string): RemoveManyResult {
   let removedCount = 0
 
@@ -124,42 +97,35 @@ export function removeLeavesBySession(tree: PaneTree, sessionId: string): Remove
   return { tree: recurse(tree), removedCount }
 }
 
-/** Remove a node by id; returns null if the whole tree is gone. */
+                                                                   
 function removeNode(tree: PaneTree, removeId: string): PaneTree | null {
-  if (tree.id === removeId) return null // this node is the one being removed
+  if (tree.id === removeId) return null
   if (tree.type === 'leaf') return tree
 
   const first = removeNode(tree.first, removeId)
   const second = removeNode(tree.second, removeId)
 
   if (first && second) return { ...tree, first, second }
-  // One side gone → collapse to the survivor.
+
   return first ?? second ?? null
 }
 
-/** Replace the session of the leaf with id `leafId`. No-op if not a leaf. */
+                                                                             
 export function replaceLeafSession(tree: PaneTree, leafId: string, sessionId: string): PaneTree {
   return updateNode(tree, leafId, (node) =>
     node.type === 'leaf' ? { ...node, sessionId } : node
   )
 }
 
-/** Adjust a split's ratio. No-op if target is a leaf. Clamped to usable range. */
+                                                                                  
 export function setRatio(tree: PaneTree, splitId: string, ratio: number): PaneTree {
   return updateNode(tree, splitId, (node) =>
     node.type === 'split' ? { ...node, ratio: clampRatio(ratio) } : node
   )
 }
 
-/**
- * Insert a new leaf as a neighbor of `targetPaneId` along `direction`, on
- * `side`. Used by sidebar drag-in: drop on the right edge of a pane → insert
- * as its right sibling via a horizontal split.
- *
- * `targetPaneId` may be a leaf or a split; the new leaf becomes the
- * `side` child of a new split that replaces the target, and the target
- * subtree becomes the other child. Ratio is the target's share after insert.
- */
+
+   
 export function insertNeighbor(
   tree: PaneTree,
   targetPaneId: string,

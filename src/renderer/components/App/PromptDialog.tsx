@@ -7,13 +7,13 @@ export interface PromptOptions {
   defaultValue?: string
   onSubmit: (value: string) => void
   onCancel: () => void
-  /** Mask the input (password/passphrase prompts). */
+                                                      
   secret?: boolean
-  /** Explanatory line under the title. */
+                                          
   body?: string
-  /** Override the OK button label. */
+                                      
   okLabel?: string
-  /** Confirmation-only dialog: no input, submit passes an empty string. */
+                                                                           
   hideInput?: boolean
 }
 

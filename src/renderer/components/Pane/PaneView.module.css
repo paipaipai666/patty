@@ -36,8 +36,8 @@
   opacity: 0.6;
 }
 
-/* Drop-zone hint shown on every pane while a sidebar drag is in flight:
- * dashed outline + center cross marking the four edge zones. */
+
+                                                                
 .dropHint {
   position: absolute;
   inset: 0;
@@ -67,7 +67,7 @@
   height: 1px;
 }
 
-/* Entrance settle for newly created panes (split, drag-in, new workspace). */
+                                                                            
 .paneView {
   animation: paneIn 140ms var(--ease-out);
 }

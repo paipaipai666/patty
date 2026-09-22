@@ -1,10 +1,5 @@
-/**
- * Controlled scroll experiment, plain pwsh (no TUI):
- *   exit omp -> print N blank lines (force baseY>0) -> emit raw IIP ->
- *   measure img position vs (bufferY-baseY)*cellH -> wheel-scroll, re-measure.
- * Prediction with current code (top = (bufferY-baseY)*cellH - scrollTop and
- * the xterm invariant scrollTop == baseY*cellH): img sits -scrollTop too high.
- */
+
+   
 const CDP_HTTP = 'http://127.0.0.1:9223'
 const PNG = 'D:\\code\\terminal\\terminal-sidebar\\tmp-test-image.png'
 
@@ -49,17 +44,17 @@ const enter = () => key('Enter', 13)
 
 await send('Page.enable'); await send('Runtime.enable')
 
-// Fresh shell: exit whatever is running (omp or pwsh). PTY auto-restarts pwsh.
+
 await ev(`document.querySelector('.xterm-helper-textarea')?.focus(); 'ok'`)
 await type('exit'); await enter()
 await sleep(2500)
 
-// Push 60 blank lines so the buffer scrolls (baseY > 0 guaranteed).
+
 await type('1..60 | ForEach-Object { Write-Host \"\" }')
 await enter()
 await sleep(1200)
 
-// Emit a raw IIP at the current cursor (visible bottom row of the viewport).
+
 const ps =
   `$b=[Convert]::ToBase64String([IO.File]::ReadAllBytes('${PNG}')); ` +
   `[Console]::Write([char]27 + ']1337;File=inline=1;width=20;height=auto:' + $b + [char]7)`
@@ -87,7 +82,7 @@ const sample = () => ev(`(() => {
 
 console.log('emitted:   ', await sample())
 
-// Wheel up 2 notches, then down 2.
+
 const rect = JSON.parse(await ev(`JSON.stringify(document.querySelector('.xterm').getBoundingClientRect())`))
 const cx = Math.round(rect.x + rect.width / 2), cy = Math.round(rect.y + rect.height / 2)
 for (let i = 0; i < 2; i++) { await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: cx, y: cy, deltaX: 0, deltaY: -120 }); await sleep(150) }

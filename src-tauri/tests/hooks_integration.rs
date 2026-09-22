@@ -1,27 +1,27 @@
 #[test]
 fn note_event_adds_to_active_map() {
     patty::hooks::note_event("pane-1", "session_start", "opencode", "main");
-    // The event was accepted without error (no panics).
+
 }
 
 #[test]
 fn note_event_unknown_source_prints_warning_only() {
     patty::hooks::note_event("pane-2", "session_start", "unknown-tool", "main");
-    // Source validation refuses; no map entry created.
+
 }
 
 #[test]
 fn note_event_session_end_removes_from_active() {
     patty::hooks::note_event("pane-3", "session_start", "claude-code", "main");
     patty::hooks::note_event("pane-3", "session_end", "claude-code", "main");
-    // No errors.
+
 }
 
 #[test]
 fn remove_pane_works() {
     patty::hooks::note_event("pane-4", "session_start", "codex", "main");
     patty::hooks::remove_pane("pane-4");
-    // No errors, entry removed.
+
 }
 
 #[test]
@@ -47,6 +47,6 @@ fn hook_secret_is_stable_within_test() {
 #[test]
 fn hook_port_starts_at_zero() {
     let port = patty::hooks::hook_port();
-    // Before server start, port should be 0
+
     assert_eq!(port, 0, "hook_port should be 0 before server starts");
 }

@@ -4,18 +4,13 @@ import type { SplitDirection } from '../../../shared/paneTypes'
 import styles from './Sash.module.css'
 
 interface SashProps {
-  /** The split node this sash belongs to. Dragging updates its ratio. */
+                                                                         
   splitId: string
   direction: SplitDirection
 }
 
-/**
- * Draggable divider between the two subtrees of a split.
- *
- * On pointerdown we capture the pointer. While dragging, the first subtree's
- * share = (pointer offset from the parent's near edge) / parentSize, clamped
- * by the store. The parent is the .split flex container that owns this sash.
- */
+
+   
 export function Sash({ splitId, direction }: SashProps) {
   const setSplitRatio = useWorkspaceStore((s) => s.setSplitRatio)
   const parentRef = useRef<HTMLElement | null>(null)
@@ -53,7 +48,7 @@ export function Sash({ splitId, direction }: SashProps) {
     setDragging(false)
   }, [])
 
-  // Drop the drag if the pointer leaves the window mid-drag.
+
   useEffect(() => {
     if (!dragging) return
     const onUp = () => {

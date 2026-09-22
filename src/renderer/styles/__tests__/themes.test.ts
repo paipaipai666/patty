@@ -98,7 +98,7 @@ describe('applyTheme', () => {
     applyTheme('dark')
     const callsAfterCache = (document.documentElement.style.setProperty as any).mock.calls.length
     applyTheme('dark')
-    // Second call should find everything cached and do nothing
+
     expect((document.documentElement.style.setProperty as any).mock.calls.length).toBe(callsAfterCache)
   })
 

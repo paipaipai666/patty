@@ -35,8 +35,7 @@ fn settings_get_all() -> Value {
 #[tauri::command]
 fn settings_set(key: &str, value: Value) -> Result<Value, String> {
     let settings = store::update_settings(key, value)?;
-    // Notification toggles install AND remove the external AI-tool hooks —
-    // disabling a tool must not leave its hook installed (REVIEW.md P1-10).
+
     if key == "notifications" {
         installer::sync_notification_tools(&settings);
     }
@@ -128,8 +127,7 @@ fn get_fonts() -> Result<Vec<String>, String> {
     fonts::get_fonts()
 }
 
-/// Whether the hook HTTP server is up (it binds an ephemeral port at startup;
-/// failure leaves the port 0 and AI notifications silently dead — surface it).
+
 #[tauri::command]
 fn hook_server_status() -> Value {
     json!({ "available": hooks::hook_port() != 0 })
@@ -137,9 +135,7 @@ fn hook_server_status() -> Value {
 
 #[tauri::command]
 fn hooks_clear_pane(pane_id: &str) {
-    // shell 提示符重绘（OSC 7）= 前台 TUI 已退出。opencode 1.18 退出 TUI 后
-    // 其服务器进程会存活一段时间并持续心跳，退出事件和看门狗都无法及时
-    // 熄灭火焰；prompt 返回时由前端调用此命令立即清除租约。
+
     hooks::remove_pane(pane_id);
 }
 
@@ -189,8 +185,7 @@ async fn theme_import() -> Value {
     let parse = (|| -> Result<Value, String> {
         let raw = std::fs::read_to_string(file.path()).map_err(|e| e.to_string())?;
         let mut theme: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-        // Type-check, not just presence: a malformed theme writes invalid CSS
-        // variables into the renderer on every launch.
+
         let string_map = |v: &Value| {
             v.as_object().is_some_and(|o| o.values().all(Value::is_string))
         };
@@ -231,9 +226,7 @@ fn metrics_record_first_terminal(entry: Value) -> Value {
     json!({ "success": true })
 }
 
-/// Built-in theme backgrounds are read from the same JSON files the renderer
-/// applies at runtime — embedded at compile time, so there is exactly one
-/// source of truth for theme colors (REVIEW.md P1-7). Parsed once per process.
+
 fn builtin_themes() -> &'static HashMap<&'static str, Value> {
     static BUILTIN: LazyLock<HashMap<&'static str, Value>> = LazyLock::new(|| {
         [
@@ -336,8 +329,7 @@ pub fn run() {
 mod tests {
     use super::*;
 
-    /// Restore a mutated env var even when the test body panics, so a failure
-    /// can't leak a wrong USERPROFILE into parallel tests.
+
     struct EnvRestore {
         key: &'static str,
         old: Option<std::ffi::OsString>,
@@ -360,17 +352,7 @@ mod tests {
 
     #[test]
     fn disabling_notification_tool_removes_its_installed_hooks() {
-        // REVIEW.md P1-10: startup ensure_* writes Patty hooks into
-        // ~/.claude/settings.json, but toggling the tool off in Settings only
-        // suppresses events server-side — the installed hooks stay forever
-        // (and every Claude tool call keeps spawning the hook script). The
-        // settings write path must strip Patty's entries for the disabled
-        // tool. installer::strip_patty_hooks already implements the removal;
-        // it is just never wired to the toggle.
-        //
-        // Note: home_dir() reads USERPROFILE, so this test mutates process
-        // env; installer::tests::home_dir_is_none_without_env does the same
-        // without a shared lock — both windows are milliseconds, accepted.
+
         let _env_guard = store::TEST_ENV_LOCK.lock().unwrap();
         let dir = std::env::temp_dir().join(format!("patty-uninstall-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

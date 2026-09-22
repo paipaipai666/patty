@@ -1,11 +1,11 @@
 import type { IipImage } from './iipParser'
 
-/** A single overlay image anchored to terminal cell coordinates. */
+                                                                    
 export interface IipOverlayItem {
   id: number
-  /** Top row in buffer-viewport cells (caller maps bufferY - baseY). */
+                                                                        
   row: number
-  /** Left column in buffer cells (slot cell x). */
+                                                   
   col: number
   rows: number
   cols: number
@@ -22,17 +22,14 @@ export interface CellSize {
 export interface IipOverlayProps {
   items: IipOverlayItem[]
   cell: CellSize
-  /** Pixel origin of the terminal text area (usually xterm-screen). */
+                                                                       
   originX: number
   originY: number
   onDismiss?: (id: number) => void
 }
 
-/**
- * Paint extracted IIP frames as absolutely-positioned <img> layers.
- * `row` is the top edge in viewport cells (0 = top of the pane); callers pass
- * `bottomAbs - rows + 1 - baseY` so the block tracks scrollback.
- */
+
+   
 export function IipOverlay({ items, cell, originX, originY }: IipOverlayProps) {
   if (items.length === 0) return null
   return (
@@ -44,9 +41,7 @@ export function IipOverlay({ items, cell, originX, originY }: IipOverlayProps) {
         width: '100%',
         height: '100%',
         pointerEvents: 'none',
-        // Must sit above xterm's canvas/WebGL layers (term.open appends them
-        // into the same container). A lower value hides <img> under the text
-        // canvas while slot glyphs remain visible.
+
         zIndex: 30,
       }}
     >
@@ -75,10 +70,8 @@ export function IipOverlay({ items, cell, originX, originY }: IipOverlayProps) {
   )
 }
 
-/**
- * Fit an image to cell units using the IIP width/height fields.
- * `auto` / missing → derive from intrinsic pixel size and cell metrics.
- */
+
+   
 export function fitIipToCells(
   image: IipImage,
   intrinsic: { widthPx: number; heightPx: number },

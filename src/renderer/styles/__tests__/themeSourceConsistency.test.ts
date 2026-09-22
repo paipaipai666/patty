@@ -2,16 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-// REVIEW.md P1-7 — theme background color used to have FOUR hand-maintained
-// sources (themes/*.json, variables.css data-theme blocks, lib.rs BUILTIN,
-// index.html boot splash). After the C2 single-sourcing:
-//   - themes/*.json is the only per-theme truth;
-//   - lib.rs embeds the JSONs via include_str! (compile time);
-//   - the pre-JS paint comes from the localStorage cache written by
-//     settingsStore (main.tsx), not from stylesheet fallback blocks;
-//   - variables.css :root and the index.html splash fallback only ever carry
-//     the DEFAULT (dark) theme.
-// This test pins that structure so the duplication can't creep back.
+
 
 const ROOT = join(__dirname, '..', '..', '..', '..')
 
@@ -20,7 +11,7 @@ function readThemesJson(): Record<string, string> {
   const out: Record<string, string> = {}
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.json'))) {
     const theme = JSON.parse(readFileSync(join(dir, file), 'utf8'))
-    // Theme files have no id field — the filename is the id (dark.json → dark).
+
     out[file.replace(/\.json$/, '')] = theme.ui['--bg-app']
   }
   return out
@@ -52,7 +43,7 @@ describe('theme single-source structure (REVIEW P1-7)', () => {
       ...src.matchAll(/include_str!\("\.\.\/\.\.\/src\/renderer\/themes\/([a-z-]+)\.json"\)/g)
     ].map((m) => m[1])
     expect(embedded.sort()).toEqual(THEME_IDS)
-    // And no hand-maintained hex table may return alongside it.
+
     expect(src.includes('const BUILTIN')).toBe(false)
   })
 

@@ -1,9 +1,7 @@
 use std::fs;
 use std::sync::{LazyLock, Mutex};
 
-/// Tests share the process-level `metrics::DATA` static, so serialize within
-/// this binary.  Use poison recovery: a panicked test poisons the mutex, but
-/// `.into_inner()` lets the next test proceed with a clean DATA.
+
 static SERIAL: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn serial_lock() -> std::sync::MutexGuard<'static, ()> {
@@ -160,8 +158,7 @@ fn records_via_persist_survive_reload() {
     patty::metrics::record_first_terminal(serde_json::json!({"shell":"bash","durationMs":50,"iso":"a"}));
     patty::metrics::record_first_terminal(serde_json::json!({"shell":"zsh","durationMs":80,"iso":"b"}));
 
-    // Persist is called by record_first_terminal.  Verify by clearing DATA
-    // then reloading from that file.
+
     patty::metrics::reset_for_test();
     patty::metrics::load_history();
     let s = patty::metrics::snapshot();

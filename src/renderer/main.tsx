@@ -5,12 +5,7 @@ import App from './App'
 import { ErrorBoundary } from './ErrorBoundary'
 import './styles/global.css'
 
-// Apply the cached theme synchronously before React renders to prevent a dark
-// flash for light/custom-theme users. patty-boot-ui holds the resolved CSS
-// variable map (written by settingsStore on every load/change) — this replaces
-// the hand-maintained per-theme blocks that used to live in variables.css
-// (REVIEW.md P1-7). The boot splash (--patty-boot-bg in index.html) covers the
-// pre-bundle window; first-ever run with no cache falls back to :root dark.
+
 try {
   const cachedTheme = localStorage.getItem('patty-theme')
   if (cachedTheme) {
@@ -25,7 +20,7 @@ try {
     }
   }
 } catch {
-  // localStorage may be unavailable (privacy mode); ignore
+
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

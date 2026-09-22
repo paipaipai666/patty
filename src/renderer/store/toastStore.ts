@@ -26,7 +26,7 @@ export const useToastStore = create<ToastStore>((set) => ({
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
 }))
 
-/** Fire-and-forget toast for non-component call sites (IPC handlers, stores). */
+                                                                                 
 export function toast(message: string, kind: Toast['kind'] = 'error'): void {
   useToastStore.getState().push(message, kind)
 }

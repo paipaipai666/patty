@@ -1,4 +1,4 @@
-/** Resume session 01a0c6df in Patty, dump overlay state, scroll up, dump again. */
+                                                                                   
 const CDP_HTTP = 'http://127.0.0.1:9223'
 const list = await (await fetch(CDP_HTTP + '/json/list')).json()
 const page = list.find((t) => t.type === 'page' && t.url.includes('1420'))
@@ -43,7 +43,7 @@ const enter = () => key('Enter', 13)
 await send('Page.enable'); await send('Runtime.enable')
 await ev(`document.querySelector('.xterm-helper-textarea')?.focus(); 'ok'`)
 
-// Dump helper: overlay items + img rects + buffer stats.
+
 const dump = async (tag) => {
   const r = await ev(`JSON.stringify((() => {
     const imgs = [...document.querySelectorAll('img')].map((el) => {
@@ -55,19 +55,19 @@ const dump = async (tag) => {
   console.log(r)
 }
 
-// 1) Ctrl+C out of any running TUI, back to pwsh.
+
 await key('c', 67, 2); await sleep(400)
 await key('c', 67, 2); await sleep(1200)
 await shot('output/playwright/resume-0-shell.png')
 
-// 2) Resume the session.
+
 await type('cd D:\\code\\AgentNexus'); await enter(); await sleep(600)
 await type('omp --resume 01a0c6df-d9da-7000-a29e-55cd3c4856d9'); await enter()
 console.log('resuming…'); await sleep(15000)
 await shot('output/playwright/resume-1-restored.png')
 await dump('restored-bottom')
 
-// 3) PageUp several times to scroll through history.
+
 for (let i = 1; i <= 4; i++) {
   await key('PageUp', 33); await sleep(700)
   await shot('output/playwright/resume-2-pageup' + i + '.png')

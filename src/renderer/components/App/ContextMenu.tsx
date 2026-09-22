@@ -22,7 +22,7 @@ export function ContextMenu({ show, x, y, items, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const cachedItemsRef = useRef<MenuItem[]>([])
 
-  // Keep the last non-empty items so the menu still shows content during its exit animation
+
   if (items.length > 0) {
     cachedItemsRef.current = items
   }
@@ -47,7 +47,7 @@ export function ContextMenu({ show, x, y, items, onClose }: ContextMenuProps) {
     }
   }, [onClose])
 
-  // Adjust position if menu would overflow
+
   useEffect(() => {
     if (!menuRef.current) return
     const adjust = () => {
@@ -65,7 +65,7 @@ export function ContextMenu({ show, x, y, items, onClose }: ContextMenuProps) {
     return () => window.removeEventListener('resize', adjust)
   }, [x, y])
 
-  // Focus first item + arrow-key navigation
+
   useEffect(() => {
     if (!mounted || !menuRef.current) return
     const buttons = Array.from(menuRef.current.querySelectorAll<HTMLButtonElement>('button:not([disabled])'))

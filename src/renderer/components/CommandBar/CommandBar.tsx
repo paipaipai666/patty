@@ -3,9 +3,7 @@ import { useSessionStore } from '../../store/sessionStore'
 import { useWorkspaceStore, getFocusedSessionId } from '../../store/workspaceStore'
 import styles from './CommandBar.module.css'
 
-// FinalShell-style local command input: compose/edit a command here, then send
-// it to the focused SSH session. History lives in localStorage (usage traces,
-// not settings) and is shared across sessions like shell history.
+
 const HISTORY_KEY = 'patty-cmd-history'
 const HISTORY_LIMIT = 200
 
@@ -21,26 +19,26 @@ function loadHistory(): string[] {
 
 function pushHistory(cmd: string) {
   const history = loadHistory()
-  // Skip consecutive duplicates — spamming the same command must not flood ↑ recall.
+
   if (history[history.length - 1] !== cmd) {
     history.push(cmd)
   }
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-HISTORY_LIMIT)))
   } catch {
-    // ignore localStorage failures
+
   }
 }
 
 export function CommandBar() {
-  // Subscribe to focus/workspace changes so the bar follows the focused pane.
+
   useWorkspaceStore((s) => s.workspaces)
   useWorkspaceStore((s) => s.activeWorkspaceId)
   const sessionId = getFocusedSessionId()
   const session = useSessionStore((s) => s.sessions.find((x) => x.id === sessionId))
 
   const [value, setValue] = useState('')
-  // History navigation: null = editing fresh text; otherwise index into history.
+
   const [histIdx, setHistIdx] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
 
@@ -60,7 +58,7 @@ export function CommandBar() {
   const send = () => {
     const cmd = value.replace(/[\r\n]+/g, ' ').trim()
     if (!cmd) return
-    // write() is fire-and-forget; the Rust side swallows EPIPE on dead PTYs.
+
     window.terminalAPI.write(session.id, cmd + '\r')
     useSessionStore.getState().resetAttention(session.id)
     pushHistory(cmd)
@@ -109,7 +107,7 @@ export function CommandBar() {
         setHistIdx(histIdx + 1)
         setValue(history[histIdx + 1])
       } else {
-        // Stepping past the newest entry restores the pre-navigation draft.
+
         setHistIdx(null)
         setValue(draft)
       }

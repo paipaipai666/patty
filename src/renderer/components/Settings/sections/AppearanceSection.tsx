@@ -42,8 +42,7 @@ function ThemePicker({
       ariaLabel="Color theme"
       onSelect={(id, mouse) => {
         if (id !== value) {
-          // Ripple from the click position; keyboard selection falls back to
-          // the viewport center.
+
           const theme = getThemeColors(id, customThemes)
           themeRipple(mouse?.x ?? window.innerWidth / 2, mouse?.y ?? window.innerHeight / 2, theme.ui['--bg-app'])
         }
@@ -69,9 +68,7 @@ function FontPicker({ value, onChange }: { value: string; onChange: (font: strin
   const [loading, setLoading] = useState(false)
   const [requested, setRequested] = useState(false)
 
-  // Fetch lazily when the dropdown first opens. `requested` guards against
-  // repeat fetches (incl. React StrictMode's double-invoked effects) and is
-  // reset on failure so a failed fetch can be retried by reopening.
+
   const loadFonts = () => {
     if (requested) return
     setRequested(true)

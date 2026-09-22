@@ -87,8 +87,7 @@ describe('Sash', () => {
     const { container } = renderSash('horizontal')
     const sash = container.querySelector('[role="separator"]')!
     const parent = sash.parentElement!
-    // jsdom elements have no layout; force getBoundingClientRect on the
-    // parent so the ratio calculation yields 250/500 = 0.5.
+
     parent.getBoundingClientRect = () => new DOMRect(0, 0, 500, 400)
 
     act(() => {

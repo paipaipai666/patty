@@ -90,7 +90,7 @@ export function SettingsModal() {
     }
   }, [settingsOpen, handleKeyDown])
 
-  // Focus trap: save/restore focus, keep Tab inside the modal
+
   useEffect(() => {
     if (!settingsOpen) return
     previouslyFocused.current = document.activeElement as HTMLElement | null

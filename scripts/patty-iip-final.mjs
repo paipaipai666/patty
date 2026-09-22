@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 await send('Page.enable')
 await send('Runtime.enable')
 
-// Fresh IIP
+
 await send('Runtime.evaluate', { expression: "document.querySelector('.xterm-helper-textarea')?.focus()" })
 const ps =
   `$b=[Convert]::ToBase64String([IO.File]::ReadAllBytes('D:\\code\\terminal\\terminal-sidebar\\tmp-test-image.png')); ` +

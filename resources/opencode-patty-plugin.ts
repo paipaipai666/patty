@@ -1,17 +1,5 @@
-/**
- * OpenCode Plugin: Patty Notifier
- *
- * 监听 OpenCode 事件，当需要用户介入时发送通知到 Patty。
- * 支持的事件：
- * - permission.asked: 权限请求
- * - question.asked: 询问问题
- * - session.idle: 会话空闲（agent 完成回答）
- * - session.error: 执行出错
- *
- * 线格式 v2：每个事件携带 role（main|subagent）。插件本地仍按 parentID
- * 过滤 subagent 的 idle/deleted（省 HTTP 噪音），上报 role 是让入口层的
- * subagent 零-emit 不变量有兜底输入。
- */
+
+   
 
 import { spawn } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
@@ -43,19 +31,18 @@ export const PattyNotifier = async ({
   const PATTY_PORT = process.env.PATTY_PORT
   const PANE_ID = process.env.PATTY_PANE_ID
 
-  // 不在 Patty 环境中，静默退出
+
   if (!PATTY_PORT || !PANE_ID) {
     return {}
   }
 
-  // 诊断日志：记录 opencode 实际发出的事件流与插件的处置，用于排查火焰
-  // 状态卡死。文件在 %TEMP%\patty-opencode-hook.log（追加写，出错静默）。
+
   const LOG_FILE = join(tmpdir(), 'patty-opencode-hook.log')
   const log = (msg: string) => {
     try {
       appendFileSync(LOG_FILE, `${new Date().toISOString()} [pid ${process.pid}] [pane ${PANE_ID}] ${msg}\n`)
     } catch {
-      // 日志失败不影响插件
+
     }
   }
   log('=== plugin active (opencode started inside Patty terminal) ===')
@@ -75,7 +62,7 @@ export const PattyNotifier = async ({
         signal: controller.signal
       })
     } catch {
-      // 静默忽略网络错误
+
     } finally {
       clearTimeout(timeoutId)
     }
@@ -87,14 +74,11 @@ export const PattyNotifier = async ({
       event,
       source: 'opencode',
       role,
-      // The hook server rejects unauthenticated callers (401); the secret
-      // is injected into the terminal env by Patty's pty layer.
+
       secret: process.env.PATTY_HOOK_SECRET
     })
 
-  // opencode 的 event dispatch 不 await 插件 handler，进程退出时 fire-and-forget
-  // 的 fetch 来不及完成。用 detached 子进程投递 session_deleted，使其脱离本
-  // 进程生命周期；spawn 失败时回退到普通 fetch（看门狗兜底）。
+
   const notifyPattyDetached = (event: string, role: SessionRole = 'main') => {
     log(`→ patty (detached): ${event} role=${role}`)
     try {
@@ -110,10 +94,7 @@ export const PattyNotifier = async ({
     }
   }
 
-  // opencode 1.18 退出时不再发射 session.deleted（插件日志实证：退出瞬间只有
-  // 心跳中断，无任何会话事件）。改为监听进程退出——任何退出路径（正常退出、
-  // Ctrl+C）都会同步触发 'exit'，在此用 detached curl 投递 session_deleted，
-  // 使火焰立即熄灭；Patty 看门狗（8s 租约）仅作为投递失败时的兜底。
+
   process.on('exit', () => {
     log('process exiting → session_deleted')
     notifyPattyDetached('session_deleted')
@@ -132,8 +113,7 @@ export const PattyNotifier = async ({
           if (info?.id && !info.parentID) {
             mainSessions.add(info.id)
           }
-          // 子 agent session 也照常转发，入口层按 role 把它降为纯租约证据
-          // （零 emit），火焰不会被误点亮。
+
           await notifyPatty('session_created', role)
           if (aliveInterval) clearInterval(aliveInterval)
           aliveInterval = setInterval(() => notifyPatty('alive'), 5000)
@@ -146,9 +126,7 @@ export const PattyNotifier = async ({
         case 'session.deleted': {
           const info = (event as any)?.properties?.info
           if (info?.id) mainSessions.delete(info.id)
-          // 子 agent session（带 parentID）的删除不代表顶层任务结束——与
-          // session.idle 的 mainSessions 守卫同理。只有顶层 session 删除
-          // 才停心跳并通知 Patty 清理火焰，否则主会话仍在运行时会被误清。
+
           if (info?.parentID) {
             log('ignored: subagent session.deleted')
             break
@@ -166,11 +144,9 @@ export const PattyNotifier = async ({
           await notifyPatty('permission_prompt')
           break
 
-        // permission.replied 和 question.replied 不触发通知
-        // 因为用户回复后 agent 还在处理，只有 session.idle 才表示真正完成
 
-        // 子 agent 也会触发 session.idle / session.status(idle)，
-        // 但只有顶层 session（无 parentID）结束才代表任务真正完成。
+
+
         case 'session.idle': {
           const sessionID = (event as any)?.properties?.sessionID
           if (sessionID && !mainSessions.has(sessionID)) {

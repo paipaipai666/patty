@@ -142,7 +142,7 @@ describe('PaneTreeRoot', () => {
 
     ws.activeWorkspaceId = 'w2'
     act(() => { root.render(<PaneTreeRoot />) })
-    // w1 stays mounted (display:none, PTY + scrollback preserved), w2 mounts.
+
     expect(container.querySelectorAll('[data-testid="pane-view"]')).toHaveLength(2)
   })
 
@@ -161,7 +161,7 @@ describe('PaneTreeRoot', () => {
 
     ws.activeWorkspaceId = 'w2'
     act(() => { root.render(<PaneTreeRoot />) })
-    // w1 (visited) + w2 (active) mount; w3 (never visited) renders nothing.
+
     expect(container.querySelectorAll('[data-testid="pane-view"]')).toHaveLength(2)
   })
 })

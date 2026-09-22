@@ -37,12 +37,12 @@ await send('Page.enable')
 await send('Runtime.enable')
 await send('Runtime.evaluate', { expression: "document.querySelector('.xterm-helper-textarea')?.focus()" })
 
-// Fill the buffer so scrolling is possible
+
 await type('1..80 | ForEach-Object { "line $_" }')
 await enter()
 await sleep(2000)
 
-// IIP
+
 const ps =
   `$b=[Convert]::ToBase64String([IO.File]::ReadAllBytes('D:\\code\\terminal\\terminal-sidebar\\tmp-test-image.png')); ` +
   `[Console]::Write([char]27 + ']1337;File=inline=1;width=20;height=auto:' + $b + [char]7)`
@@ -71,7 +71,7 @@ const snap = async (tag) => {
 
 const before = await snap('before')
 
-// Scroll via the actual viewport element
+
 await evalJs(`(() => { const vp = document.querySelector('.xterm-viewport'); vp.scrollTop = Math.max(0, vp.scrollTop - 400); return vp.scrollTop })()`)
 await sleep(500)
 const up = await snap('up')

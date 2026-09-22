@@ -1,7 +1,7 @@
 export type ShellType = 'powershell' | 'pwsh' | 'cmd' | 'gitbash' | 'wsl' | 'ssh'
 
-/** Display label per shell. Keyed on ShellType so a new variant without a
- *  label is a compile error. */
+
+                                
 export const SHELL_LABELS: Record<ShellType, string> = {
   powershell: 'Windows PowerShell',
   pwsh: 'PowerShell 7',
@@ -11,24 +11,24 @@ export const SHELL_LABELS: Record<ShellType, string> = {
   ssh: 'SSH'
 }
 
-/** SSH connection parameters. Carried on profiles (with id/name) and snapshotted
- *  onto sessions (without them) so editing a profile never mutates live sessions. */
+
+                                                                                     
 export interface SshTarget {
   host: string
-  port?: number        // omitted = 22
-  user?: string        // omitted = ssh default (local username)
+  port?: number
+  user?: string
   identityFile?: string
 }
 
 export interface SshProfile extends SshTarget {
   id: string
-  name: string         // display name; used as session title on connect
+  name: string
 }
 
-/** Returned by the ssh_config_import command: a profile without id yet. */
+                                                                           
 export type SshProfileDraft = SshTarget & { name: string }
 
-/** One collection round of remote /proc + df stats (emitted as `ssh:metrics:<id>`). */
+                                                                                       
 export interface RawStats {
   cpuJiffies: [number, number, number, number, number, number, number, number]
   memTotalKb: number
@@ -41,14 +41,14 @@ export interface RawStats {
   diskUsedKb: number
 }
 
-/** Payload of the global `ssh:auth` event: the backend wants a secret. */
+                                                                          
 export interface SshAuthRequest {
   kind: 'password' | 'passphrase'
   prompt: string
   attempt: number
 }
 
-/** Payload of the global `ssh:hostkey` event: unknown host key confirmation. */
+                                                                                
 export interface SshHostkeyRequest {
   host: string
   port: number

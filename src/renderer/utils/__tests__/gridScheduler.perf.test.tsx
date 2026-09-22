@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { registerGrid, unregisterGrid, MAX_ACTIVE_GRIDS } from '../gridScheduler'
 
-// Drive RAF manually so the tick cadence is deterministic.
+
 let rafCbs: FrameRequestCallback[] = []
 let nowVal = 0
 
@@ -35,12 +35,12 @@ describe('gridScheduler concurrency cap (M5)', () => {
     const grids = Array.from({ length: N }, () => ({ tick: vi.fn() }))
     grids.forEach((g) => registerGrid(g))
 
-    // One eligible cycle (>= TICK_INTERVAL_MS since last tick).
+
     frame(200)
 
     const tickedCount = grids.filter((g) => g.tick.mock.calls.length > 0).length
     expect(tickedCount).toBeLessThanOrEqual(MAX_ACTIVE_GRIDS)
-    expect(tickedCount).toBe(MAX_ACTIVE_GRIDS) // cap is actually exercised
+    expect(tickedCount).toBe(MAX_ACTIVE_GRIDS)
 
     grids.forEach((g) => unregisterGrid(g))
   })
@@ -50,12 +50,12 @@ describe('gridScheduler concurrency cap (M5)', () => {
     const grids = Array.from({ length: N }, () => ({ tick: vi.fn() }))
     grids.forEach((g) => registerGrid(g))
 
-    // Drive several eligible cycles.
+
     for (let i = 0; i < 5; i++) {
       frame(200 + i * 200)
     }
 
-    // Every grid ticked at least once across the cycles (rotation covers all).
+
     const tickedAtLeastOnce = grids.filter((g) => g.tick.mock.calls.length > 0).length
     expect(tickedAtLeastOnce).toBe(N)
 
@@ -65,12 +65,10 @@ describe('gridScheduler concurrency cap (M5)', () => {
 
 describe('gridScheduler M5 empirical threshold', () => {
   it('measures per-grid redraw cost and a jank-budget crossover N*', () => {
-    // The timing benchmark needs real clocks (beforeEach mocks performance.now).
+
     vi.spyOn(performance, 'now').mockRestore()
 
-    // Proxy for ContributionGrid.tick cost: updateHeat (random writes over the
-    // heat buffer) + renderCanvas double pass. The JS loop dominates; canvas
-    // rasterization is an additional, backend-dependent cost not captured here.
+
     const ROWS = 5
     const COLS = 60
     function representativeTick(): number {
@@ -100,7 +98,7 @@ describe('gridScheduler M5 empirical threshold', () => {
     // eslint-disable-next-line no-console
     console.log(`[M5] per-grid redraw C=${C.toFixed(4)}ms, jank-budget crossover N*=${Nstar}`)
     expect(C).toBeGreaterThan(0)
-    // The cap is a safety net comfortably below the jank threshold.
+
     expect(MAX_ACTIVE_GRIDS).toBeLessThan(Nstar)
   })
 })

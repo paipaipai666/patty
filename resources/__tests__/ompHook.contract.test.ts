@@ -1,14 +1,8 @@
-/**
- * Contract tests: omp raw extension events → normalized Patty hook events.
- *
- * The extension maps omp's event names onto Patty's envelope. If an omp
- * upgrade renames events (session_stop, tool_approval_requested, …), these
- * tests fail instead of the attention indicators silently going dark.
- */
+
+   
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-// session_deleted is delivered via a detached curl process so it survives
-// omp's exit; mock spawn to capture it.
+
 const spawnCalls: { cmd: string; args: string[] }[] = []
 vi.mock('node:child_process', () => ({
   spawn: vi.fn((cmd: string, args: string[]) => {
@@ -44,7 +38,7 @@ beforeEach(() => {
   spawnCalls.length = 0
   handlers = new Map()
   intervalCallbacks = []
-  process.env.PATTY_PORT = '1' // unroutable port; fetch is stubbed anyway
+  process.env.PATTY_PORT = '1'
   process.env.PATTY_PANE_ID = 'pane-1'
   process.env.PATTY_HOOK_SECRET = 'secret-1'
   vi.stubGlobal('fetch', vi.fn(async (_url: string, init: { body: string }) => {
@@ -125,7 +119,7 @@ describe('PattyNotifier (omp extension)', () => {
   it('session_shutdown → detached session_deleted delivery', async () => {
     PattyNotifier(pi)
     await handlers.get('session_shutdown')?.({}, ctx)
-    expect(posted).toHaveLength(0) // detached path bypasses fetch
+    expect(posted).toHaveLength(0)
     expect(spawnCalls).toHaveLength(1)
     expect(spawnCalls[0].cmd).toBe('curl')
     const body = JSON.parse(spawnCalls[0].args[spawnCalls[0].args.length - 1])
@@ -133,8 +127,7 @@ describe('PattyNotifier (omp extension)', () => {
   })
 
   it('every emitted event stays within the canonical hook vocabulary', async () => {
-    // 覆盖全部六条 handler + 心跳 + detached 投递路径；任何 omp 升级导致的
-    // 改名/新增都会越过 fetch/curl 边界前在这里撞上词汇表。
+
     PattyNotifier(pi)
     for (const name of ['session_start', 'session_stop', 'tool_call', 'tool_approval_requested', 'auto_retry_start']) {
       await handlers.get(name)?.({}, ctx)

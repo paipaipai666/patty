@@ -6,22 +6,15 @@ import { PaneView } from './PaneView'
 import { Sash } from './Sash'
 import styles from './PaneTree.module.css'
 
-/**
- * Recursively render the pane split trees of all workspaces.
- *
- * Only the active workspace mounts. Once a workspace has been visited it
- * stays mounted (display:none while inactive) so its PTY, running commands
- * and scrollback survive switching. Workspaces restored from disk but never
- * opened render nothing — their PTY spawns lazily on first visit, so
- * restarting with 100 restored workspaces boots one shell, not 100.
- */
+
+   
 export function PaneTreeRoot() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const focusPane = useWorkspaceStore((s) => s.focusPane)
   const sessions = useSessionStore((s) => s.sessions)
 
-  // Workspaces that have been mounted at least once (active at some point).
+
   const mountedRef = useRef<Set<string>>(new Set())
 
   const sessionById = useMemo(() => {
@@ -68,8 +61,7 @@ function renderNode(
   if (node.type === 'leaf') {
     const session = sessionById.get(node.sessionId)
     if (!session) {
-      // The tree should never reference a missing session (loadFromPersisted
-      // prunes them), but guard anyway: render an empty pane instead of crashing.
+
       return <PaneViewPlaceholder key={key} paneId={node.id} focused={focusedPaneId === node.id} onFocus={focusPane} />
     }
     return (
@@ -96,7 +88,7 @@ function renderSplit(
   visible: boolean = true
 ): React.ReactNode {
   const dirClass = node.direction === 'horizontal' ? styles.splitHorizontal : styles.splitVertical
-  // ratio is the first subtree's share; express as flex-basis percentage.
+
   const firstBasis = `${(node.ratio * 100).toFixed(4)}%`
 
   return (
@@ -112,7 +104,7 @@ function renderSplit(
   )
 }
 
-/** Fallback for a leaf whose session was removed but not yet pruned from the tree. */
+                                                                                      
 function PaneViewPlaceholder({
   paneId,
   focused,

@@ -1,7 +1,5 @@
-/**
- * Shared harness for the E2E scripts: resolve the prod exe, launch it with an
- * isolated APPDATA and a WebView2 debug port, attach CDP, and clean up.
- */
+
+   
 import { spawn, execFileSync } from 'node:child_process'
 import { createServer } from 'node:net'
 import { mkdtempSync, rmSync, existsSync } from 'node:fs'
@@ -9,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { waitForPageTarget, Cdp, sleep } from './cdp.mjs'
 
-/** Poll until the OS reports the pid gone (signal 0 = existence probe). */
+                                                                           
 export async function waitForProcessDeath(pid, timeoutMs) {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
@@ -17,7 +15,7 @@ export async function waitForProcessDeath(pid, timeoutMs) {
       process.kill(pid, 0)
     } catch (e) {
       if (e.code === 'ESRCH') return
-      // EPERM still means the process exists.
+
     }
     await sleep(250)
   }
@@ -31,11 +29,7 @@ export function resolveExe() {  if (process.env.PATTY_EXE) return process.env.PA
       encoding: 'utf8'
     })
   ).target_directory
-  // Only a production exe works: plain `cargo build` leaves the `dev` cfg on
-  // (tauri marks any build without the custom-protocol feature as dev), so a
-  // debug exe tries to load http://127.0.0.1:1420 instead of embedded assets.
-  // The Tauri CLI passes --features custom-protocol; `tauri build --no-bundle`
-  // is the fast way to get a prod exe without the NSIS step.
+
   const exe = join(targetDir, 'release', 'patty.exe')
   if (!existsSync(exe)) {
     throw new Error(`no release exe at ${exe} — run \`npx tauri build --no-bundle\` first`)
@@ -43,7 +37,7 @@ export function resolveExe() {  if (process.env.PATTY_EXE) return process.env.PA
   return exe
 }
 
-/** Grab an OS-assigned free port (two concurrent e2e runs must not collide). */
+                                                                                
 async function freePort() {
   const srv = createServer()
   await new Promise((res) => srv.listen(0, '127.0.0.1', res))
@@ -52,10 +46,8 @@ async function freePort() {
   return port
 }
 
-/**
- * Launch Patty and attach CDP. Returns { cdp, appData, close }.
- * close() kills the process tree and removes the isolated APPDATA.
- */
+
+   
 export async function launchApp() {
   if (!existsSync(resolve('out/renderer/index.html'))) {
     throw new Error('out/renderer missing — run `npm run build` first')
@@ -79,19 +71,16 @@ export async function launchApp() {
   let appExited = null
   app.on('exit', (code) => { appExited = code })
 
-  // If attach fails, the spawned GUI app would otherwise outlive this script
-  // and its ChildProcess handle keeps node's event loop alive forever (this
-  // is what hung the CI job for an hour).
+
   const killApp = async () => {
     if (appExited !== null) return
-    // Kill the whole tree, not just the exe: Windows TerminateProcess runs no
-    // Rust Drop, so a bare kill would orphan the ConPTY conhost/pwsh children.
+
     try {
       execFileSync('taskkill', ['/T', '/F', '/PID', String(app.pid)], { stdio: 'ignore' })
     } catch {
       app.kill('SIGKILL')
     }
-    // Give the exit event a moment to arrive before callers poll appExited.
+
     await sleep(300)
   }
 
@@ -100,8 +89,7 @@ export async function launchApp() {
   try {
     page = await waitForPageTarget(debugPort)
     cdp = await Cdp.connect(page.webSocketDebuggerUrl)
-    // Ride out WebView2's early navigation (about:blank → tauri.localhost):
-    // waitFor retries through the transient context errors.
+
     await cdp.waitFor(`document.readyState === 'complete' && document.querySelector('#root')?.children.length > 0`)
   } catch (e) {
     await killApp()

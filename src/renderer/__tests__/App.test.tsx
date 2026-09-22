@@ -20,7 +20,7 @@ const hoisted = vi.hoisted(() => {
   const sessionState = {
     sessions: [],
     collections: [],
-    // widened from the null literal so tests can assign a session id
+
     activeSessionId: null as string | null,
     sidebarVisible: true,
     sidebarWidth: 220,
@@ -151,9 +151,7 @@ vi.mock('../components/App/PromptDialog', async () => {
   const { useRef } = await import('react')
   return {
     PromptDialog: (props: { show: boolean; options: { title?: string } }) => {
-      // Record shown dialog options keyed by title; remember this instance's
-      // title so dismissal (which renders the empty fallback options) still
-      // clears the right entry.
+
       const lastTitle = useRef<string | null>(null)
       const title = props.options?.title
       if (props.show && title) {
@@ -241,13 +239,11 @@ describe('App', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', ctrlKey: true, bubbles: true }))
     })
     expect(hoisted.mockAddSession).toHaveBeenCalledWith({ cwd: undefined, shell: 'powershell' })
-    // Lifecycle passes the collectionId explicitly (null = top level).
+
     expect(hoisted.mockCreateWorkspace).toHaveBeenCalledWith('sess-new', null)
   })
 
-  // The "New Terminal Here" coverage moved with the function — it now lives in
-  // store/sessionLifecycle.ts and is tested in store/__tests__/sessionLifecycle.test.ts
-  // against the real stores.
+
 
   it('Ctrl+W calls handleCloseSession when active session exists', () => {
     hoisted.sessionState.activeSessionId = 'sess-act'
@@ -258,8 +254,7 @@ describe('App', () => {
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', ctrlKey: true, bubbles: true }))
     })
-    // The PTY kill is owned by sessionStore.removeSession (REVIEW.md P1-6) —
-    // App must not call kill itself, or the same PTY gets killed twice.
+
     expect(terminalAPI.kill).not.toHaveBeenCalled()
     expect(hoisted.mockRemoveSession).toHaveBeenCalledWith('sess-act')
     expect(hoisted.mockRemoveSessionEverywhere).toHaveBeenCalledWith('sess-act')

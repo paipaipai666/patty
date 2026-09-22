@@ -35,11 +35,8 @@ const emptyEntry = (): SessionMetrics => ({ samples: [], lastRaw: null, running:
 
 const sum = (xs: readonly number[]) => xs.reduce((a, b) => a + b, 0)
 
-/**
- * Derive one display sample from a raw collection round. Rate fields need a
- * previous round: the first sample reports 0 for CPU%/network; a non-positive
- * dt drops the sample (returns null); counter regressions clamp to 0.
- */
+
+   
 function computeSample(
   prev: MonitorSample | null,
   prevRaw: RawStats | null,
@@ -85,7 +82,7 @@ export const useRemoteMetricsStore = create<RemoteMetricsStore>((set) => ({
       const entry = s.byId[id] ?? emptyEntry()
       const prev = entry.samples[entry.samples.length - 1] ?? null
       const sample = computeSample(prev, entry.lastRaw, raw, now)
-      // Dropped sample (dt<=0): keep the old base so the next delta stays sane.
+
       if (!sample) return s
       return {
         byId: {
@@ -121,7 +118,7 @@ export const useRemoteMetricsStore = create<RemoteMetricsStore>((set) => ({
     })
 }))
 
-// Sessions die independently of the monitor panel: drop their metrics state.
+
 useSessionStore.subscribe((state) => {
   const alive = new Set(state.sessions.map((s) => s.id))
   const { byId, clear } = useRemoteMetricsStore.getState()

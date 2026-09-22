@@ -1,6 +1,5 @@
-/**
- * cd AgentNexus → omp resume → measure overlay vs scroll.
- */
+
+   
 import { writeFileSync } from 'node:fs'
 
 const CDP = 'http://127.0.0.1:9223'
@@ -60,7 +59,7 @@ await send('Page.enable')
 await send('Runtime.enable')
 await send('Runtime.evaluate', { expression: "document.querySelector('.xterm-helper-textarea')?.focus()" })
 
-// Leave any TUI
+
 await esc(); await sleep(150); await esc(); await sleep(150)
 await type('/exit'); await enter(); await sleep(1200)
 
@@ -74,7 +73,7 @@ await sleep(5000)
 await shot('output/playwright/resume-01.png')
 await measure('after-resume')
 
-// Scroll the terminal viewport up (wheel)
+
 await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 800, y: 500, deltaX: 0, deltaY: -400 })
 await sleep(600)
 await shot('output/playwright/resume-02-scrollup.png')

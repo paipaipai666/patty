@@ -1,6 +1,5 @@
-/**
- * Exit omp TUI → emit raw IIP from PowerShell → measure overlay.
- */
+
+   
 import { writeFileSync } from 'node:fs'
 
 const CDP_HTTP = 'http://127.0.0.1:9223'
@@ -63,14 +62,14 @@ const measure = async (tag) => {
 await send('Page.enable'); await send('Runtime.enable')
 await send('Runtime.evaluate', { expression: `document.querySelector('.xterm-helper-textarea')?.focus()` })
 
-// Get out of omp TUI
+
 await esc(); await sleep(200); await esc(); await sleep(200)
 await type('/exit')
 await enter()
 await sleep(1500)
 await shot('output/playwright/patty-f-after-exit.png')
 
-// Emit IIP from PowerShell
+
 const ps =
   `$b=[Convert]::ToBase64String([IO.File]::ReadAllBytes('${PNG}')); ` +
   `[Console]::Write([char]27 + ']1337;File=inline=1;width=20;height=auto:' + $b + [char]7)`

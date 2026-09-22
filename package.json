@@ -11,6 +11,7 @@
     "test:e2e": "node e2e/smoke.test.mjs",
     "benchmark:startup": "node scripts/benchmark-startup.mjs",
     "typecheck": "tsc -b --noEmit",
+    "check:comments": "node scripts/no-comments.mjs --check",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "package": "tauri build",

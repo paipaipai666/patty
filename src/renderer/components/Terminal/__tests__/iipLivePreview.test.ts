@@ -8,7 +8,7 @@ const ESC = '\x1b'
 const ROOT = resolve(__dirname, '../../../../..')
 const PNG_PATH = resolve(ROOT, 'tmp-test-image.png')
 
-/** Wire format from oh-my-pi encodeITerm2 — matches captured logs. */
+                                                                      
 function encodeITerm2(base64Data: string, width: number): string {
   return `${ESC}]1337;File=inline=1;width=${width};height=auto:${base64Data}\x07`
 }
@@ -21,14 +21,14 @@ describe('live preview against omp encodeITerm2 wire format', () => {
     const blockRows = 10
     const iip = encodeITerm2(b64, width)
 
-    // ONLY form observed in PTY logs — no CUU.
+
     const frame = `\r${ESC}[K${ESC}[106C${iip}`
     const extract = createIipStreamExtractor()
     const r1 = extract(frame)
     expect(r1.images).toHaveLength(1)
 
     const slot = r1.images[0].slot
-    // Slot is written at (current paint row, col 106) = IIP line = block bottom.
+
     const bottom = blockRows - 1
     const lines: string[] = Array.from({ length: blockRows }, () => '')
     lines[bottom] = ' '.repeat(106) + slot
@@ -41,13 +41,11 @@ describe('live preview against omp encodeITerm2 wire format', () => {
     expect(fit.cols).toBe(width)
 
     const a = resolveAnchor(hit, lines, bottom, fit.rows)
-    // Reserved blanks above the slot ⇒ omp block-bottom form.
+
     expect(a.topY).toBe(bottom - fit.rows + 1)
     expect(a.fromSlot).toBe(true)
 
-    // A redundant re-emission while the original slot is still anchored must
-    // NOT drag the overlay: commit keeps the first item put and appends a
-    // second display.
+
     const r2 = extract(frame)
     expect(r2.images).toHaveLength(1)
     const hit2 = { row: 15, col: 106 }
@@ -65,7 +63,7 @@ describe('live preview against omp encodeITerm2 wire format', () => {
       slotCol: hit.col,
     }
     const lines2: string[] = Array.from({ length: 30 }, () => '')
-    lines2[hit.row] = ' '.repeat(106) + slot // original slot still anchored
+    lines2[hit.row] = ' '.repeat(106) + slot
     lines2[hit2.row] = ' '.repeat(106) + r2.images[0].slot
     const committed = commitIipPlacement(
       [firstItem],
@@ -80,7 +78,7 @@ describe('live preview against omp encodeITerm2 wire format', () => {
       lines2
     )
     expect(committed).toHaveLength(2)
-    expect(committed[0].bufferY).toBe(a.topY) // not dragged
+    expect(committed[0].bufferY).toBe(a.topY)
     expect(committed[1].bufferY).toBe(hit2.row - fit.rows + 1)
 
     const top = a.topY

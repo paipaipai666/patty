@@ -1,13 +1,9 @@
-// SSH profile support: connection parameters and ~/.ssh/config import.
-// Sessions themselves run on the in-process russh stack (see sshconn.rs);
-// no credentials are stored — password prompts are handled by UI modals.
+
 
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-/// Connection parameters. The renderer sends this verbatim through `create_pty`;
-/// it is also persisted on sessions (camelCase keys) and read back by
-/// `warm_startup` to reconnect SSH sessions after an app restart.
+
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshTarget {
@@ -17,7 +13,7 @@ pub struct SshTarget {
     pub identity_file: Option<String>,
 }
 
-/// A parsed `~/.ssh/config` Host block, before the renderer assigns an id.
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshProfileDraft {
@@ -28,9 +24,7 @@ pub struct SshProfileDraft {
     pub identity_file: Option<String>,
 }
 
-/// Cut a config line at the first unquoted '#'. OpenSSH only treats '#' as a
-/// comment starter outside quotes — quoted values may legally contain it
-/// (e.g. IdentityFile "C:\keys\site#2.pem").
+
 fn strip_comment(line: &str) -> &str {
     let mut quote: Option<char> = None;
     for (i, ch) in line.char_indices() {
@@ -45,9 +39,7 @@ fn strip_comment(line: &str) -> &str {
     line
 }
 
-/// Parse OpenSSH client config into profile drafts. Only Host / HostName /
-/// User / Port / IdentityFile are honored; Include, Match, ProxyJump and other
-/// directives are ignored. Wildcard-only blocks (`Host *`) are skipped.
+
 pub fn parse_ssh_config(content: &str) -> Vec<SshProfileDraft> {
     struct Block {
         name: String,
@@ -62,13 +54,13 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshProfileDraft> {
     let mut current: Option<Block> = None;
 
     for raw_line in content.lines() {
-        // Strip comments: a '#' starts a comment unless inside quotes.
+
         let line = strip_comment(raw_line);
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
-        // Support both `Key value` and `Key=value`.
+
         let (key, value) = match line.split_once('=') {
             Some((k, v)) => (k.trim(), v.trim()),
             None => match line.split_once(char::is_whitespace) {
@@ -80,12 +72,11 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshProfileDraft> {
         let value = value.trim_matches(|c| c == '"' || c == '\'');
 
         if key_lower == "host" {
-            // Finish the previous block.
+
             if let Some(b) = current.take() {
                 blocks.push(b);
             }
-            // First non-wildcard pattern becomes the profile name; a block of
-            // only wildcards gets no block at all (skipped).
+
             let name = value
                 .split_whitespace()
                 .find(|p| !p.contains('*') && !p.contains('?'));
@@ -110,7 +101,7 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshProfileDraft> {
                 } else {
                     value.to_string()
                 };
-                // Keep only the first IdentityFile — drafts are single-key.
+
                 if b.identity_file.is_none() {
                     b.identity_file = Some(expanded);
                 }
@@ -134,8 +125,7 @@ pub fn parse_ssh_config(content: &str) -> Vec<SshProfileDraft> {
         .collect()
 }
 
-/// Command payload for `ssh_config_import`: a missing/unreadable config file
-/// is not an error — the user simply has nothing to import.
+
 pub fn import_ssh_config() -> Value {
     let content = std::env::var("USERPROFILE")
         .ok()
@@ -210,15 +200,11 @@ mod tests {
 
     #[test]
     fn parse_preserves_hash_inside_quoted_values() {
-        // REVIEW.md P1-14a: the comment-strip claims a '#' is safe inside
-        // quotes ("unless inside quotes"), but the implementation truncates at
-        // the first '#' unconditionally. A quoted HostName/IdentityFile
-        // containing '#' — legal on both OpenSSH and Windows paths — is
-        // silently mangled into a wrong target.
+
         let cfg = "Host router\n  HostName \"example#host.internal\"\n  IdentityFile \"C:\\keys\\site#2.pem\"\n";
         let drafts = parse_ssh_config(cfg);
         assert_eq!(drafts.len(), 1);
-        // OpenSSH semantics: quotes removed, '#' inside them kept literal.
+
         assert_eq!(drafts[0].host, "example#host.internal");
         assert_eq!(drafts[0].identity_file.as_deref(), Some("C:\\keys\\site#2.pem"));
     }

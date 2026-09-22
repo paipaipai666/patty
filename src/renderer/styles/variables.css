@@ -5,7 +5,7 @@
 
   --bg-app:            #0a0a0c;
 
-  /* AI icon colors */
+                    
   --ai-claude-color:       #e09a7e;
   --ai-claude-bg:          rgba(224, 154, 126, 0.10);
   --ai-claude-glow:        rgba(224, 154, 126, 0.25);
@@ -16,7 +16,7 @@
   --ai-codex-bg:           rgba(79, 212, 176, 0.10);
   --ai-codex-glow:         rgba(79, 212, 176, 0.25);
 
-  /* Fire effect - ContributionGrid */
+                                    
   --fire-claude:       #e09a7e;
   --fire-opencode:     #a3b5d4;
   --fire-codex:        #4fd4b0;
@@ -53,7 +53,7 @@
   --fire-glow-copilot-4:   rgba(133, 52, 243, 0.35);
   --fire-gradient-copilot: linear-gradient(90deg, transparent 0%, rgba(133, 52, 243, 0.08) 40%, rgba(133, 52, 243, 0.18) 100%);
 
-  /* Attention states (session list) */
+                                     
   --attention-complete-bg:     rgba(48, 209, 88, 0.10);
   --attention-complete-bar:    #30d158;
   --attention-complete-glow:   rgba(48, 209, 88, 0.30);
@@ -64,7 +64,7 @@
   --attention-error-bar:       #ff453a;
   --attention-error-glow:      rgba(255, 69, 58, 0.30);
 
-  /* Neutral gray scale */
+                        
   --overlay-bg:          rgba(0, 0, 0, 0.55);
   --scrollbar-thumb:     rgba(255, 255, 255, 0.08);
   --neutral:             #8e8e93;
@@ -75,7 +75,7 @@
   --neutral-10:          rgba(255, 255, 255, 0.10);
   --neutral-20:          rgba(255, 255, 255, 0.20);
 
-  /* Accent derivatives */
+                        
   --accent-glow-subtle:  rgba(10, 132, 255, 0.03);
   --accent-glow-soft:    rgba(10, 132, 255, 0.04);
   --accent-glow-light:   rgba(10, 132, 255, 0.06);
@@ -83,13 +83,13 @@
   --accent-glow-strong:  rgba(10, 132, 255, 0.30);
   --accent-hover:        #409cff;
 
-  /* Cyan decorative */
+                     
   --cyan-glow-soft:      rgba(100, 210, 255, 0.02);
   --cyan-glow:           rgba(100, 210, 255, 0.03);
   --cyan-glow-light:     rgba(100, 210, 255, 0.06);
   --cyan-glow-medium:    rgba(100, 210, 255, 0.08);
 
-  /* Semantic */
+              
   --green-glow:          rgba(48, 209, 88, 0.3);
   --red-glow:            rgba(255, 69, 58, 0.3);
   --bg-error:            rgba(255, 69, 58, 0.1);
@@ -105,7 +105,7 @@
   --amber:             #ff9f0a;
   --indigo:            #5e5ce6;
 
-  /* Surface hierarchy: background/base < surface < card < dialog */
+                                                                  
   --bg-surface:        rgba(28, 28, 30, 0.92);
   --bg-sidebar:        rgba(28, 28, 30, 0.92);
   --bg-titlebar:       rgba(28, 28, 30, 0.92);
@@ -141,7 +141,7 @@
   --btn-close-hover:   #ff453a;
 
   --sidebar-width:     260px;
-  /* Keep in sync with setSidebarWidth clamp in sessionStore.ts */
+                                                                
   --sidebar-min-width: 160px;
   --sidebar-max-width: 320px;
   --titlebar-height:   52px;
@@ -170,7 +170,7 @@
   --transition-normal: 250ms var(--ease-out);
   --transition-slow:   400ms var(--ease-out);
 
-  /* Spacing scale (Apple-style) */
+                                 
   --space-1:           4px;
   --space-2:           8px;
   --space-3:           12px;
