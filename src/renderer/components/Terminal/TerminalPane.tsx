@@ -104,7 +104,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
   const iipExtractRef = useRef<((data: string) => { out: string; images: IipImage[] }) | null>(null)
   if (!iipExtractRef.current) {
-    iipExtractRef.current = createIipStreamExtractor('')
+    iipExtractRef.current = createIipStreamExtractor()
   }
   const [iipItems, setIipItems] = useState<IipOverlayItem[]>([])
   const termForIipRef = useRef<Terminal | null>(null)

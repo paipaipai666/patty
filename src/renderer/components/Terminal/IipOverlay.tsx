@@ -98,7 +98,6 @@ export function fitIipToCells(
   let rows = parseDim(image.header.height, maxRows, cell.heightPx)
 
   const natCols = Math.max(1, Math.ceil(intrinsic.widthPx / cell.widthPx))
-  const natRows = Math.max(1, Math.ceil(intrinsic.heightPx / cell.heightPx))
 
   if (cols == null && rows == null) {
     cols = Math.min(natCols, maxCols)

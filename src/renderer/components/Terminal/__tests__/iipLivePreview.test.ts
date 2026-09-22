@@ -32,7 +32,7 @@ describe('live preview against omp encodeITerm2 wire format', () => {
     const bottom = blockRows - 1
     const lines: string[] = Array.from({ length: blockRows }, () => '')
     lines[bottom] = ' '.repeat(106) + slot
-    const hit = findIipSlot(lines, slot)
+    const hit = findIipSlot(lines, slot)!
     expect(hit).toEqual({ row: bottom, col: 106 })
 
     const img = buildIipImage(`inline=1;width=${width};height=auto`, b64, slot)
