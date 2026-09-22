@@ -29,7 +29,7 @@ A modern, minimal terminal manager for Windows with a sidebar layout.
 - **Split Panes & Workspaces** - Split any pane horizontally/vertically (tmux-style, inheriting cwd); sessions live in workspaces, drag between panes
 - **SSH Sessions** - Connect to remote hosts over SSH (in-process russh, no external ssh.exe): saved profiles, `~/.ssh/config` import, password/public-key auth via in-app prompts, TOFU host-key verification, remote CPU/memory/network/disk monitor
 - **Metrics Dashboard** - Local CPU/memory/GPU/process metrics sampled on demand (PowerShell counters, only while the dashboard is open)
-- **AI Attention Notifications** - Visual indicators when Claude Code, OpenCode, Codex CLI, or Oh My Pi needs your input
+- **AI Attention Notifications** - Visual indicators when Claude Code, OpenCode, Codex CLI, Oh My Pi, Qwen Code, or GitHub Copilot CLI needs your input
 
 ## Screenshot
 
@@ -80,8 +80,10 @@ Notification events trigger an animated contribution-grid style effect and a col
 - **OpenCode** - Via plugin system (TypeScript plugin)
 - **Codex CLI** - Via lifecycle hooks (PowerShell hook script)
 - **Oh My Pi (omp)** - Via agent extension (TypeScript)
+- **Qwen Code** - Via `settings.json` lifecycle hooks (PowerShell hook script)
+- **GitHub Copilot CLI** - Via `~/.copilot/hooks/*.json` (PowerShell hook script)
 
-All four adapters translate native events into the shared wire vocabulary pinned by `resources/hook-protocol.json` — consumed by both the Rust hook server's consistency test and the adapters' contract tests, so a vocabulary drift fails CI instead of silently dimming the indicators.
+All adapters translate native events into the shared wire vocabulary pinned by `resources/hook-protocol.json` — consumed by both the Rust hook server's consistency test and the adapters' contract tests, so a vocabulary drift fails CI instead of silently dimming the indicators.
 
 ### Configuration
 
@@ -97,7 +99,7 @@ The settings modal covers 6 categories:
 | **Terminal** | Cursor style (block/underline/bar), cursor blink, terminal opacity (40-100%), default shell |
 | **Shortcuts** | Remap all keyboard shortcuts via key capture |
 | **Layout** | Sidebar position (left/right) |
-| **Notifications** | Toggle AI notifications for Claude Code, OpenCode, Codex CLI, and Oh My Pi independently |
+| **Notifications** | Toggle AI notifications for Claude Code, OpenCode, Codex CLI, Oh My Pi, Qwen Code, and Copilot CLI independently |
 | **SSH** | Manage saved SSH profiles (host/port/user/identity file), import from `~/.ssh/config` |
 
 Custom themes can be edited visually with color pickers or directly as JSON, with import/export support.

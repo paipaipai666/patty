@@ -385,7 +385,7 @@ mod tests {
 
         settings_set(
             "notifications",
-            json!({ "claudeCode": false, "openCode": true, "codex": true, "ohMyPi": true }),
+            json!({ "claudeCode": false, "openCode": true, "codex": true, "ohMyPi": true, "qwenCode": true, "copilotCli": true }),
         )
         .unwrap();
 

@@ -15,6 +15,9 @@ fn heartbeat_timeout_ms(source: &str) -> Option<u64> {
     match source {
         "opencode" => Some(8_000),
         "omp" => Some(8_000),
+        // Qwen / Copilot fire tool+session hooks densely enough for an 8s lease.
+        "qwen-code" => Some(8_000),
+        "copilot-cli" => Some(8_000),
         "claude-code" => Some(600_000),
         "codex" => Some(600_000),
         _ => None,
@@ -155,6 +158,8 @@ fn map_source_to_ai_type(source: &str) -> Option<&'static str> {
         "opencode" => Some("opencode"),
         "codex" => Some("codex"),
         "omp" => Some("omp"),
+        "qwen-code" => Some("qwen"),
+        "copilot-cli" => Some("copilot"),
         _ => None,
     }
 }
@@ -168,6 +173,8 @@ pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str
         "opencode" => settings["notifications"]["openCode"].as_bool().unwrap_or(true),
         "codex" => settings["notifications"]["codex"].as_bool().unwrap_or(true),
         "omp" => settings["notifications"]["ohMyPi"].as_bool().unwrap_or(true),
+        "qwen-code" => settings["notifications"]["qwenCode"].as_bool().unwrap_or(true),
+        "copilot-cli" => settings["notifications"]["copilotCli"].as_bool().unwrap_or(true),
         _ => true,
     };
     let events = compute_hook_events(pane_id, event, source, role, enabled);
@@ -520,6 +527,20 @@ mod tests {
     }
 
     #[test]
+    fn compute_events_session_start_with_qwen() {
+        let events = compute_hook_events("p1", "session_start", "qwen-code", "main", true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1[2], "qwen");
+    }
+
+    #[test]
+    fn compute_events_session_start_with_copilot() {
+        let events = compute_hook_events("p1", "session_start", "copilot-cli", "main", true);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].1[2], "copilot");
+    }
+
+    #[test]
     fn compute_events_permission_maps_to_attention() {
         let events = compute_hook_events("p1", "permission_prompt", "claude-code", "main", true);
         assert_eq!(events.len(), 1);
@@ -621,6 +642,8 @@ mod tests {
         assert_eq!(map_source_to_ai_type("codex"), Some("codex"));
         assert_eq!(map_source_to_ai_type("omp"), Some("omp"));
         assert_eq!(map_source_to_ai_type("claude-code"), Some("claude"));
+        assert_eq!(map_source_to_ai_type("qwen-code"), Some("qwen"));
+        assert_eq!(map_source_to_ai_type("copilot-cli"), Some("copilot"));
         assert_eq!(map_source_to_ai_type("unknown-tool"), None);
     }
 
@@ -628,6 +651,8 @@ mod tests {
     fn heartbeat_timeout_direct() {
         assert_eq!(heartbeat_timeout_ms("opencode"), Some(8_000));
         assert_eq!(heartbeat_timeout_ms("omp"), Some(8_000));
+        assert_eq!(heartbeat_timeout_ms("qwen-code"), Some(8_000));
+        assert_eq!(heartbeat_timeout_ms("copilot-cli"), Some(8_000));
         assert_eq!(heartbeat_timeout_ms("claude-code"), Some(600_000));
         assert_eq!(heartbeat_timeout_ms("codex"), Some(600_000));
         assert_eq!(heartbeat_timeout_ms("unknown"), None);

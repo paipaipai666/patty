@@ -32,6 +32,14 @@ pub fn codex_settings_path() -> Option<PathBuf> {
     home_dir().map(|h| h.join(".codex").join("hooks.json"))
 }
 
+pub fn qwen_settings_path() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".qwen").join("settings.json"))
+}
+
+pub fn copilot_hooks_dir() -> Option<PathBuf> {
+    home_dir().map(|h| h.join(".copilot").join("hooks"))
+}
+
 fn hook_script_source() -> PathBuf {
     let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -170,6 +178,17 @@ fn is_patty_codex_hook(n: &Value) -> bool {
         })
 }
 
+fn is_patty_source_hook(n: &Value, source: &str) -> bool {
+    let needle = format!("-Source \"{source}\"");
+    n.get("hooks")
+        .and_then(Value::as_array)
+        .is_some_and(|hooks| {
+            hooks.iter().any(|h| {
+                command_contains(h, "patty-hook.ps1") && command_contains(h, &needle)
+            })
+        })
+}
+
 fn apply_claude_hooks(settings: &mut Value, hook_script_path: &str) {
     let obj = settings.as_object_mut().expect("settings object");
     let hooks = obj.entry("hooks".to_string()).or_insert_with(|| json!({}));
@@ -199,6 +218,23 @@ fn apply_codex_hooks(settings: &mut Value, hook_script_path: &str) {
     upsert_hook(hooks, "PreToolUse", cmd_hook("", hook_command.clone()), is_patty_codex_hook);
     upsert_hook(hooks, "PostToolUse", cmd_hook("", hook_command.clone()), is_patty_codex_hook);
     upsert_hook(hooks, "UserPromptSubmit", cmd_hook("", hook_command), is_patty_codex_hook);
+}
+
+fn apply_qwen_hooks(settings: &mut Value, hook_script_path: &str) {
+    let hook_command = format!("powershell -ExecutionPolicy Bypass -File \"{hook_script_path}\" -Source \"qwen-code\"");
+    let is_patty = |n: &Value| is_patty_source_hook(n, "qwen-code");
+    let obj = settings.as_object_mut().expect("settings object");
+    let hooks = obj.entry("hooks".to_string()).or_insert_with(|| json!({}));
+
+    upsert_hook(hooks, "SessionStart", cmd_hook("startup|resume", hook_command.clone()), is_patty);
+    upsert_hook(hooks, "SessionEnd", cmd_hook("", hook_command.clone()), is_patty);
+    upsert_hook(hooks, "Notification", cmd_hook(HOOK_MATCHER, hook_command.clone()), is_patty);
+    upsert_hook(hooks, "PermissionRequest", cmd_hook("", hook_command.clone()), is_patty);
+    upsert_hook(hooks, "Stop", cmd_hook("", hook_command.clone()), is_patty);
+    upsert_hook(hooks, "StopFailure", cmd_hook("", hook_command.clone()), is_patty);
+    upsert_hook(hooks, "PreToolUse", cmd_hook("", hook_command.clone()), is_patty);
+    upsert_hook(hooks, "PostToolUse", cmd_hook("", hook_command.clone()), is_patty);
+    upsert_hook(hooks, "UserPromptSubmit", cmd_hook("", hook_command), is_patty);
 }
 
 fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_path: &str) {
@@ -276,6 +312,84 @@ pub fn ensure_codex_hook() {
     install_at(&settings_path, apply_codex_hooks, &hook_script.to_string_lossy());
 }
 
+pub fn ensure_qwen_hook() {
+    let Some(settings_path) = qwen_settings_path() else {
+        eprintln!("[installer] no home directory (USERPROFILE/HOME unset) — skipping qwen hook install");
+        return;
+    };
+    let hook_script = ensure_hook_script_exists();
+    install_at(&settings_path, apply_qwen_hooks, &hook_script.to_string_lossy());
+}
+
+pub fn remove_qwen_hook() {
+    if let Some(p) = qwen_settings_path() {
+        strip_source_hooks(&p, "qwen-code");
+    }
+}
+
+fn strip_source_hooks(path: &PathBuf, source: &str) {
+    let Ok(raw) = fs::read_to_string(path) else { return };
+    let Ok(mut settings) = serde_json::from_str::<Value>(&raw) else { return };
+    let Some(hooks) = settings.get_mut("hooks").and_then(Value::as_object_mut) else { return };
+    let mut changed = false;
+    for list in hooks.values_mut() {
+        if let Some(arr) = list.as_array_mut() {
+            let before = arr.len();
+            arr.retain(|h| !is_patty_source_hook(h, source));
+            changed |= arr.len() != before;
+        }
+    }
+    if changed {
+        if let Err(e) = crate::store::save_atomic_to(path, &settings) {
+            eprintln!("[installer] failed to write {}: {e}", path.display());
+        }
+    }
+}
+
+/// Build the single-file Copilot CLI hooks document Patty owns.
+/// Copilot loads every `*.json` under the hooks dir; we only touch patty-notifier.json.
+fn apply_copilot_hooks_file(hook_script_path: &str) -> Value {
+    let ps = format!("powershell -NoProfile -ExecutionPolicy Bypass -File \"{hook_script_path}\" -Source \"copilot-cli\"");
+    let with_event = |event: &str| format!("{ps} -EventType {event}");
+    let entry = |cmd: String| json!([{ "type": "command", "powershell": cmd, "timeoutSec": 5 }]);
+
+    json!({
+        "version": 1,
+        "hooks": {
+            "sessionStart": entry(with_event("session_start")),
+            "sessionEnd": entry(with_event("session_end")),
+            "agentStop": entry(with_event("stop")),
+            "errorOccurred": entry(with_event("error")),
+            "preToolUse": entry(with_event("pre_tool_use")),
+            "postToolUse": entry(with_event("post_tool_use")),
+            "userPromptSubmitted": entry(with_event("user_prompt_submit")),
+        }
+    })
+}
+
+pub fn ensure_copilot_hook() {
+    let Some(dir) = copilot_hooks_dir() else {
+        eprintln!("[installer] no home directory (USERPROFILE/HOME unset) — skipping copilot hook install");
+        return;
+    };
+    let hook_script = ensure_hook_script_exists();
+    if let Err(e) = fs::create_dir_all(&dir) {
+        eprintln!("[installer] copilot hooks dir: {e}");
+        return;
+    }
+    let dest = dir.join("patty-notifier.json");
+    let doc = apply_copilot_hooks_file(&hook_script.to_string_lossy());
+    if let Err(e) = crate::store::save_atomic_to(&dest, &doc) {
+        eprintln!("[installer] failed to write {}: {e}", dest.display());
+    }
+}
+
+pub fn remove_copilot_hook() {
+    if let Some(dir) = copilot_hooks_dir() {
+        remove_file_if_present(dir.join("patty-notifier.json"), "copilot hook file");
+    }
+}
+
 /// Remove Patty's hook entries from the Claude settings files (both the live
 /// settings.json and the legacy settings.local.json), leaving the user's own
 /// hooks untouched. No-op when absent or unparseable.
@@ -330,6 +444,8 @@ pub fn sync_notification_tools(settings: &Value) {
     if on("openCode") { ensure_opencode_plugin() } else { remove_opencode_plugin() }
     if on("codex") { ensure_codex_hook() } else { remove_codex_hook() }
     if on("ohMyPi") { ensure_omp_hook() } else { remove_omp_hook() }
+    if on("qwenCode") { ensure_qwen_hook() } else { remove_qwen_hook() }
+    if on("copilotCli") { ensure_copilot_hook() } else { remove_copilot_hook() }
 }
 
 pub fn ensure_opencode_plugin() {
@@ -441,6 +557,34 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("-Source \"codex\""));
+    }
+
+    #[test]
+    fn qwen_apply_builds_keys_with_source() {
+        let mut settings = json!({ "model": "qwen3" });
+        apply_qwen_hooks(&mut settings, "C:/Patty/patty-hook.ps1");
+        for key in ["SessionStart", "SessionEnd", "Notification", "PermissionRequest", "Stop", "StopFailure", "PreToolUse", "PostToolUse", "UserPromptSubmit"] {
+            assert!(settings["hooks"].get(key).is_some(), "missing {key}");
+        }
+        assert_eq!(settings["model"], "qwen3");
+        assert!(settings["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("-Source \"qwen-code\""));
+    }
+
+    #[test]
+    fn copilot_hooks_file_shape() {
+        let doc = apply_copilot_hooks_file("C:/Patty/patty-hook.ps1");
+        assert_eq!(doc["version"], 1);
+        for key in ["sessionStart", "sessionEnd", "agentStop", "errorOccurred", "preToolUse", "postToolUse", "userPromptSubmitted"] {
+            assert!(doc["hooks"].get(key).is_some(), "missing {key}");
+        }
+        let cmd = doc["hooks"]["sessionStart"][0]["powershell"].as_str().unwrap();
+        assert!(cmd.contains("patty-hook.ps1"));
+        assert!(cmd.contains("-Source \"copilot-cli\""));
+        assert!(cmd.contains("-EventType session_start"));
+        assert_eq!(doc["hooks"]["sessionStart"][0]["timeoutSec"], 5);
     }
 
     #[test]

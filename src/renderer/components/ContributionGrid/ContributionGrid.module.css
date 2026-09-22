@@ -49,3 +49,11 @@
 .grid[data-type="omp"]::after {
   background: var(--fire-gradient-omp);
 }
+
+.grid[data-type="qwen"]::after {
+  background: var(--fire-gradient-qwen);
+}
+
+.grid[data-type="copilot"]::after {
+  background: var(--fire-gradient-copilot);
+}

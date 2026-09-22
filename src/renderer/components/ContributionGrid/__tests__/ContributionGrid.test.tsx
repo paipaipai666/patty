@@ -36,7 +36,7 @@ beforeEach(() => {
   style.setProperty('--fire-glow-claude-4', 'rgba(200,60,200,0.5)')
 })
 
-function render(aiType: 'claude' | 'opencode' | 'codex' | 'omp' | null) {
+function render(aiType: 'claude' | 'opencode' | 'codex' | 'omp' | 'qwen' | 'copilot' | null) {
   const container = document.createElement('div')
   container.style.width = '200px'
   container.style.height = '100px'

@@ -194,6 +194,37 @@ describe('patty-hook.ps1 contract', () => {
     }
   })
 
+  it('Qwen SessionStart → session_start with source qwen-code', T, async () => {
+    const body = await runHook(JSON.stringify({ hook_event_name: 'SessionStart' }), ['-Source', 'qwen-code'])
+    expect(body).toEqual({ paneId: 'pane-1', event: 'session_start', source: 'qwen-code', secret: 'secret-1' })
+  })
+
+  it('Qwen PermissionRequest → permission_prompt', T, async () => {
+    const body = await runHook(JSON.stringify({ hook_event_name: 'PermissionRequest' }), ['-Source', 'qwen-code'])
+    expect(body.event).toBe('permission_prompt')
+    expect(body.source).toBe('qwen-code')
+  })
+
+  it('Copilot camelCase agentStop → stop with source copilot-cli', T, async () => {
+    const body = await runHook(JSON.stringify({ hook_event_name: 'agentStop' }), ['-Source', 'copilot-cli'])
+    expect(body).toEqual({ paneId: 'pane-1', event: 'stop', source: 'copilot-cli', secret: 'secret-1' })
+  })
+
+  it('Copilot camelCase sessionEnd → session_end', T, async () => {
+    const body = await runHook(JSON.stringify({ hook_event_name: 'sessionEnd' }), ['-Source', 'copilot-cli'])
+    expect(body.event).toBe('session_end')
+  })
+
+  it('Copilot camelCase preToolUse → pre_tool_use', T, async () => {
+    const body = await runHook(JSON.stringify({ hook_event_name: 'preToolUse' }), ['-Source', 'copilot-cli'])
+    expect(body.event).toBe('pre_tool_use')
+  })
+
+  it('Copilot errorOccurred → error', T, async () => {
+    const body = await runHook(JSON.stringify({ hook_event_name: 'errorOccurred' }), ['-Source', 'copilot-cli'])
+    expect(body.event).toBe('error')
+  })
+
   it('empty stdin → stop', T, async () => {
     const body = await runHook('')
     expect(body.event).toBe('stop')

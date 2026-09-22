@@ -26,7 +26,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     claudeCode: true,
     openCode: true,
     codex: true,
-    ohMyPi: true
+    ohMyPi: true,
+    qwenCode: true,
+    copilotCli: true
   },
   sshProfiles: []
 }

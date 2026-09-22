@@ -3,12 +3,33 @@ import { registerGrid, unregisterGrid } from '../../utils/gridScheduler'
 import styles from './ContributionGrid.module.css'
 
 interface Props {
-  aiType: 'claude' | 'opencode' | 'codex' | 'omp' | null
+  aiType: 'claude' | 'opencode' | 'codex' | 'omp' | 'qwen' | 'copilot' | null
 }
 
-const FIRE_VARS: Record<string, string> = { claude: '--fire-claude', opencode: '--fire-opencode', codex: '--fire-codex', omp: '--fire-omp' }
-const GLOW3_VARS: Record<string, string> = { claude: '--fire-glow-claude-3', opencode: '--fire-glow-opencode-3', codex: '--fire-glow-codex-3', omp: '--fire-glow-omp-3' }
-const GLOW4_VARS: Record<string, string> = { claude: '--fire-glow-claude-4', opencode: '--fire-glow-opencode-4', codex: '--fire-glow-codex-4', omp: '--fire-glow-omp-4' }
+const FIRE_VARS: Record<string, string> = {
+  claude: '--fire-claude',
+  opencode: '--fire-opencode',
+  codex: '--fire-codex',
+  omp: '--fire-omp',
+  qwen: '--fire-qwen',
+  copilot: '--fire-copilot',
+}
+const GLOW3_VARS: Record<string, string> = {
+  claude: '--fire-glow-claude-3',
+  opencode: '--fire-glow-opencode-3',
+  codex: '--fire-glow-codex-3',
+  omp: '--fire-glow-omp-3',
+  qwen: '--fire-glow-qwen-3',
+  copilot: '--fire-glow-copilot-3',
+}
+const GLOW4_VARS: Record<string, string> = {
+  claude: '--fire-glow-claude-4',
+  opencode: '--fire-glow-opencode-4',
+  codex: '--fire-glow-codex-4',
+  omp: '--fire-glow-omp-4',
+  qwen: '--fire-glow-qwen-4',
+  copilot: '--fire-glow-copilot-4',
+}
 
 const ROWS = 5
 const GAP = 2

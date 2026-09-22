@@ -144,6 +144,20 @@ export interface UITheme {
   '--fire-glow-omp-3': string
   '--fire-glow-omp-4': string
   '--fire-gradient-omp': string
+  '--ai-qwen-color': string
+  '--ai-qwen-bg': string
+  '--ai-qwen-glow': string
+  '--fire-qwen': string
+  '--fire-glow-qwen-3': string
+  '--fire-glow-qwen-4': string
+  '--fire-gradient-qwen': string
+  '--ai-copilot-color': string
+  '--ai-copilot-bg': string
+  '--ai-copilot-glow': string
+  '--fire-copilot': string
+  '--fire-glow-copilot-3': string
+  '--fire-glow-copilot-4': string
+  '--fire-gradient-copilot': string
 
   '--attention-complete-bg': string
   '--attention-complete-bar': string
@@ -209,6 +223,8 @@ export interface NotificationSettings {
   openCode: boolean
   codex: boolean
   ohMyPi: boolean
+  qwenCode: boolean
+  copilotCli: boolean
 }
 
 export interface AppSettings {

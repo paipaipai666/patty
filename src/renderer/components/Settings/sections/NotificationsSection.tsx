@@ -10,7 +10,9 @@ const NOTIFICATION_TOGGLES: Array<{
   { key: 'claudeCode', label: 'Claude Code', desc: 'Show indicators for permission requests, questions, and errors' },
   { key: 'openCode', label: 'OpenCode', desc: 'Show indicators for permission requests, questions, and errors' },
   { key: 'codex', label: 'Codex CLI', desc: 'Show indicators when Codex CLI needs your attention' },
-  { key: 'ohMyPi', label: 'Oh My Pi', desc: 'Show indicators when Oh My Pi needs your attention' }
+  { key: 'ohMyPi', label: 'Oh My Pi', desc: 'Show indicators when Oh My Pi needs your attention' },
+  { key: 'qwenCode', label: 'Qwen Code', desc: 'Show indicators when Qwen Code needs your attention' },
+  { key: 'copilotCli', label: 'GitHub Copilot CLI', desc: 'Show indicators when Copilot CLI needs your attention' }
 ]
 
 export function NotificationsSection({ settings, updateSetting }: SectionProps) {
@@ -45,9 +47,9 @@ export function NotificationsSection({ settings, updateSetting }: SectionProps) 
       ))}
 
       <div className={styles.settingDesc} style={{ marginTop: '16px' }}>
-        Toggling a tool off removes Patty's hooks from its config (Claude Code
-        settings.json, Codex hooks.json, OpenCode/omp plugin files); toggling
-        on reinstalls them.
+        Toggling a tool off removes Patty's hooks from its config (Claude/Qwen
+        settings.json, Codex hooks.json, Copilot hooks dir, OpenCode/omp plugin
+        files); toggling on reinstalls them.
       </div>
     </div>
   )

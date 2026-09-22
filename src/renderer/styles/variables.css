@@ -37,6 +37,22 @@
   --fire-glow-omp-4:     rgba(167, 139, 250, 0.35);
   --fire-gradient-omp:   linear-gradient(90deg, transparent 0%, rgba(167, 139, 250, 0.08) 40%, rgba(167, 139, 250, 0.18) 100%);
 
+  --ai-qwen-color:         #6950EF;
+  --ai-qwen-bg:            rgba(105, 80, 239, 0.12);
+  --ai-qwen-glow:          rgba(105, 80, 239, 0.28);
+  --fire-qwen:             #6950EF;
+  --fire-glow-qwen-3:      rgba(105, 80, 239, 0.18);
+  --fire-glow-qwen-4:      rgba(105, 80, 239, 0.35);
+  --fire-gradient-qwen:    linear-gradient(90deg, transparent 0%, rgba(105, 80, 239, 0.08) 40%, rgba(105, 80, 239, 0.18) 100%);
+
+  --ai-copilot-color:      #8534F3;
+  --ai-copilot-bg:         rgba(133, 52, 243, 0.12);
+  --ai-copilot-glow:       rgba(133, 52, 243, 0.28);
+  --fire-copilot:          #8534F3;
+  --fire-glow-copilot-3:   rgba(133, 52, 243, 0.18);
+  --fire-glow-copilot-4:   rgba(133, 52, 243, 0.35);
+  --fire-gradient-copilot: linear-gradient(90deg, transparent 0%, rgba(133, 52, 243, 0.08) 40%, rgba(133, 52, 243, 0.18) 100%);
+
   /* Attention states (session list) */
   --attention-complete-bg:     rgba(48, 209, 88, 0.10);
   --attention-complete-bar:    #30d158;

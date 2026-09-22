@@ -13,6 +13,8 @@
 # Usage:
 #   Claude Code: powershell -ExecutionPolicy Bypass -File patty-hook.ps1
 #   Codex CLI:   powershell -ExecutionPolicy Bypass -File patty-hook.ps1 -Source "codex"
+#   Qwen Code:   powershell -ExecutionPolicy Bypass -File patty-hook.ps1 -Source "qwen-code"
+#   Copilot CLI: powershell -ExecutionPolicy Bypass -File patty-hook.ps1 -Source "copilot-cli"
 
 param(
     [string]$EventType = "",
@@ -52,17 +54,22 @@ try {
             try {
                 $inputData = $stdinInput | ConvertFrom-Json
                 if ($inputData.hook_event_name) {
-                    # Codex CLI hook events: SessionStart, PermissionRequest, Stop, etc.
+                    # Codex / Qwen / Copilot hook events: SessionStart, PermissionRequest,
+                    # Stop, PreToolUse, etc. (PascalCase or camelCase).
                     $hookName = $inputData.hook_event_name.ToString().ToLower()
                     switch ($hookName) {
                         "sessionstart" { $eventType = "session_start" }
+                        "sessionend" { $eventType = "session_end" }
                         "permissionrequest" { $eventType = "permission_prompt" }
                         "stop" { $eventType = "stop" }
-                        # Codex 以 PascalCase 上报这些事件；归一化到与 Claude 侧
-                        # -EventType 一致的下划线规范名，避免词汇表漂移。
+                        "agentstop" { $eventType = "stop" }
+                        "erroroccurred" { $eventType = "error" }
+                        # Codex/Qwen 以 PascalCase、Copilot 以 camelCase 上报；归一到
+                        # 与 Claude 侧 -EventType 一致的下划线规范名，避免词汇表漂移。
                         "pretooluse" { $eventType = "pre_tool_use" }
                         "posttooluse" { $eventType = "post_tool_use" }
                         "userpromptsubmit" { $eventType = "user_prompt_submit" }
+                        "userpromptsubmitted" { $eventType = "user_prompt_submit" }
                         "notification" {
                             # Claude Code 2.x 的 Notification 载荷同时带 hook_event_name
                             # 和 notification_type（permission_prompt / idle_prompt /
@@ -83,6 +90,19 @@ try {
                             else { $eventType = "error" }
                         }
                         default { $eventType = $hookName }
+                    }
+                } elseif ($inputData.event) {
+                    # Copilot camelCase payloads may use `event` instead of hook_event_name.
+                    $eventType = $inputData.event.ToString().ToLower()
+                    switch ($eventType) {
+                        "sessionstart" { $eventType = "session_start" }
+                        "sessionend" { $eventType = "session_end" }
+                        "pretooluse" { $eventType = "pre_tool_use" }
+                        "posttooluse" { $eventType = "post_tool_use" }
+                        "agentstop" { $eventType = "stop" }
+                        "erroroccurred" { $eventType = "error" }
+                        "userpromptsubmitted" { $eventType = "user_prompt_submit" }
+                        default { }
                     }
                 } elseif ($inputData.notification_type) {
                     # Notification hook: permission_prompt, idle_prompt, elicitation_dialog

@@ -1,7 +1,7 @@
 {
   "version": 2,
   "description": "Patty hook 线协议：各 AI CLI 适配器（patty-hook.ps1 / opencode-patty-plugin.ts / omp-patty-hook.ts）把原生事件翻译为本文件定义的规范事件，POST 到 127.0.0.1:$PATTY_PORT/hook，载荷 {paneId, event, source, secret, role?}。本文件是事件词汇的单一事实源：src-tauri/src/hooks.rs 的一致性测试与 resources/__tests__/ 的适配器契约测试都消费它——任何一侧漂移（新增、改名、映射变化）都会让测试失败，而不是让指示灯静默熄灭。它只喂测试，不驱动运行时。",
-  "sources": ["claude-code", "codex", "opencode", "omp"],
+  "sources": ["claude-code", "codex", "opencode", "omp", "qwen-code", "copilot-cli"],
   "roles": ["main", "subagent"],
   "events": {
     "session_start": null,

@@ -30,7 +30,7 @@ const { mockUpdateSetting, mockCloseSettings, settingsState } = vi.hoisted(() =>
       // Mock state uses partial theme objects; the real CustomTheme requires
       // full UITheme/XtermTheme keysets the component never reads here.
       customThemes: [] as Array<{ id: string; name: string; ui: Record<string, string>; terminal: Record<string, string> }>,
-      notifications: { claudeCode: true, openCode: true, codex: true, ohMyPi: true },
+      notifications: { claudeCode: true, openCode: true, codex: true, ohMyPi: true, qwenCode: true, copilotCli: true },
       sshProfiles: []
     },
     settingsOpen: true,

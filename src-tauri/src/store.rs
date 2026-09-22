@@ -57,7 +57,7 @@ pub fn default_settings() -> Value {
         },
         "customThemes": [],
         "sshProfiles": [],
-        "notifications": { "claudeCode": true, "openCode": true, "codex": true, "ohMyPi": true }
+        "notifications": { "claudeCode": true, "openCode": true, "codex": true, "ohMyPi": true, "qwenCode": true, "copilotCli": true }
     })
 }
 

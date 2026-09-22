@@ -140,6 +140,16 @@
   background: var(--ai-omp-bg);
 }
 
+.aiIconQwen {
+  color: var(--ai-qwen-color);
+  background: var(--ai-qwen-bg);
+}
+
+.aiIconCopilot {
+  color: var(--ai-copilot-color);
+  background: var(--ai-copilot-bg);
+}
+
 .item {
   display: flex;
   align-items: center;
@@ -202,6 +212,14 @@
 
 .itemActive .aiIconOmp {
   box-shadow: 0 0 6px var(--ai-omp-glow);
+}
+
+.itemActive .aiIconQwen {
+  box-shadow: 0 0 6px var(--ai-qwen-glow);
+}
+
+.itemActive .aiIconCopilot {
+  box-shadow: 0 0 6px var(--ai-copilot-glow);
 }
 
 @keyframes ripple {

@@ -44,7 +44,7 @@ vi.mock('../store/settingsStore', () => {
         closePane: 'Ctrl+Shift+W'
       },
       customThemes: [],
-      notifications: { claudeCode: true, openCode: true, codex: true, ohMyPi: true },
+      notifications: { claudeCode: true, openCode: true, codex: true, ohMyPi: true, qwenCode: true, copilotCli: true },
       sshProfiles: []
     },
     loaded: true,
