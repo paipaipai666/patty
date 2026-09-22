@@ -16,92 +16,114 @@ describe('createIIPStreamPatcher', () => {
     expect(patcher(`${ESC}[31mred`)).toBe(`${ESC}[31mred`)
   })
 
-  it('injects size=0 into an IIP header missing size', () => {
+  it('injects real decoded size into an IIP header missing size (omp/yazi PNG)', () => {
     const patcher = createIIPStreamPatcher()
+    // "base64data" is 10 b64 chars → 7 decoded bytes (atob fails on unpadded
+    // length; the formula still yields the size IIPHandler needs).
     const input = `${ESC}]1337;File=name=test.png;:base64data${ESC}\\`
     const output = patcher(input)
-    expect(output).toBe(`${ESC}]1337;File=size=0;name=test.png;:base64data${ESC}\\`)
+    expect(output).toBe(`${ESC}]1337;File=inline=1;size=7;name=test.png;:base64data${ESC}\\`)
   })
 
-  it('does not inject size when already present', () => {
+  it('accepts omp encodeITerm2 shape: inline=1 width=N height=auto, no size', () => {
+    // Mirrors packages/tui/src/terminal-capabilities.ts encodeITerm2() from
+    // oh-my-pi: `File=inline=1;width=…;height=auto:base64` + BEL, no size.
+    const pngB64 = b64encode(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]))
+    const input = `${ESC}]1337;File=inline=1;width=20;height=auto:${pngB64}\x07`
+    const output = createIIPStreamPatcher()(input)
+    expect(output).toBe(
+      `${ESC}]1337;File=size=11;inline=1;width=20;height=auto:${pngB64}\x07`
+    )
+  })
+
+  it('keeps size when present; still injects inline=1 when missing', () => {
     const patcher = createIIPStreamPatcher()
     const input = `${ESC}]1337;File=name=test.png;size=100;:base64data${ESC}\\`
-    expect(patcher(input)).toBe(input)
+    expect(patcher(input)).toBe(
+      `${ESC}]1337;File=inline=1;name=test.png;size=100;:base64data${ESC}\\`
+    )
   })
 
-  it('injects size=0 after File= when other fields precede it', () => {
+  it('injects real size after File= when other fields precede it', () => {
     const patcher = createIIPStreamPatcher()
-    const input = `${ESC}]1337;File=name=a.png;width=100;:data`
+    const input = `${ESC}]1337;File=name=a.png;width=100;:data${ESC}\\`
     const output = patcher(input)
-    expect(output).toBe(`${ESC}]1337;File=size=0;name=a.png;width=100;:data`)
+    // "data" decodes to 3 bytes
+    expect(output).toBe(`${ESC}]1337;File=inline=1;size=3;name=a.png;width=100;:data${ESC}\\`)
+  })
+
+  it('holds a missing-size IIP until the terminator so size can be measured', () => {
+    const patcher = createIIPStreamPatcher()
+    expect(patcher(`${ESC}]1337;File=name=test.png;:data`)).toBe('')
+    expect(patcher(`${ESC}\\`)).toBe(`${ESC}]1337;File=inline=1;size=3;name=test.png;:data${ESC}\\`)
   })
 
   it('handles partial marker prefix at the end of a chunk (hold for next)', () => {
     const patcher = createIIPStreamPatcher()
     const chunk1 = `${ESC}]`
-    const chunk2 = `1337;File=name=test.png;:data`
+    const chunk2 = `1337;File=name=test.png;:data${ESC}\\`
 
     const out1 = patcher(chunk1)
     // First chunk holds the partial marker
     expect(out1).toBe('')
     const out2 = patcher(chunk2)
-    expect(out2).toBe(`${ESC}]1337;File=size=0;name=test.png;:data`)
+    expect(out2).toBe(`${ESC}]1337;File=inline=1;size=3;name=test.png;:data${ESC}\\`)
   })
 
   it('handles marker split across multiple chunks character by character', () => {
     const patcher = createIIPStreamPatcher()
-    const chunks = [`${ESC}`, ']', '1', '3', '3', '7;File=name=x.png;:data']
+    const chunks = [`${ESC}`, ']', '1', '3', '3', '7;File=name=x.png;:data', `${ESC}\\`]
 
     for (let i = 0; i < chunks.length - 1; i++) {
       expect(patcher(chunks[i])).toBe('')
     }
     const last = patcher(chunks[chunks.length - 1])
-    expect(last).toBe(`${ESC}]1337;File=size=0;name=x.png;:data`)
+    expect(last).toBe(`${ESC}]1337;File=inline=1;size=3;name=x.png;:data${ESC}\\`)
   })
 
   it('handles header colon split across chunks', () => {
     const patcher = createIIPStreamPatcher()
     const chunk1 = `${ESC}]1337;File=name=test.png;`
-    const chunk2 = `:base64data`
+    const chunk2 = `:base64data${ESC}\\`
 
     expect(patcher(chunk1)).toBe('')
     const out2 = patcher(chunk2)
-    expect(out2).toBe(`${ESC}]1337;File=size=0;name=test.png;:base64data`)
+    expect(out2).toBe(`${ESC}]1337;File=inline=1;size=7;name=test.png;:base64data${ESC}\\`)
   })
 
   it('handles the partial marker `\\x1b` at end of chunk', () => {
     const patcher = createIIPStreamPatcher()
     expect(patcher('hello\x1b')).toBe('hello') // emits text, holds \x1b
-    expect(patcher(']1337;File=name=t.png;:data')).toBe(
-      '\x1b]1337;File=size=0;name=t.png;:data'
+    expect(patcher(']1337;File=name=t.png;:data\x07')).toBe(
+      '\x1b]1337;File=inline=1;size=3;name=t.png;:data\x07'
     )
   })
 
   it('handles varying partial marker suffixes', () => {
     const patcher = createIIPStreamPatcher()
     expect(patcher(`${ESC}]1`)).toBe('') // holds \x1b]1
-    expect(patcher(`337;File=name=t.png;:data`)).toBe(
-      `${ESC}]1337;File=size=0;name=t.png;:data`
+    expect(patcher(`337;File=name=t.png;:data\x07`)).toBe(
+      `${ESC}]1337;File=inline=1;size=3;name=t.png;:data\x07`
     )
   })
 
   it('processes multiple IIP markers in one chunk', () => {
     const patcher = createIIPStreamPatcher()
     const input =
-      `${ESC}]1337;File=name=a.png;:data1` +
-      `${ESC}]1337;File=name=b.png;:data2`
+      `${ESC}]1337;File=name=a.png;:data1\x07` +
+      `${ESC}]1337;File=name=b.png;:data2\x07`
     const output = patcher(input)
     expect(output).toBe(
-      `${ESC}]1337;File=size=0;name=a.png;:data1` +
-      `${ESC}]1337;File=size=0;name=b.png;:data2`
+      `${ESC}]1337;File=inline=1;size=3;name=a.png;:data1\x07` +
+      `${ESC}]1337;File=inline=1;size=3;name=b.png;:data2\x07`
     )
   })
 
   it('processes mixed content: non-IIP, IIP, non-IIP', () => {
     const patcher = createIIPStreamPatcher()
-    const input = `prefix${ESC}]1337;File=name=x.png;:datasuffix`
+    const input = `prefix${ESC}]1337;File=name=x.png;:data${ESC}\\suffix`
     const output = patcher(input)
-    expect(output).toBe(`prefix${ESC}]1337;File=size=0;name=x.png;:datasuffix`)
+    expect(output).toBe(`prefix${ESC}]1337;File=inline=1;size=3;name=x.png;:data${ESC}\\suffix`)
   })
 
   it('recovers after a malformed unbounded header by emitting raw at 1024 limit', () => {
@@ -116,18 +138,22 @@ describe('createIIPStreamPatcher', () => {
     const patcher = createIIPStreamPatcher()
     const input = `${ESC}]1337;File=name=a.png;:data${ESC}`
     const output = patcher(input)
-    // First flush: should output the patched header and data, but hold \x1b
-    expect(output).toBe(`${ESC}]1337;File=size=0;name=a.png;:data`)
+    // Holds the whole missing-size image (no terminator yet) including the trailing \x1b
+    expect(output).toBe('')
 
-    const out2 = patcher(']1337;File=name=b.png;:data2')
-    expect(out2).toBe(`${ESC}]1337;File=size=0;name=b.png;:data2`)
+    const out2 = patcher(']1337;File=name=b.png;:data2\x07')
+    // First image gets no terminator of its own here — the next IIP marker is
+    // not a terminator, so both images are measured and re-emitted once the
+    // stream settles. In real IIP every image ends with BEL/ST.
+    expect(out2).toContain(`${ESC}]1337;File=inline=1;size=3;name=a.png;:data${ESC}`)
+    expect(out2).toContain(`${ESC}]1337;File=inline=1;size=3;name=b.png;:data2\x07`)
   })
 
   it('emits non-IIP data before a marker and patches the marker', () => {
     const patcher = createIIPStreamPatcher()
-    const input = `before${ESC}]1337;File=name=x.png;:data`
+    const input = `before${ESC}]1337;File=name=x.png;:data${ESC}\\`
     const output = patcher(input)
-    expect(output).toBe(`before${ESC}]1337;File=size=0;name=x.png;:data`)
+    expect(output).toBe(`before${ESC}]1337;File=inline=1;size=3;name=x.png;:data${ESC}\\`)
   })
 
   it('handles consecutive chunks each ending with a possible marker prefix', () => {
@@ -147,13 +173,12 @@ describe('createIIPStreamPatcher', () => {
   it('holds payload tail that is entirely a marker prefix for next chunk', () => {
     const patcher = createIIPStreamPatcher()
     const input = `${ESC}]1337;File=name=a.png;:\x1b`
-    // Payload is a lone `\x1b`: fewer than the 4 base64 chars needed to sniff
-    // TIFF and no terminator yet, so the whole sequence (header included) is
-    // held until the sniff becomes decidable. The byte stream that eventually
-    // comes out is identical — only the per-call split differs.
+    // Payload is a lone `\x1b` (start of the next marker): held until the
+    // following chunk decides the boundary. The first image ends up with an
+    // empty payload (size=0, ImageAddon drops it); the second renders.
     expect(patcher(input)).toBe('')
-    expect(patcher(']1337;File=name=b.png;:data')).toBe(
-      `${ESC}]1337;File=size=0;name=a.png;:${ESC}]1337;File=size=0;name=b.png;:data`
+    expect(patcher(']1337;File=name=b.png;:data\x07')).toBe(
+      `${ESC}]1337;File=inline=1;size=0;name=a.png;:${ESC}]1337;File=inline=1;size=3;name=b.png;:data\x07`
     )
   })
 })

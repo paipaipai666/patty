@@ -14,6 +14,10 @@ import { getThemeColors } from '../../styles/themes'
 import { perfMark, perfMeasure } from '../../../shared/perf'
 import styles from './Terminal.module.css'
 import { createIIPStreamPatcher } from './iipStreamPatcher'
+import { createIipStreamExtractor, findIipSlot, fitIipToCells } from './iipParser'
+import type { IipImage } from './iipParser'
+import { commitIipPlacement, isStaleIipGeneration, resolveAnchor, type IipOverlayItem } from './iipAnchor'
+import { IipOverlay } from './IipOverlay'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
 import { markTerminalOpen } from '../../utils/shellReadiness'
 
@@ -125,6 +129,171 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const iipPatcherRef = useRef<((data: string) => string) | null>(null)
   if (!iipPatcherRef.current) {
     iipPatcherRef.current = createIIPStreamPatcher()
+  }
+  // DOM-overlay IIP path: extract frames so we can paint them even when
+  // ImageAddon drops the sequence. Placeholder is empty — layout blank rows
+  // come from the agent's own reserved lines.
+  const iipExtractRef = useRef<((data: string) => { out: string; images: IipImage[] }) | null>(null)
+  if (!iipExtractRef.current) {
+    iipExtractRef.current = createIipStreamExtractor('')
+  }
+  const [iipItems, setIipItems] = useState<IipOverlayItem[]>([])
+  const termForIipRef = useRef<Terminal | null>(null)
+  const [cellSize, setCellSize] = useState({ widthPx: 9, heightPx: 18 })
+  const [iipScrollTick, setIipScrollTick] = useState(0)
+
+  // Keep overlay glued to buffer rows: poll baseY every frame while any image
+  // is mounted (omp TUI scrolling may not fire xterm onScroll). Also prune
+  // items whose slot glyph vanished: ESC[2J/3J, conversation switches and
+  // TUI erases renumber/destroy absolute anchor rows — without this, images
+  // from an older conversation paint inside the new one. A slot must be
+  // missing for a few consecutive frames before the item is dropped, so a
+  // repaint (erase old slot → decode → commit new slot) never flickers.
+  const iipItemsRef = useRef(iipItems)
+  iipItemsRef.current = iipItems
+  useEffect(() => {
+    if (iipItems.length === 0) return
+    let raf = 0
+    let last = -1
+    let lastBufLen = -1
+    const slotMisses: Record<number, number> = {}
+    // Debug globals read by the CDP probes in scripts/.
+    const w = window as unknown as { __iipLiveBaseY?: number; __iipTick?: number }
+    const tick = () => {
+      const term = termForIipRef.current
+      const buf = term?.buffer.active
+      const baseY = buf?.baseY ?? 0
+      const top = term?.element?.querySelector('.xterm-viewport')?.scrollTop ?? 0
+      w.__iipLiveBaseY = baseY
+      const key = baseY * 100000 + top
+      if (key !== last) {
+        last = key
+        w.__iipTick = Date.now()
+        setIipScrollTick((t) => t + 1)
+      }
+      if (term && buf) {
+        if (buf.length < lastBufLen) {
+          // Buffer cleared/trimmed: absolute rows renumbered → drop everything.
+          lastBufLen = buf.length
+          for (const k of Object.keys(slotMisses)) delete slotMisses[Number(k)]
+          setIipItems([])
+        } else {
+          lastBufLen = buf.length
+          const items = iipItemsRef.current
+          const aliveIds: Record<number, true> = {}
+          for (const it of items) aliveIds[it.id] = true
+          for (const k of Object.keys(slotMisses)) {
+            if (!aliveIds[Number(k)]) delete slotMisses[Number(k)]
+          }
+          const deadIds: Record<number, true> = {}
+          for (const it of items) {
+            if (it.fromSlot !== true || it.slotRow < 0) continue
+            const line = buf.getLine(it.slotRow)
+            const alive =
+              !!line && it.slotCol < line.length && line.getCell(it.slotCol)?.getChars() === it.slot
+            if (alive) {
+              delete slotMisses[it.id]
+            } else {
+              slotMisses[it.id] = (slotMisses[it.id] ?? 0) + 1
+              if (slotMisses[it.id] >= 3) deadIds[it.id] = true
+            }
+          }
+          if (Object.keys(deadIds).length > 0) {
+            setIipItems((prev) => prev.filter((x) => !deadIds[x.id]))
+          }
+        }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    const vp = termForIipRef.current?.element?.querySelector('.xterm-viewport')
+    const onScroll = () => setIipScrollTick((t) => t + 1)
+    vp?.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      cancelAnimationFrame(raf)
+      vp?.removeEventListener('scroll', onScroll)
+    }
+  }, [iipItems.length])
+
+
+  /**
+   * After the slot character is in the xterm buffer, scan for it — that cell
+   * is the image's **top-left**. Commit goes through `commitIipPlacement`:
+   * same payload with its old slot erased = repaint (reuse id, move); old slot
+   * still present = a second display of the same bytes (append a new item).
+   */
+  const placeIipImage = (term: Terminal, image: IipImage) => {
+    const key =
+      image.payloadBase64.length +
+      ':' +
+      image.payloadBase64.slice(0, 32) +
+      ':' +
+      image.payloadBase64.slice(-32)
+
+    const generation = ptyGenerationRef.current
+    const buf = term.buffer.active
+    // Prefer getCell().getChars() over translateToString: PUA slots must not
+    // be trimmed/replaced or findIipSlot never hits and we glue to the cursor.
+    const lines: string[] = []
+    for (let i = 0; i < buf.length; i++) {
+      const line = buf.getLine(i)
+      if (!line) {
+        lines.push('')
+        continue
+      }
+      let s = ''
+      for (let x = 0; x < line.length; x++) {
+        s += line.getCell(x)?.getChars() || ' '
+      }
+      lines.push(s)
+    }
+    const hit = findIipSlot(lines, image.slot)
+    const cursorAbs = buf.baseY + buf.cursorY
+
+    const el = new Image()
+    el.onload = () => {
+      if (isStaleIipGeneration(generation, ptyGenerationRef.current)) return
+      const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core
+      const cellW = core?._renderService?.dimensions?.css?.cell?.width ?? 9
+      const cellH = core?._renderService?.dimensions?.css?.cell?.height ?? 18
+      setCellSize({ widthPx: cellW, heightPx: cellH })
+      const fit = fitIipToCells(
+        image,
+        { widthPx: el.naturalWidth || 800, heightPx: el.naturalHeight || 600 },
+        { widthPx: cellW, heightPx: cellH },
+        term.cols
+      )
+      // Slot is the IIP line (block bottom). Top = bottom − rows + 1.
+      const anchor = resolveAnchor(hit, lines, cursorAbs, fit.rows)
+      ;(window as unknown as { __iipLast?: unknown }).__iipLast = {
+        hit,
+        cursorAbs,
+        fit,
+        anchor,
+        baseY: term.buffer.active.baseY,
+        topY: anchor.topY,
+      }
+      setIipItems((prevItems) =>
+        commitIipPlacement(
+          prevItems,
+          {
+            id: 0,
+            key,
+            dataUrl: image.dataUrl,
+            bufferY: anchor.topY,
+            col: anchor.col,
+            fromSlot: anchor.fromSlot,
+            slot: image.slot,
+            slotRow: hit?.row ?? -1,
+            slotCol: hit?.col ?? -1,
+            rows: fit.rows,
+            cols: fit.cols,
+          },
+          lines
+        )
+      )
+    }
+    el.src = image.dataUrl
   }
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Scale-bridge snapshot captured at the start of a sidebar width animation.
@@ -256,6 +425,17 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     }
     if (perfEnabled) perfMark('terminal:xterm-construct')
     const term = new Terminal(termOptions as ITerminalOptions)
+    termForIipRef.current = term
+    // Overlay rows must track viewport scroll. xterm onScroll/onRender is not
+    // enough here (omp TUI wheels can repaint without changing baseY), so also
+    // listen on .xterm-viewport and keep a rAF loop while images are mounted.
+    const bumpIip = () => setIipScrollTick((t) => t + 1)
+    if (typeof (term as unknown as { onRender?: unknown }).onRender === 'function') {
+      ;(term as unknown as { onRender: (cb: () => void) => unknown }).onRender(bumpIip)
+    }
+    if (typeof term.onScroll === 'function') {
+      term.onScroll(bumpIip)
+    }
     if (perfEnabled) perfMeasure('terminal:xterm-construct', 'terminal:xterm-construct')
 
     // Copy/paste
@@ -528,6 +708,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       cleanupExitRef.current?.()
       if (perfEnabled) perfMark('terminal:create-session-ipc-start')
       const generation = ++ptyGenerationRef.current
+      // New PTY / possibly a new term buffer: drop anchors from the old one.
+      setIipItems([])
 
       // Subscribe BEFORE invoking create_pty: the backend flips a preheated
       // PTY to "attached" inside create_pty, and from then on the reader
@@ -544,7 +726,12 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
           setHasData(true)
           if (perfEnabled) perfMeasure('terminal:first-data', 'terminal:create-session-ipc-start')
         }
-        term.write(iipPatcherRef.current!(data))
+        const extracted = iipExtractRef.current!(data)
+        const placeAll = () => {
+          for (const image of extracted.images) placeIipImage(term, image)
+        }
+        if (extracted.out) term.write(extracted.out, placeAll)
+        else placeAll()
       }
       const flushQueue = () => {
         replayWritten = true
@@ -603,7 +790,12 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
               // A preheated PTY already produced its initial output (banner,
               // prompt) before we attached — replay it before the queued live
               // data so ordering is preserved.
-              term.write(iipPatcherRef.current!(result.replay))
+              const extractedReplay = iipExtractRef.current!(result.replay)
+              const placeReplay = () => {
+                for (const image of extractedReplay.images) placeIipImage(term, image)
+              }
+              if (extractedReplay.out) term.write(extractedReplay.out, placeReplay)
+              else placeReplay()
               setHasData(true)
             }
             flushQueue()
@@ -780,6 +972,18 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       style={{ opacity: opacity < 1 ? opacity : 1 }}
     >
       {!hasData && visible && <div className={styles.bootShimmer} aria-hidden="true" />}
+      <IipOverlay
+        items={iipItems.map((item) => {
+          void iipScrollTick
+          // Viewport-relative row. Must be viewportY, not baseY: baseY stays
+          // at its max when scrolled up (ydisp lags); scrollTop == viewportY*cellH.
+          const viewportY = termForIipRef.current?.buffer.active.viewportY ?? 0
+          return { ...item, row: item.bufferY - viewportY }
+        })}
+        cell={cellSize}
+        originX={0}
+        originY={0}
+      />
     </div>
   )
 }

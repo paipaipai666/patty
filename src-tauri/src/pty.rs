@@ -616,6 +616,61 @@ fn normalize_cwd(cwd: Option<&str>) -> Option<&str> {
     cwd.filter(|c| !c.is_empty() && Path::new(c).is_dir())
 }
 
+/// Host identity env vars that leak from the process hosting Patty (Windows
+/// Terminal, VS Code, kitty, …). Children inherit them via ConPTY, and oh-my-pi
+/// trusts them over our IIP advertising — e.g. `WT_SESSION` can flip omp onto
+/// Sixel (dead on in-box ConPTY) and `VSCODE_PID` forces `imageProtocol: null`.
+fn terminal_identity_envs_to_strip() -> &'static [&'static str] {
+    &[
+        "WT_SESSION",
+        "WT_PROFILE_ID",
+        "WT_SESSION_ID",
+        "VSCODE_PID",
+        "VSCODE_CWD",
+        "VSCODE_GIT_ASKPASS_NODE",
+        "VSCODE_GIT_ASKPASS_MAIN",
+        "VSCODE_INJECTION",
+        "KITTY_WINDOW_ID",
+        "KITTY_PID",
+        "GHOSTTY_RESOURCES_DIR",
+        "WEZTERM_PANE",
+        "WEZTERM_EXECUTABLE",
+        "ALACRITTY_WINDOW_ID",
+        "ALACRITTY_SOCKET",
+        "ITERM_SESSION_ID",
+        "ITERM_PROFILE",
+        "TERM_PROGRAM_VERSION",
+        "LC_TERMINAL_VERSION",
+        "TMUX",
+        "TMUX_PANE",
+        "STY",
+        "ZELLIJ",
+    ]
+}
+
+/// Terminal identity and image-capability env for child shells.
+///
+/// `TERM_PROGRAM=vscode` is kept for tools that special-case VS Code (and
+/// `LC_TERMINAL=iTerm2` for chafa/yazi IIP). oh-my-pi hardcodes
+/// `vscode → imageProtocol: null` and will only emit a text fallback, so:
+/// - `ITERM_SESSION_ID` makes omp detect `iterm2` (checked before TERM_PROGRAM)
+/// - `PI_FORCE_IMAGE_PROTOCOL=iterm2` pins the protocol even if detection drifts
+///
+/// Together these land on OSC 1337 IIP — the one pixel-graphics path this
+/// terminal actually renders (ImageAddon + iipStreamPatcher). Sixel dies on
+/// Windows ConPTY; Kitty graphics is not implemented in ImageAddon.
+fn terminal_capability_envs() -> [(&'static str, &'static str); 6] {
+    [
+        ("TERM", "xterm-256color"),
+        ("COLORTERM", "truecolor"),
+        ("TERM_PROGRAM", "vscode"),
+        ("LC_TERMINAL", "iTerm2"),
+        // Any non-empty value is enough for omp's detectTerminalId.
+        ("ITERM_SESSION_ID", "patty:0:0"),
+        ("PI_FORCE_IMAGE_PROTOCOL", "iterm2"),
+    ]
+}
+
 fn spawn_inner(
     app: Option<&AppHandle>,
     id: &str,
@@ -644,16 +699,12 @@ fn spawn_inner(
     let mut cmd = CommandBuilder::new(&shell_path);
     cmd.args(shell_spawn_args(&shell_path));
     cmd.cwd(&working_dir);
-    cmd.env("TERM", "xterm-256color");
-    cmd.env("COLORTERM", "truecolor");
-    cmd.env("TERM_PROGRAM", "vscode");
-    // chafa 1.18's term-db has no entry for TERM_PROGRAM=vscode, so without this
-    // it renders images as cell-resolution block symbols (what users perceive as
-    // "blurry"). LC_TERMINAL=iTerm2 matches chafa's iTerm2 rule → chafa emits
-    // IIP pixel graphics (TIFF payload, transcoded to PNG by iipStreamPatcher).
-    // yazi likewise treats LC_TERMINAL=iTerm2 as IIP-capable, so its behavior
-    // is unchanged.
-    cmd.env("LC_TERMINAL", "iTerm2");
+    for key in terminal_identity_envs_to_strip() {
+        cmd.env_remove(key);
+    }
+    for (key, value) in terminal_capability_envs() {
+        cmd.env(key, value);
+    }
     // Only inject the hook channel when the hook server actually started —
     // otherwise every shell would pointlessly POST to port 0 (and a stale
     // PATTY_PORT from the environment could hit an unrelated listener).
@@ -1075,6 +1126,28 @@ mod tests {
     fn shell_path_falls_back_for_unknown() {
         assert_eq!(shell_path(Some("no-such-shell")), shell_path(None));
         assert!(shell_path(Some("powershell")).ends_with("powershell.exe"));
+    }
+
+    #[test]
+    fn terminal_capability_envs_force_itm2_for_omp_images() {
+        let envs = terminal_capability_envs();
+        let get = |k: &str| envs.iter().find(|(key, _)| *key == k).map(|(_, v)| *v);
+        // oh-my-pi disables images for TERM_PROGRAM=vscode unless forced.
+        assert_eq!(get("PI_FORCE_IMAGE_PROTOCOL"), Some("iterm2"));
+        assert_eq!(get("TERM_PROGRAM"), Some("vscode"));
+        // omp's detectTerminalId checks ITERM_SESSION_ID before TERM_PROGRAM.
+        assert_eq!(get("ITERM_SESSION_ID"), Some("patty:0:0"));
+        // chafa/yazi IIP path stays advertised.
+        assert_eq!(get("LC_TERMINAL"), Some("iTerm2"));
+    }
+
+    #[test]
+    fn terminal_identity_envs_strip_host_leaks() {
+        let strip = terminal_identity_envs_to_strip();
+        // Windows Terminal / VS Code / kitty markers must not reach omp.
+        for key in ["WT_SESSION", "VSCODE_PID", "KITTY_WINDOW_ID", "ITERM_SESSION_ID"] {
+            assert!(strip.contains(&key), "{key} should be stripped");
+        }
     }
 
     #[test]

@@ -10,11 +10,10 @@
  *    @xterm/addon-image's IIPHandler aborts on a missing *or zero* `size`
  *    field (IIPHandler.ts:69 `!this._header.size`). chafa omits `size`
  *    entirely (legal per the iTerm2 spec — it only drives the progress
- *    indicator), so its images are silently dropped. We inject the real
- *    decoded payload length, which passes both the abort check and the
- *    `iipSizeLimit` gate, and preallocates the decoder buffer exactly.
- *    (An earlier version injected `size=0`; that still fails the `!size`
- *    check and never rendered.)
+ *    indicator), so its images are silently dropped. oh-my-pi / yazi PNG
+ *    also omit `size`. We inject the real decoded payload length, which
+ *    passes both the abort check and the `iipSizeLimit` gate, and
+ *    preallocates the decoder buffer exactly.
  *
  * 2. TIFF → PNG payload transcode.
  *    chafa always wraps IIP pixels in an *uncompressed* TIFF container
@@ -25,10 +24,9 @@
  *    and re-emit the same pixels as PNG. The PNG uses stored (uncompressed)
  *    deflate blocks, so the encoder is tiny and fully synchronous — which
  *    keeps `term.write` ordering intact. Wire size is unchanged (both are
- *    uncompressed). Non-TIFF payloads (e.g. yazi's PNG) pass through
- *    untouched; if such a payload also lacks `size` we inject `size=0`, which
- *    preserves the addon's previous behavior (it aborts the image) without
- *    affecting the surrounding stream.
+ *    uncompressed). Non-TIFF payloads with an explicit `size` stream through
+ *    untouched; without `size` they are measured like TIFF and get the real
+ *    decoded length injected.
  *
  * Bounded state machine — never a naive cross-chunk string replace:
  * - Non-IIP data passes through with zero buffering and zero latency.
@@ -74,13 +72,20 @@ export function createIIPStreamPatcher(): (data: string) => string {
   const marker = '\x1b]1337'
 
   // Inject `size=<size>;` right after `File=` when the header has no size
-  // field; otherwise return the header unchanged.
+  // field; otherwise return the header unchanged. Also force `inline=1` when
+  // missing — IIPHandler aborts on `!inline` (download-only is unsupported).
+  // Match `size=` / `inline=` whether they follow `File=`, `;`, or the start.
   const patchHeader = (header: string, size: number): string => {
-    if (/(^|;)size=/.test(header)) {
-      return marker + header
+    let h = header
+    if (!/(?:^|;|File=)size=/.test(h)) {
+      const injectAt = h.indexOf('File=') + 'File='.length
+      h = h.slice(0, injectAt) + `size=${size};` + h.slice(injectAt)
     }
-    const injectAt = header.indexOf('File=') + 'File='.length
-    return marker + header.slice(0, injectAt) + `size=${size};` + header.slice(injectAt)
+    if (!/(?:^|;|File=)inline=/.test(h)) {
+      const injectAt = h.indexOf('File=') + 'File='.length
+      h = h.slice(0, injectAt) + 'inline=1;' + h.slice(injectAt)
+    }
+    return marker + h
   }
 
   return (data: string): string => {
@@ -145,13 +150,31 @@ export function createIIPStreamPatcher(): (data: string) => string {
         break
       }
 
-      if (combined.startsWith(TIFF_B64_PREFIX, payloadStart)) {
-        // TIFF payload: buffer until the terminator, then transcode to PNG.
+      const isTiff = combined.startsWith(TIFF_B64_PREFIX, payloadStart)
+      const headerHasSize = /(?:^|;|File=)size=/.test(header)
+
+      if (isTiff || !headerHasSize) {
+        // TIFF needs a full-payload transcode. A missing `size` field also
+        // needs the full payload: IIPHandler aborts on `!size` (including
+        // size=0), and oh-my-pi / yazi PNG omit `size` entirely — so measure
+        // the decoded byte length and inject that.
+        //
+        // Payload end is BEL/ST, or the next `\x1b]1337` marker (base64 never
+        // contains ESC, so a marker cannot appear inside a payload).
         const termIdx = firstTerminator(combined, payloadStart)
-        if (termIdx === -1) {
+        const nextMarker = combined.indexOf(marker, payloadStart)
+        let endIdx = -1
+        let termLen = 0
+        if (termIdx !== -1 && (nextMarker === -1 || termIdx < nextMarker)) {
+          endIdx = termIdx
+          termLen = combined[termIdx] === '\x07' ? 1 : 2
+        } else if (nextMarker !== -1) {
+          endIdx = nextMarker
+        }
+        if (endIdx === -1) {
           const held = combined.slice(markerPos)
           if (held.length > TIFF_B64_LIMIT) {
-            // Oversize: emit the patched header + raw TIFF payload. The addon
+            // Oversize: emit the patched header + raw payload. The addon
             // enforces its own size limit and drops the image — the stream
             // itself stays valid.
             out += patchHeader(header, 0) + ':' + combined.slice(payloadStart)
@@ -161,19 +184,22 @@ export function createIIPStreamPatcher(): (data: string) => string {
           }
           break
         }
-        const termLen = combined[termIdx] === '\x07' ? 1 : 2
-        const terminator = combined.slice(termIdx, termIdx + termLen)
-        const payloadB64 = combined.slice(payloadStart, termIdx)
+        const terminator = termLen > 0 ? combined.slice(endIdx, endIdx + termLen) : ''
+        const payloadB64 = combined.slice(payloadStart, endIdx)
         let payload = payloadB64
         let size = 0
-        const tiff = decodeBase64(payloadB64)
-        if (tiff !== null) {
-          size = tiff.length // raw TIFF fallback: valid size for the addon's gates
-          const png = transcodeTiffBytes(tiff)
-          if (png !== null) {
-            payload = png.b64
-            size = png.len
+        if (isTiff) {
+          const tiff = decodeBase64(payloadB64)
+          if (tiff !== null) {
+            size = tiff.length // raw TIFF fallback: valid size for the addon's gates
+            const png = transcodeTiffBytes(tiff)
+            if (png !== null) {
+              payload = png.b64
+              size = png.len
+            }
           }
+        } else {
+          size = decodedBase64Size(payloadB64)
         }
         out += patchHeader(header, size) + ':' + payload + terminator
         // The image segment is fully consumed — drop the held buffer. Without
@@ -182,14 +208,13 @@ export function createIIPStreamPatcher(): (data: string) => string {
         // re-processes it and a later OSC's ST becomes a phantom terminator,
         // re-emitting a corrupt second copy.
         buf = ''
-        pos = termIdx + termLen
+        pos = endIdx + termLen
         continue
       }
 
-      // Passable payload (PNG/JPEG/GIF): emit the patched header, then the
-      // payload verbatim. It cannot contain another `\x1b]1337` (base64
-      // alphabet excludes ESC), so scan for the next marker and emit the gap,
-      // then loop to patch it too.
+      // Header already carries size and payload is PNG/JPEG/GIF: stream.
+      // It cannot contain another `\x1b]1337` (base64 alphabet excludes ESC),
+      // so scan for the next marker and emit the gap, then loop to patch it too.
       out += patchHeader(header, 0) + ':'
       const nextMarker = combined.indexOf(marker, payloadStart)
       if (nextMarker === -1) {
@@ -246,6 +271,16 @@ function decodeBase64(b64: string): Uint8Array | null {
   } catch {
     return null
   }
+}
+
+/** Decoded byte length of a base64 payload (padding-aware). */
+function decodedBase64Size(b64: string): number {
+  const decoded = decodeBase64(b64)
+  if (decoded !== null) return decoded.length
+  let len = b64.length
+  if (len >= 2 && b64.endsWith('==')) len -= 2
+  else if (len >= 1 && b64.endsWith('=')) len -= 1
+  return Math.floor((len * 3) / 4)
 }
 
 function encodeBase64(bytes: Uint8Array): string {
