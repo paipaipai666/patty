@@ -57,3 +57,6 @@ temp/
 .worktrees/
 .tokensave
 .serena/
+
+# CDP verification screenshots (scripts/*.mjs)
+/output/
