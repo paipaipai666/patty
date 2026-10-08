@@ -1,175 +1,222 @@
 
-   
-
 import { spawn } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-interface PattyContext {
-  project?: string
-  directory?: string
-  $?: unknown
-}
-
-interface PattyEvent {
-  type: string
-  properties?: Record<string, any>
-}
-
-interface PattyHook {
-  event: (payload: { event: PattyEvent }) => Promise<void>
-}
-
 type SessionRole = 'main' | 'subagent'
 
-export const PattyNotifier = async ({
-  project: _project,
-  directory: _directory,
-  $: _$
-}: PattyContext): Promise<PattyHook | Record<string, never>> => {
-  const PATTY_PORT = process.env.PATTY_PORT
-  const PANE_ID = process.env.PATTY_PANE_ID
+type IntervalHandle = ReturnType<typeof setInterval>
 
+interface OpaqueEvent {
+  type: string
+  properties?: unknown
+  [key: string]: unknown
+}
 
-  if (!PATTY_PORT || !PANE_ID) {
-    return {}
+interface SessionPayload {
+  sessionID?: string
+  parentID?: string
+  status?: { type?: string }
+}
+
+interface PluginContext {
+  event: {
+    subscribe: (input: { signal: AbortSignal }) => AsyncIterable<OpaqueEvent>
   }
+}
 
+const active = () => Boolean(process.env.PATTY_PORT && process.env.PATTY_PANE_ID)
 
-  const LOG_FILE = join(tmpdir(), 'patty-opencode-hook.log')
-  const log = (msg: string) => {
-    try {
-      appendFileSync(LOG_FILE, `${new Date().toISOString()} [pid ${process.pid}] [pane ${PANE_ID}] ${msg}\n`)
-    } catch {
+const LOG_FILE = join(tmpdir(), 'patty-opencode-hook.log')
+const log = (msg: string) => {
+  try {
+    appendFileSync(LOG_FILE, `${new Date().toISOString()} [pid ${process.pid}] [pane ${process.env.PATTY_PANE_ID}] ${msg}\n`)
+  } catch {
 
-    }
   }
-  log('=== plugin active (opencode started inside Patty terminal) ===')
+}
 
-  const mainSessions = new Set<string>()
-  let aliveInterval: ReturnType<typeof setInterval> | null = null
+const asRecord = (value: unknown): Record<string, unknown> | undefined =>
+  value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : undefined
 
-  const notifyPatty = async (event: string, role: SessionRole = 'main') => {
-    log(`→ patty: ${event} role=${role}`)
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 1500)
-    try {
-      await fetch(`http://127.0.0.1:${PATTY_PORT}/hook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: hookBody(event, role),
-        signal: controller.signal
-      })
-    } catch {
+const asString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined
 
-    } finally {
-      clearTimeout(timeoutId)
-    }
+const payloadOf = (event: OpaqueEvent): SessionPayload => {
+  const props = asRecord(event.properties) ?? asRecord(event.data) ?? asRecord(event) ?? {}
+  const info = asRecord(props.info)
+  const status = asRecord(props.status)
+  return {
+    sessionID: asString(info?.id) ?? asString(props.sessionID),
+    parentID: asString(info?.parentID) ?? asString(props.parentID),
+    status: status === undefined ? undefined : { type: asString(status.type) }
   }
+}
 
-  const hookBody = (event: string, role: SessionRole) =>
-    JSON.stringify({
-      paneId: PANE_ID,
-      event,
-      source: 'opencode',
-      role,
+const mainSessions = new Set<string>()
+let aliveInterval: IntervalHandle | null = null
 
-      secret: process.env.PATTY_HOOK_SECRET
+const hookBody = (event: string, role: SessionRole) =>
+  JSON.stringify({
+    paneId: process.env.PATTY_PANE_ID,
+    event,
+    source: 'opencode',
+    role,
+
+    secret: process.env.PATTY_HOOK_SECRET
+  })
+
+const notifyPatty = async (event: string, role: SessionRole = 'main') => {
+  log(`→ patty: ${event} role=${role}`)
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 1500)
+  try {
+    await fetch(`http://127.0.0.1:${process.env.PATTY_PORT}/hook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: hookBody(event, role),
+      signal: controller.signal
     })
+  } catch {
 
-
-  const notifyPattyDetached = (event: string, role: SessionRole = 'main') => {
-    log(`→ patty (detached): ${event} role=${role}`)
-    try {
-      const child = spawn(
-        'curl',
-        ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '-d', hookBody(event, role)],
-        { detached: true, stdio: 'ignore' }
-      )
-      child.on('error', () => {})
-      child.unref()
-    } catch {
-      void notifyPatty(event)
-    }
+  } finally {
+    clearTimeout(timeoutId)
   }
+}
 
+const notifyPattyDetached = (event: string, role: SessionRole = 'main') => {
+  log(`→ patty (detached): ${event} role=${role}`)
+  try {
+    const child = spawn(
+      'curl',
+      ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${process.env.PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '-d', hookBody(event, role)],
+      { detached: true, stdio: 'ignore' }
+    )
+    child.on('error', () => {})
+    child.unref()
+  } catch {
+    void notifyPatty(event)
+  }
+}
 
+const stopAlive = () => {
+  if (aliveInterval) {
+    clearInterval(aliveInterval)
+    aliveInterval = null
+  }
+}
+
+const startAlive = () => {
+  stopAlive()
+  aliveInterval = setInterval(() => void notifyPatty('alive'), 5000)
+  if (typeof aliveInterval === 'object' && 'unref' in aliveInterval) {
+    aliveInterval.unref()
+  }
+}
+
+let exitHooked = false
+const hookExit = () => {
+  if (exitHooked) return
+  exitHooked = true
   process.on('exit', () => {
     log('process exiting → session_deleted')
     notifyPattyDetached('session_deleted')
   })
+}
 
-  return {
-    event: async ({ event }) => {
-      const props = (event as any)?.properties
-      const sid = props?.info?.id ?? props?.sessionID
-      const parentID = props?.info?.parentID
-      log(`opencode event: ${event.type}${sid ? ` session=${sid}` : ''}${parentID ? ` parent=${parentID}` : ''}`)
-      switch (event.type) {
-        case 'session.created': {
-          const info = (event as any)?.properties?.info
-          const role: SessionRole = info?.parentID ? 'subagent' : 'main'
-          if (info?.id && !info.parentID) {
-            mainSessions.add(info.id)
-          }
+const PRIMARY_KEY = '__pattyOpencodeNotifierPrimary'
+const claimPrimary = (): boolean => {
+  const g = globalThis as Record<string, unknown>
+  if (g[PRIMARY_KEY]) return false
+  g[PRIMARY_KEY] = true
+  return true
+}
 
-          await notifyPatty('session_created', role)
-          if (aliveInterval) clearInterval(aliveInterval)
-          aliveInterval = setInterval(() => notifyPatty('alive'), 5000)
-          if (aliveInterval && typeof aliveInterval === 'object' && 'unref' in aliveInterval) {
-            ;(aliveInterval as any).unref()
-          }
-          break
-        }
+const handleEvent = async (event: OpaqueEvent) => {
+  if (!active()) return
+  const { sessionID, parentID, status } = payloadOf(event)
+  log(`opencode event: ${event.type}${sessionID ? ` session=${sessionID}` : ''}${parentID ? ` parent=${parentID}` : ''}`)
+  switch (event.type) {
+    case 'session.created': {
+      const role: SessionRole = parentID ? 'subagent' : 'main'
+      if (sessionID && !parentID) {
+        mainSessions.add(sessionID)
+      }
 
-        case 'session.deleted': {
-          const info = (event as any)?.properties?.info
-          if (info?.id) mainSessions.delete(info.id)
+      await notifyPatty('session_created', role)
+      hookExit()
+      startAlive()
+      break
+    }
 
-          if (info?.parentID) {
-            log('ignored: subagent session.deleted')
-            break
-          }
-          if (aliveInterval) {
-            clearInterval(aliveInterval)
-            aliveInterval = null
-          }
-          notifyPattyDetached('session_deleted')
-          break
-        }
+    case 'session.deleted': {
+      if (sessionID) mainSessions.delete(sessionID)
 
-        case 'permission.asked':
-        case 'question.asked':
-          await notifyPatty('permission_prompt')
-          break
+      if (parentID) {
+        log('ignored: subagent session.deleted')
+        break
+      }
+      stopAlive()
+      notifyPattyDetached('session_deleted')
+      break
+    }
 
+    case 'permission.asked':
+    case 'question.asked':
+      await notifyPatty('permission_prompt')
+      break
 
+    case 'session.idle': {
+      if (sessionID && !mainSessions.has(sessionID)) {
+        log('ignored: session.idle from non-main session')
+        break
+      }
+      await notifyPatty('idle')
+      break
+    }
 
+    case 'session.status': {
+      if (status?.type === 'idle' && sessionID && mainSessions.has(sessionID)) {
+        await notifyPatty('idle')
+      }
+      break
+    }
 
-        case 'session.idle': {
-          const sessionID = (event as any)?.properties?.sessionID
-          if (sessionID && !mainSessions.has(sessionID)) {
-            log('ignored: session.idle from non-main session')
-            break
-          }
-          await notifyPatty('idle')
-          break
-        }
+    case 'session.error':
+    case 'session.execution.failed':
+      await notifyPatty('error')
+      break
+  }
+}
 
-        case 'session.status': {
-          const sessionID = (event as any)?.properties?.sessionID
-          const status = (event as any)?.properties?.status
-          if (status?.type === 'idle' && sessionID && mainSessions.has(sessionID)) {
-            await notifyPatty('idle')
-          }
-          break
-        }
+const plugin = {
+  id: 'patty-notifier',
 
-        case 'session.error':
-          await notifyPatty('error')
-          break
+  async setup(ctx: PluginContext) {
+    if (!active() || !claimPrimary()) return
+    log('=== plugin active via v2 setup (opencode started inside Patty terminal) ===')
+    const controller = new AbortController()
+    void (async () => {
+      for await (const event of ctx.event.subscribe({ signal: controller.signal })) {
+        await handleEvent(event)
+      }
+    })()
+    return () => {
+      controller.abort()
+      stopAlive()
+    }
+  },
+
+  async server() {
+    if (!active()) return {}
+    log('=== plugin active via v1 server() (opencode started inside Patty terminal) ===')
+    return {
+      event: async ({ event }: { event: OpaqueEvent }) => {
+        await handleEvent(event)
       }
     }
   }
 }
+
+export default plugin

@@ -56,7 +56,8 @@ fn opencode_plugin_source_exists() {
     assert!(content.contains("PATTY_HOOK_SECRET"), "plugin must send the hook secret");
     assert!(content.contains("PATTY_PORT"), "plugin must reference PATTY_PORT");
     assert!(content.contains("PATTY_PANE_ID"), "plugin must reference PATTY_PANE_ID");
-    assert!(content.contains("PattyNotifier"), "plugin must export PattyNotifier");
+    assert!(content.contains("export default"), "plugin must default-export a v2 definition");
+    assert!(content.contains("setup(ctx"), "plugin must expose a v2 setup(ctx)");
 }
 
 #[test]
