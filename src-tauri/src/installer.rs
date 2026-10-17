@@ -121,12 +121,15 @@ fn args_hook(matcher: &str, extra_args: &[&str], hook_script_path: &str) -> Valu
 
 
 fn upsert_hook(hooks: &mut Value, key: &str, entry: Value, is_patty: fn(&Value) -> bool) {
-    let list = hooks
-        .as_object_mut()
-        .expect("hooks object")
-        .entry(key.to_string())
-        .or_insert_with(|| json!([]));
-    let arr = list.as_array_mut().expect("hook list is an array");
+    let Some(obj) = hooks.as_object_mut() else { return };
+    let list = obj.entry(key.to_string()).or_insert_with(|| json!([]));
+    if list.is_null() {
+        *list = json!([]);
+    }
+    let Some(arr) = list.as_array_mut() else {
+        eprintln!("[installer] hook key {key}: not an array, skipping");
+        return;
+    };
     if let Some(idx) = arr.iter().position(is_patty) {
         arr[idx] = entry;
     } else {
@@ -181,8 +184,14 @@ fn is_patty_source_hook(n: &Value, source: &str) -> bool {
 }
 
 fn apply_claude_hooks(settings: &mut Value, hook_script_path: &str) {
-    let obj = settings.as_object_mut().expect("settings object");
+    let Some(obj) = settings.as_object_mut() else {
+        eprintln!("[installer] settings top level is not an object, skipping claude hook install");
+        return;
+    };
     let hooks = obj.entry("hooks".to_string()).or_insert_with(|| json!({}));
+    if !hooks.is_object() {
+        *hooks = json!({});
+    }
 
     let base = format!("powershell -ExecutionPolicy Bypass -File \"{hook_script_path}\"");
     let with_event = |event: &str| format!("{base} -EventType {event}");
@@ -199,8 +208,14 @@ fn apply_claude_hooks(settings: &mut Value, hook_script_path: &str) {
 
 fn apply_codex_hooks(settings: &mut Value, hook_script_path: &str) {
     let hook_command = format!("powershell -ExecutionPolicy Bypass -File \"{hook_script_path}\" -Source \"codex\"");
-    let obj = settings.as_object_mut().expect("settings object");
+    let Some(obj) = settings.as_object_mut() else {
+        eprintln!("[installer] settings top level is not an object, skipping codex hook install");
+        return;
+    };
     let hooks = obj.entry("hooks".to_string()).or_insert_with(|| json!({}));
+    if !hooks.is_object() {
+        *hooks = json!({});
+    }
 
     upsert_hook(hooks, "SessionStart", cmd_hook("startup|resume", hook_command.clone()), is_patty_codex_hook);
     upsert_hook(hooks, "PermissionRequest", cmd_hook("", hook_command.clone()), is_patty_codex_hook);
@@ -213,8 +228,14 @@ fn apply_codex_hooks(settings: &mut Value, hook_script_path: &str) {
 fn apply_qwen_hooks(settings: &mut Value, hook_script_path: &str) {
     let hook_command = format!("powershell -ExecutionPolicy Bypass -File \"{hook_script_path}\" -Source \"qwen-code\"");
     let is_patty = |n: &Value| is_patty_source_hook(n, "qwen-code");
-    let obj = settings.as_object_mut().expect("settings object");
+    let Some(obj) = settings.as_object_mut() else {
+        eprintln!("[installer] settings top level is not an object, skipping qwen hook install");
+        return;
+    };
     let hooks = obj.entry("hooks".to_string()).or_insert_with(|| json!({}));
+    if !hooks.is_object() {
+        *hooks = json!({});
+    }
 
     upsert_hook(hooks, "SessionStart", cmd_hook("startup|resume", hook_command.clone()), is_patty);
     upsert_hook(hooks, "SessionEnd", cmd_hook("", hook_command.clone()), is_patty);
@@ -243,6 +264,11 @@ fn install_at(settings_path: &PathBuf, apply: fn(&mut Value, &str), hook_script_
     } else {
         json!({})
     };
+
+    if !settings.is_object() {
+        eprintln!("[installer] top level is not an object, leaving untouched: {}", settings_path.display());
+        return;
+    }
 
     apply(&mut settings, hook_script_path);
 
@@ -702,5 +728,66 @@ mod tests {
         install_at(&file, apply_codex_hooks, "X/patty-hook.ps1");
         assert_eq!(fs::read_to_string(&file).unwrap(), original);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn install_leaves_non_object_top_level_untouched() {
+        let shapes = ["[]", "null", "\"string\"", "42"];
+        for (idx, original) in shapes.iter().enumerate() {
+            let dir = std::env::temp_dir().join(format!("patty-installer-shape-{}-{idx}", std::process::id()));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            let file = dir.join("settings.json");
+            fs::write(&file, original.to_string()).unwrap();
+            install_at(&file, apply_claude_hooks, "X/patty-hook.ps1");
+            assert_eq!(fs::read_to_string(&file).unwrap(), *original, "top-level shape must survive");
+            let _ = fs::remove_dir_all(&dir);
+        }
+    }
+
+    #[test]
+    fn apply_repairs_non_object_hooks_field() {
+        for hooks_value in [Value::Null, json!([]), json!("str"), json!(42)] {
+            let mut settings = json!({ "model": "opus", "hooks": hooks_value });
+            apply_claude_hooks(&mut settings, "X/patty-hook.ps1");
+            assert!(settings["hooks"].is_object(), "hooks must become an object");
+            assert!(settings["hooks"]["Stop"].is_array());
+            assert_eq!(settings["model"], "opus");
+        }
+    }
+
+    #[test]
+    fn apply_skips_hook_key_whose_value_is_not_an_array() {
+        let mut hooks = json!({ "Stop": { "not": "an array" }, "SessionStart": "str" });
+        let entry = cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into());
+        upsert_hook(&mut hooks, "Stop", entry.clone(), is_patty_hook);
+        upsert_hook(&mut hooks, "SessionStart", entry, is_patty_hook);
+        assert_eq!(hooks["Stop"], json!({ "not": "an array" }));
+        assert_eq!(hooks["SessionStart"], json!("str"));
+    }
+
+    #[test]
+    fn apply_turns_null_hook_key_into_array() {
+        let mut hooks = json!({ "Stop": Value::Null });
+        let entry = cmd_hook("", "powershell -File \"X/patty-hook.ps1\"".into());
+        upsert_hook(&mut hooks, "Stop", entry, is_patty_hook);
+        assert_eq!(hooks["Stop"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn apply_survives_every_malformed_shape_without_panicking() {
+        let hook_script = "X/patty-hook.ps1";
+        for top in [
+            json!({ "hooks": { "Stop": [ { "hooks": "not-array" } ] } }),
+            json!({ "hooks": { "Stop": [ "plain-string" ] } }),
+            json!({ "hooks": { "Notification": 7 } }),
+        ] {
+            let mut settings = top;
+            apply_claude_hooks(&mut settings, hook_script);
+            let codex = json!({ "hooks": { "Stop": [ { "hooks": "not-array" } ] } });
+            apply_codex_hooks(&mut codex.clone(), hook_script);
+            let qwen = json!({ "hooks": { "Notification": "str" } });
+            apply_qwen_hooks(&mut qwen.clone(), hook_script);
+        }
     }
 }
