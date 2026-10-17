@@ -126,7 +126,7 @@ describe('createIIPStreamPatcher', () => {
 
   it('recovers after a malformed unbounded header by emitting raw at 1024 limit', () => {
     const patcher = createIIPStreamPatcher()
-    const longGarbage = `${ESC}]1337;` + 'A'.repeat(2000)
+    const longGarbage = `${ESC}]1337;File=` + 'A'.repeat(2000)
     const output = patcher(longGarbage)
 
     expect(output).toBe(longGarbage)
@@ -176,6 +176,80 @@ describe('createIIPStreamPatcher', () => {
     )
   })
 })
+
+
+describe('non-File OSC 1337 pass-through', () => {
+  it('passes SetUserVar with a colon in the value through byte-identically', () => {
+    const patcher = createIIPStreamPatcher()
+    const input = `${ESC}]1337;SetUserVar=x:y\x07`
+    expect(patcher(input)).toBe(input)
+  })
+
+  it('passes RequestAttention through immediately without buffering', () => {
+    const patcher = createIIPStreamPatcher()
+    const input = `${ESC}]1337;RequestAttention=yes\x07`
+    expect(patcher(input)).toBe(input)
+  })
+
+  it('passes a base64 SetUserVar value through byte-identically', () => {
+    const patcher = createIIPStreamPatcher()
+    const value = b64encode(new Uint8Array([1, 2, 3, 4]))
+    const input = `${ESC}]1337;SetUserVar=MYVAR=${value}\x07`
+    expect(patcher(input)).toBe(input)
+  })
+
+  it('passes a non-File sequence terminated by ST through byte-identically', () => {
+    const patcher = createIIPStreamPatcher()
+    const input = `${ESC}]1337;SetUserVar=a=b${ESC}\\`
+    expect(patcher(input)).toBe(input)
+  })
+
+  it('passes non-File sequences through when split across chunks', () => {
+    const patcher = createIIPStreamPatcher()
+    const chunk1 = `${ESC}]1337;RequestAttention`
+    const chunk2 = '=yes\x07'
+    expect(patcher(chunk1)).toBe(chunk1)
+    expect(patcher(chunk2)).toBe(chunk2)
+  })
+
+  it('passes a non-File sequence that diverges from the File= prefix through intact', () => {
+    const patcher = createIIPStreamPatcher()
+    const full = `${ESC}]1337;Fix=1:2\x07`
+    expect(patcher(`${ESC}]1337;Fi`)).toBe('')
+    expect(patcher(full.slice(`${ESC}]1337;Fi`.length))).toBe(full)
+  })
+
+  it('does not treat File= inside a non-File value as a patch target', () => {
+    const patcher = createIIPStreamPatcher()
+    const input = `${ESC}]1337;SetUserVar=note=File=a:1\x07`
+    expect(patcher(input)).toBe(input)
+  })
+
+  it('does not inject fields into printable text after a non-File sequence', () => {
+    const patcher = createIIPStreamPatcher()
+    const input = `${ESC}]1337;RequestAttention=yes\x07File=abc: def\x07tail`
+    expect(patcher(input)).toBe(input)
+  })
+
+  it('patches a File= image that follows a non-File sequence in one chunk', () => {
+    const patcher = createIIPStreamPatcher()
+    const input =
+      `${ESC}]1337;RequestAttention=yes\x07` +
+      `${ESC}]1337;File=name=a.png;:data1\x07`
+    expect(patcher(input)).toBe(
+      `${ESC}]1337;RequestAttention=yes\x07` +
+      `${ESC}]1337;File=inline=1;size=3;name=a.png;:data1\x07`
+    )
+  })
+
+  it('streams a long non-File value without waiting for the header scan limit', () => {
+    const patcher = createIIPStreamPatcher()
+    const value = 'A'.repeat(600)
+    const input = `${ESC}]1337;SetUserVar=BIG=${value}\x07`
+    expect(patcher(input)).toBe(input)
+  })
+})
+
 
 
 function b64encode(bytes: Uint8Array): string {

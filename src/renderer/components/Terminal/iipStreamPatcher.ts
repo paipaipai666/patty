@@ -2,6 +2,7 @@
    
 
 const IIP_HEADER_SCAN_LIMIT = 1024
+const FILE_PREFIX = ';File='
 
 
 const TIFF_B64_PREFIX = 'SUkq'
@@ -70,6 +71,14 @@ export function createIIPStreamPatcher(): (data: string) => string {
 
 
       out += combined.slice(pos, markerPos)
+
+      const markerEnd = markerPos + marker.length
+      const afterMarker = combined.slice(markerEnd, markerEnd + FILE_PREFIX.length)
+      if (!FILE_PREFIX.startsWith(afterMarker)) {
+        out += marker
+        pos = markerEnd
+        continue
+      }
 
 
       const colon = combined.indexOf(':', markerPos)
