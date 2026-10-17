@@ -31,12 +31,11 @@ export function splitLeaf(
 
   return updateNode(tree, targetLeafId, (node) => {
     if (node.type !== 'leaf') return node
-    const origLeaf: PaneLeaf = { id: newPaneId(), type: 'leaf', sessionId: node.sessionId }
 
-    const first = side === 'first' ? newLeaf : origLeaf
-    const second = side === 'first' ? origLeaf : newLeaf
+    const first = side === 'first' ? newLeaf : node
+    const second = side === 'first' ? node : newLeaf
     const split: PaneSplit = {
-      id: node.id,
+      id: newPaneId(),
       type: 'split',
       direction,
       ratio: side === 'first' ? 1 - origRatio : origRatio,

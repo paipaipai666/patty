@@ -145,7 +145,7 @@ describe('TerminalPane PTY lifecycle (C5)', () => {
     })
 
     expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
-    expect(terminalAPI.kill).toHaveBeenCalledTimes(1)
+    expect(terminalAPI.kill).not.toHaveBeenCalled()
 
 
     await act(async () => {
@@ -179,7 +179,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
 
 
     act(() => { root.unmount() })
-    expect(terminalAPI.kill).toHaveBeenCalledTimes(1)
+    expect(terminalAPI.kill).not.toHaveBeenCalled()
 
 
     await act(async () => {

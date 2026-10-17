@@ -726,7 +726,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       if (isComposing) unblockTextareaStyles()
       textarea?.removeEventListener('compositionstart', onCompositionStart)
       textarea?.removeEventListener('compositionend', onCompositionEnd)
-      window.terminalAPI.kill(session.id)
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
       webglAddonRef.current?.dispose()

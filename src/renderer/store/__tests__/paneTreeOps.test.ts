@@ -46,9 +46,20 @@ describe('splitLeaf', () => {
 
   it('is a no-op when the target id is a split, not a leaf', () => {
     const tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
-    const again = splitLeaf(tree, 'p1', 's3', 'horizontal')
+    const splitId = tree.type === 'split' ? tree.id : null
+    if (!splitId) throw new Error('expected split tree')
+
+    const again = splitLeaf(tree, splitId, 's3', 'horizontal')
 
     expect(again).toBe(tree)
+  })
+
+  it('splits the surviving original leaf when split again by its id', () => {
+    const tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
+    const again = splitLeaf(tree, 'p1', 's3', 'horizontal')
+
+    if (again.type !== 'split') return
+    expect(collectSessionIds(again)).toEqual(['s1', 's3', 's2'])
   })
 
   it('does not mutate the input tree', () => {
@@ -65,6 +76,44 @@ describe('splitLeaf', () => {
 
     expect(next.ratio).toBeGreaterThanOrEqual(0.1)
     expect(next.ratio).toBeLessThanOrEqual(0.9)
+  })
+
+  it('preserves the original leaf id so the pane is not remounted', () => {
+    const tree = singleLeafTree('s1', 'p1')
+    const next = splitLeaf(tree, 'p1', 's2', 'horizontal', 'second', 0.5)
+
+    expect(next.type).toBe('split')
+    if (next.type !== 'split') return
+
+    expect(next.first.id).toBe('p1')
+    expect(next.first.id).not.toBe(next.second.id)
+  })
+
+  it('preserves the original leaf identity when the new side is first', () => {
+    const tree = singleLeafTree('s1', 'p1')
+    const next = splitLeaf(tree, 'p1', 's2', 'vertical', 'first', 0.5)
+
+    if (next.type !== 'split') return
+
+    expect(next.second.id).toBe('p1')
+  })
+
+  it('does not reuse the original leaf id for the new pane', () => {
+    const tree = singleLeafTree('s1', 'p1')
+    const next = splitLeaf(tree, 'p1', 's2', 'horizontal')
+
+    const ids = collectLeafIds(next)
+    expect(new Set(ids).size).toBe(2)
+  })
+
+  it('keeps the original node object identity for the split container', () => {
+    const tree = singleLeafTree('s1', 'p1')
+    const original = findLeaf(tree, 'p1')!
+    const next = splitLeaf(tree, 'p1', 's2', 'horizontal')
+
+    if (next.type !== 'split') return
+    const first = next.first
+    expect(first).toBe(original)
   })
 })
 
@@ -125,7 +174,18 @@ describe('replaceLeafSession', () => {
 
   it('is a no-op on a split id', () => {
     const tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
-    expect(replaceLeafSession(tree, 'p1', 'sX')).toBe(tree)
+    const splitId = tree.type === 'split' ? tree.id : null
+    if (!splitId) throw new Error('expected split tree')
+
+    expect(replaceLeafSession(tree, splitId, 'sX')).toBe(tree)
+  })
+
+  it('replaces the session on the original leaf by its id', () => {
+    const tree = splitLeaf(singleLeafTree('s1', 'p1'), 'p1', 's2', 'horizontal')
+    const next = replaceLeafSession(tree, 'p1', 'sX')
+
+    if (next.type !== 'split') return
+    expect((next.first as any).sessionId).toBe('sX')
   })
 })
 
