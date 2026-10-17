@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { flushNow } from './store/dirtyScheduler'
 import type { AppSettings, CustomTheme, SshTarget, SshProfileDraft, RawStats, SshAuthRequest, SshHostkeyRequest } from '../shared/settingsTypes'
 import type { MetricSample, FirstTerminalEntry, MetricsSnapshot } from '../shared/metricsTypes'
 import type { PersistedState } from '../shared/stateTypes'
@@ -69,7 +70,14 @@ export const terminalAPI = {
 
   windowMinimize: () => void appWindow.minimize(),
   windowMaximize: () => void appWindow.toggleMaximize(),
-  windowClose: () => void appWindow.close(),
+  windowClose: async () => {
+    try {
+      await flushNow()
+    } catch (err) {
+      console.error('[state] close flush failed:', err)
+    }
+    await appWindow.close()
+  },
 
   onMaximizeChange: (callback: (maximized: boolean) => void): Unsubscribe =>
     asyncUnsub(
@@ -133,11 +141,10 @@ export const terminalAPI = {
 
 
   stateLoad: () => invoke<PersistedState>('state_load'),
-  stateSave: (state: PersistedState) => {
-    void invoke('state_save', { state }).catch((err) => {
+  stateSave: (state: PersistedState) =>
+    invoke<void>('state_save', { state }).catch((err) => {
       console.error('[state] save failed:', err)
-    })
-  },
+    }),
 
 
   perfEnabled: import.meta.env.VITE_PATTY_PERF === '1',

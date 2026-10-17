@@ -67,6 +67,53 @@ describe('markDirty', () => {
 })
 
 describe('flushNow', () => {
+  it('resolves only after stateSave settles', async () => {
+    configureDirtyScheduler(() => ({
+      sessions: [],
+      collections: [],
+      activeSessionId: null,
+      sidebarVisible: true,
+      sidebarWidth: 220,
+      workspaces: [],
+      activeWorkspaceId: null
+    }))
+    let release: () => void = () => undefined
+    mockStateSave.mockImplementation(
+      () =>
+        new Promise<void>((resolvePromise) => {
+          release = () => resolvePromise()
+        })
+    )
+    let flushed = false
+    const flush = Promise.resolve(flushNow()).then(() => {
+      flushed = true
+    })
+    await Promise.resolve()
+    expect(mockStateSave).toHaveBeenCalledTimes(1)
+    expect(flushed).toBe(false)
+    release()
+    await flush
+    expect(flushed).toBe(true)
+    mockStateSave.mockReset()
+  })
+
+  it('cancels a pending debounced flush when called directly', async () => {
+    const builder = vi.fn((): PersistedState | null => ({
+      sessions: [],
+      collections: [],
+      activeSessionId: null,
+      sidebarVisible: true,
+      sidebarWidth: 220,
+      workspaces: [],
+      activeWorkspaceId: null
+    }))
+    configureDirtyScheduler(builder)
+    markDirty()
+    await flushNow()
+    expect(builder).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1000)
+    expect(builder).toHaveBeenCalledTimes(1)
+  })
   it('flushes state immediately via the builder', () => {
     const builder = vi.fn((): PersistedState | null => ({
       sessions: [],

@@ -125,7 +125,9 @@ export function TitleBar({ onOpenSettings, sidebarVisible, onToggleSidebar }: Ti
         </button>
         <button
           type="button"
-          onClick={() => window.terminalAPI.windowClose()}
+          onClick={() => {
+            void window.terminalAPI.windowClose()
+          }}
           className={`${styles.btnControl} ${styles.btnClose}`}
           aria-label="Close"
         >

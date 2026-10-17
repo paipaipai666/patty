@@ -16,29 +16,28 @@ export function markDirty(): void {
   if (flushTimer) return
   flushTimer = setTimeout(() => {
     flushTimer = null
-    flushNow()
+    void flushNow()
   }, FLUSH_DELAY_MS)
 }
 
-export function flushNow(): void {
+export async function flushNow(): Promise<void> {
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
   if (!buildPersistedState) {
-
     dirty = false
     return
   }
   dirty = false
   const state = buildPersistedState()
   if (state) {
-    window.terminalAPI.stateSave(state)
+    await window.terminalAPI.stateSave(state)
   }
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    if (flushTimer) {
-      clearTimeout(flushTimer)
-      flushTimer = null
-    }
-    flushNow()
+    void flushNow()
   })
 }
