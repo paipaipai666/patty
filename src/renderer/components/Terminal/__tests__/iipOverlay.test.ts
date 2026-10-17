@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fitIipToCells } from '../IipOverlay'
-import { buildIipImage } from '../iipParser'
+import { buildIipImage, fitIipToCells } from '../iipParser'
 
 const PNG_B64 = 'iVBORw0KGgo'
 const cell = { widthPx: 10, heightPx: 20 }

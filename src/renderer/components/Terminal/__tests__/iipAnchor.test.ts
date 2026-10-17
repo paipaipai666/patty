@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveAnchor, commitIipPlacement, isIipSlotPresent, type IipOverlayItem } from '../iipAnchor'
+import { resolveAnchor, commitIipPlacement, isIipSlotPresent, buildSlotEraseSequence, readCellSize, type IipOverlayItem } from '../iipAnchor'
 
 function item(over: Partial<IipOverlayItem>): IipOverlayItem {
   return {
@@ -109,5 +109,48 @@ describe('commitIipPlacement', () => {
     const prev = [item({ id: 7, key: 'a' }), item({ id: 3, key: 'b' })]
     const next = commitIipPlacement(prev, item({ id: 0, key: 'c' }), [])
     expect(next[2].id).toBe(8)
+  })
+})
+
+describe('buildSlotEraseSequence', () => {
+  const viewport = { topY: 0, rows: 24, cols: 80 }
+
+  it('erases the planted cell without moving the cursor', () => {
+    expect(buildSlotEraseSequence({ row: 2, col: 4 }, viewport)).toBe('\x1b7\x1b[3;5H\x1b[1X\x1b8')
+  })
+
+  it('maps buffer rows through the scroll offset', () => {
+    expect(buildSlotEraseSequence({ row: 40, col: 0 }, { topY: 40, rows: 24, cols: 80 })).toBe(
+      '\x1b7\x1b[1;1H\x1b[1X\x1b8'
+    )
+  })
+
+  it('refuses to erase a cell that is off screen', () => {
+    expect(buildSlotEraseSequence({ row: 40, col: 0 }, { topY: 60, rows: 24, cols: 80 })).toBeNull()
+    expect(buildSlotEraseSequence({ row: 30, col: 0 }, viewport)).toBeNull()
+    expect(buildSlotEraseSequence({ row: -1, col: 0 }, viewport)).toBeNull()
+    expect(buildSlotEraseSequence({ row: 0, col: -1 }, viewport)).toBeNull()
+    expect(buildSlotEraseSequence({ row: 0, col: 80 }, viewport)).toBeNull()
+  })
+})
+
+describe('readCellSize', () => {
+  const withCell = (cell: unknown) => ({
+    _core: { _renderService: { dimensions: { css: { cell } } } }
+  })
+
+  it('reads the live cell metrics off the render service', () => {
+    expect(readCellSize(withCell({ width: 11, height: 22 }))).toEqual({ widthPx: 11, heightPx: 22 })
+  })
+
+  it('returns null when the metrics are missing or unusable', () => {
+    expect(readCellSize(undefined)).toBeNull()
+    expect(readCellSize({})).toBeNull()
+    expect(readCellSize(withCell(undefined))).toBeNull()
+    expect(readCellSize(withCell({ width: 0, height: 22 }))).toBeNull()
+    expect(readCellSize(withCell({ width: 11, height: 0 }))).toBeNull()
+    expect(readCellSize(withCell({ width: -3, height: 22 }))).toBeNull()
+    expect(readCellSize(withCell({ width: Number.NaN, height: 22 }))).toBeNull()
+    expect(readCellSize(withCell('11x22'))).toBeNull()
   })
 })

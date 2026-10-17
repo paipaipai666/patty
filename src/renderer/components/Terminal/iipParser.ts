@@ -132,10 +132,12 @@ export function buildIipImage(fields: string, payloadBase64: string, slot: strin
 
                                               
 export const IIP_SLOT0 = 0xe000
+export const IIP_SLOT_COUNT = 0xf8ff - IIP_SLOT0 + 1
 
                                                           
-export function nextIipSlot(n: number): string {
-  return String.fromCharCode(IIP_SLOT0 + (n % 0xf8ff))
+export function nextIipSlot(n: number): string | null {
+  if (!Number.isInteger(n) || n < 0 || n >= IIP_SLOT_COUNT) return null
+  return String.fromCharCode(IIP_SLOT0 + n)
 }
 
 
@@ -153,10 +155,48 @@ export function findIipSlot(
 
 
    
+export interface CellSize {
+  widthPx: number
+  heightPx: number
+}
+
+export interface IipCellRow {
+  readonly length: number
+  getCell(x: number): { getChars(): string } | undefined
+}
+
+export interface IipCellBuffer {
+  readonly length: number
+  getLine(index: number): IipCellRow | undefined
+}
+
+function cellUnit(chars: string): string {
+  if (chars.length === 1) return chars
+  return chars.trim() === '' ? ' ' : '?'
+}
+
+export function cellAlignedLines(buffer: IipCellBuffer): string[] {
+  const lines: string[] = []
+  for (let i = 0; i < buffer.length; i++) {
+    const line = buffer.getLine(i)
+    if (!line) {
+      lines.push('')
+      continue
+    }
+    let s = ''
+    for (let x = 0; x < line.length; x++) {
+      s += cellUnit(line.getCell(x)?.getChars() ?? '')
+    }
+    lines.push(s)
+  }
+  return lines
+}
+
+
 export function fitIipToCells(
   image: IipImage,
   intrinsic: { widthPx: number; heightPx: number },
-  cell: { widthPx: number; heightPx: number },
+  cell: CellSize,
   maxWidthCols: number
 ): { cols: number; rows: number } {
   const parseDim = (v: string | undefined, max: number, axisPx: number): number | null => {
@@ -268,9 +308,12 @@ export function createIipStreamExtractor(): (data: string) => IipExtractResult {
       }
 
       const payloadB64 = combined.slice(payloadStart, endIdx)
-      const slot = nextIipSlot(slotCount++)
-      images.push(buildIipImage(fields, payloadB64, slot))
-      out += slot
+      const slot = nextIipSlot(slotCount)
+      if (slot !== null) {
+        slotCount += 1
+        images.push(buildIipImage(fields, payloadB64, slot))
+        out += slot
+      }
       buf = ''
       pos = endIdx + termLen
     }

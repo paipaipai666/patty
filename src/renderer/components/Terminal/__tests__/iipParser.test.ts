@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   buildIipImage,
   createIipStreamExtractor,
+  IIP_SLOT_COUNT,
+  nextIipSlot,
   parseIipFileHeader,
   sniffMimeFromBase64,
 } from '../iipParser'
@@ -104,5 +106,38 @@ describe('createIipStreamExtractor', () => {
     const { out, images } = extract('plain text\r\n')
     expect(out).toBe('plain text\r\n')
     expect(images).toHaveLength(0)
+  })
+})
+
+describe('nextIipSlot', () => {
+  it('hands out every slot in the private-use space exactly once', () => {
+    const seen = new Set<string>()
+    for (let n = 0; n < IIP_SLOT_COUNT; n++) {
+      const slot = nextIipSlot(n)
+      expect(slot).not.toBeNull()
+      seen.add(slot as string)
+    }
+    expect(seen.size).toBe(IIP_SLOT_COUNT)
+    expect(nextIipSlot(0)).toBe(String.fromCharCode(0xe000))
+    expect(nextIipSlot(IIP_SLOT_COUNT - 1)).toBe(String.fromCharCode(0xf8ff))
+  })
+
+  it('refuses to hand out a slot once the space is exhausted', () => {
+    expect(nextIipSlot(IIP_SLOT_COUNT)).toBeNull()
+    expect(nextIipSlot(IIP_SLOT_COUNT + 500)).toBeNull()
+  })
+})
+
+describe('createIipStreamExtractor slot exhaustion', () => {
+  it('drops frames instead of reusing a slot once the space is exhausted', () => {
+    const extract = createIipStreamExtractor()
+    const frame = `${ESC}]1337;File=inline=1:${PNG_B64}\x07`
+    for (let n = 0; n < IIP_SLOT_COUNT; n++) {
+      expect(extract(frame).images).toHaveLength(1)
+    }
+    const overflow = extract(frame)
+    expect(overflow.images).toHaveLength(0)
+    expect(overflow.out).toBe('')
+    expect(extract(frame).out).toBe('')
   })
 })

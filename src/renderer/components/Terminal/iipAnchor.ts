@@ -1,3 +1,6 @@
+import type { CellSize } from './iipParser'
+
+
 
    
 
@@ -79,6 +82,39 @@ export function commitIipPlacement(
 
 
    
+export const FALLBACK_CELL_SIZE: CellSize = { widthPx: 9, heightPx: 18 }
+
+type RenderServiceProbe = {
+  _core?: {
+    _renderService?: {
+      dimensions?: { css?: { cell?: { width?: unknown; height?: unknown } } }
+    }
+  }
+}
+
+function positiveNumber(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
+}
+
+export function readCellSize(term: unknown): CellSize | null {
+  const cell = (term as RenderServiceProbe | null | undefined)?._core?._renderService?.dimensions?.css?.cell
+  const widthPx = positiveNumber(cell?.width)
+  const heightPx = positiveNumber(cell?.height)
+  if (widthPx === null || heightPx === null) return null
+  return { widthPx, heightPx }
+}
+
+export function buildSlotEraseSequence(
+  slot: { row: number; col: number },
+  viewport: { topY: number; rows: number; cols: number }
+): string | null {
+  const row = slot.row - viewport.topY
+  if (row < 0 || row >= viewport.rows) return null
+  if (slot.col < 0 || slot.col >= viewport.cols) return null
+  return `\x1b7\x1b[${row + 1};${slot.col + 1}H\x1b[1X\x1b8`
+}
+
+
 export function isStaleIipGeneration(captured: number, current: number): boolean {
   return captured !== current
 }

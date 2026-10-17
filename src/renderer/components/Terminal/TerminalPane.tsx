@@ -14,9 +14,17 @@ import { getThemeColors } from '../../styles/themes'
 import { perfMark, perfMeasure } from '../../../shared/perf'
 import styles from './Terminal.module.css'
 import { createIIPStreamPatcher } from './iipStreamPatcher'
-import { createIipStreamExtractor, findIipSlot, fitIipToCells } from './iipParser'
-import type { IipImage } from './iipParser'
-import { commitIipPlacement, isStaleIipGeneration, resolveAnchor, type IipOverlayItem } from './iipAnchor'
+import { cellAlignedLines, createIipStreamExtractor, findIipSlot, fitIipToCells } from './iipParser'
+import type { CellSize, IipImage } from './iipParser'
+import {
+  buildSlotEraseSequence,
+  commitIipPlacement,
+  FALLBACK_CELL_SIZE,
+  isStaleIipGeneration,
+  readCellSize,
+  resolveAnchor,
+  type IipOverlayItem
+} from './iipAnchor'
 import { IipOverlay } from './IipOverlay'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
 import { markTerminalOpen } from '../../utils/shellReadiness'
@@ -108,7 +116,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   }
   const [iipItems, setIipItems] = useState<IipOverlayItem[]>([])
   const termForIipRef = useRef<Terminal | null>(null)
-  const [cellSize, setCellSize] = useState({ widthPx: 9, heightPx: 18 })
+  const [cellSize, setCellSize] = useState<CellSize>(FALLBACK_CELL_SIZE)
+  const cellSizeRef = useRef<CellSize>(cellSize)
+  cellSizeRef.current = cellSize
+  const applyCellSize = useCallback((next: CellSize) => {
+    setCellSize((prev) =>
+      prev.widthPx === next.widthPx && prev.heightPx === next.heightPx ? prev : next
+    )
+  }, [])
   const [iipScrollTick, setIipScrollTick] = useState(0)
 
 
@@ -192,33 +207,20 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     const generation = ptyGenerationRef.current
     const buf = term.buffer.active
 
-    const lines: string[] = []
-    for (let i = 0; i < buf.length; i++) {
-      const line = buf.getLine(i)
-      if (!line) {
-        lines.push('')
-        continue
-      }
-      let s = ''
-      for (let x = 0; x < line.length; x++) {
-        s += line.getCell(x)?.getChars() || ' '
-      }
-      lines.push(s)
-    }
+    const lines = cellAlignedLines(buf)
     const hit = findIipSlot(lines, image.slot)
     const cursorAbs = buf.baseY + buf.cursorY
 
     const el = new Image()
     el.onload = () => {
       if (isStaleIipGeneration(generation, ptyGenerationRef.current)) return
-      const core = (term as unknown as { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } } })._core
-      const cellW = core?._renderService?.dimensions?.css?.cell?.width ?? 9
-      const cellH = core?._renderService?.dimensions?.css?.cell?.height ?? 18
-      setCellSize({ widthPx: cellW, heightPx: cellH })
+      const measured = readCellSize(term)
+      const cell = measured ?? cellSizeRef.current
+      if (measured) applyCellSize(measured)
       const fit = fitIipToCells(
         image,
         { widthPx: el.naturalWidth || 800, heightPx: el.naturalHeight || 600 },
-        { widthPx: cellW, heightPx: cellH },
+        cell,
         term.cols
       )
 
@@ -250,6 +252,18 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
           lines
         )
       )
+    }
+    el.onerror = () => {
+      if (isStaleIipGeneration(generation, ptyGenerationRef.current)) return
+      if (!hit) return
+      const planted = buf.getLine(hit.row)?.getCell(hit.col)?.getChars()
+      if (planted !== image.slot) return
+      const erase = buildSlotEraseSequence(hit, {
+        topY: buf.viewportY,
+        rows: term.rows,
+        cols: term.cols
+      })
+      if (erase) term.write(erase)
     }
     el.src = image.dataUrl
   }
@@ -290,6 +304,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       if (fitAddonRef.current && termRef.current) {
         try {
           fitAddonRef.current.fit()
+          const measured = readCellSize(termRef.current)
+          if (measured) applyCellSize(measured)
+
           if (!skipResize) {
             const term = termRef.current
             window.terminalAPI.resize(session.id, term.cols, term.rows)
@@ -299,7 +316,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         }
       }
     },
-    [session.id]
+    [session.id, applyCellSize]
   )
 
   const beginScaleBridge = useCallback(() => {
@@ -372,7 +389,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     const term = new Terminal(termOptions as ITerminalOptions)
     termForIipRef.current = term
 
-    const bumpIip = () => setIipScrollTick((t) => t + 1)
+    const bumpIip = () => {
+      if (iipItemsRef.current.length === 0) return
+      setIipScrollTick((t) => t + 1)
+    }
     if (typeof (term as unknown as { onRender?: unknown }).onRender === 'function') {
       ;(term as unknown as { onRender: (cb: () => void) => unknown }).onRender(bumpIip)
     }
