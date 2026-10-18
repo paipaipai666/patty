@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveAnchor, commitIipPlacement, isIipSlotPresent, buildSlotEraseSequence, readCellSize, type IipOverlayItem } from '../iipAnchor'
+import { resolveAnchor, commitIipPlacement, isIipSlotPresent, buildSlotEraseSequence, readCellSize, FALLBACK_CACHE_LIMIT, type IipOverlayItem } from '../iipAnchor'
 
 function item(over: Partial<IipOverlayItem>): IipOverlayItem {
   return {
@@ -109,6 +109,25 @@ describe('commitIipPlacement', () => {
     const prev = [item({ id: 7, key: 'a' }), item({ id: 3, key: 'b' })]
     const next = commitIipPlacement(prev, item({ id: 0, key: 'c' }), [])
     expect(next[2].id).toBe(8)
+  })
+
+  it('bounds cursor-fallback items so they cannot grow without limit', () => {
+    let prev: IipOverlayItem[] = []
+    for (let i = 0; i < FALLBACK_CACHE_LIMIT + 12; i++) {
+      prev = commitIipPlacement(prev, item({ id: 0, key: `k${i}`, fromSlot: false }), [])
+    }
+    expect(prev).toHaveLength(FALLBACK_CACHE_LIMIT)
+    expect(prev[prev.length - 1].key).toBe(`k${FALLBACK_CACHE_LIMIT + 11}`)
+    expect(prev[0].key).toBe('k12')
+  })
+
+  it('keeps slot-anchored items regardless of how many fallback items arrive', () => {
+    let prev: IipOverlayItem[] = [item({ id: 1, key: 'anchored', fromSlot: true })]
+    for (let i = 0; i < FALLBACK_CACHE_LIMIT + 12; i++) {
+      prev = commitIipPlacement(prev, item({ id: 0, key: `k${i}`, fromSlot: false }), [])
+    }
+    expect(prev.some((x) => x.key === 'anchored')).toBe(true)
+    expect(prev).toHaveLength(FALLBACK_CACHE_LIMIT + 1)
   })
 })
 

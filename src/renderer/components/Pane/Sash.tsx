@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import type { SplitDirection } from '../../../shared/paneTypes'
+import { clampRatioToPixels } from '../../../shared/paneTypes'
 import styles from './Sash.module.css'
 
 interface SashProps {
@@ -32,11 +33,16 @@ export function Sash({ splitId, direction }: SashProps) {
     (e: React.PointerEvent<HTMLDivElement>) => {
       const parent = parentRef.current
       if (!parent) return
+      if (e.buttons === 0) {
+        parentRef.current = null
+        setDragging(false)
+        return
+      }
       const rect = parent.getBoundingClientRect()
       const size = direction === 'horizontal' ? rect.width : rect.height
       if (size <= 0) return
       const offset = direction === 'horizontal' ? e.clientX - rect.left : e.clientY - rect.top
-      setSplitRatio(splitId, offset / size)
+      setSplitRatio(splitId, clampRatioToPixels(offset / size, size))
     },
     [direction, setSplitRatio, splitId]
   )
@@ -67,6 +73,7 @@ export function Sash({ splitId, direction }: SashProps) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
+      onPointerCancel={endDrag}
       role="separator"
       aria-orientation={direction === 'horizontal' ? 'vertical' : 'horizontal'}
     />

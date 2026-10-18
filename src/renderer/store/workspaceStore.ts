@@ -41,7 +41,7 @@ interface WorkspaceStore {
   replaceLeafAt: (paneId: string, sessionId: string) => void
   closeFocused: () => void
   removeSessionEverywhere: (sessionId: string) => void
-  setSplitRatio: (splitId: string, ratio: number) => void
+  setSplitRatio: (splitId: string, ratio: number, containerPx?: number) => void
   focusPane: (paneId: string) => void
   ensureVisible: (sessionId: string) => boolean
 
@@ -262,14 +262,14 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     markDirty()
   },
 
-  setSplitRatio: (splitId, ratio) => {
+  setSplitRatio: (splitId, ratio, containerPx) => {
     const { workspaces, activeWorkspaceId } = get()
     if (!activeWorkspaceId) return
     const ws = workspaces.find((w) => w.id === activeWorkspaceId)
     if (!ws) return
     set({
       workspaces: patchWorkspace(workspaces, activeWorkspaceId, {
-        paneTree: setRatio(ws.paneTree, splitId, ratio)
+        paneTree: setRatio(ws.paneTree, splitId, ratio, containerPx)
       })
     })
     markDirty()

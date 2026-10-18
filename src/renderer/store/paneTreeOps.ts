@@ -1,7 +1,7 @@
 
    
 import type { PaneTree, PaneLeaf, PaneSplit, SplitDirection } from '../../shared/paneTypes'
-import { clampRatio } from '../../shared/paneTypes'
+import { clampRatio, clampRatioToPixels } from '../../shared/paneTypes'
 import { newPaneId, firstLeafId as normalizeFirstLeafId, findLeaf } from '../../shared/paneTreeNormalize'
 
                                                                                   
@@ -116,10 +116,10 @@ export function replaceLeafSession(tree: PaneTree, leafId: string, sessionId: st
   )
 }
 
-                                                                                  
-export function setRatio(tree: PaneTree, splitId: string, ratio: number): PaneTree {
+ 
+export function setRatio(tree: PaneTree, splitId: string, ratio: number, containerPx = 0): PaneTree {
   return updateNode(tree, splitId, (node) =>
-    node.type === 'split' ? { ...node, ratio: clampRatio(ratio) } : node
+    node.type === 'split' ? { ...node, ratio: clampRatioToPixels(ratio, containerPx) } : node
   )
 }
 

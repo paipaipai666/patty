@@ -41,9 +41,19 @@ export interface PersistedPaneSplit {
 
 export type PersistedPaneTree = PersistedPaneLeaf | PersistedPaneSplit
 
-                                                                                     
+        
 export function clampRatio(ratio: number): number {
   const MIN = 0.1
   const MAX = 1 - MIN
   return Math.min(MAX, Math.max(MIN, ratio))
+}
+
+export const MIN_PANE_PX = 80
+
+export function clampRatioToPixels(ratio: number, containerPx: number): number {
+  if (!Number.isFinite(containerPx) || containerPx <= 0) return clampRatio(ratio)
+  if (containerPx < MIN_PANE_PX * 2) return 0.5
+  const floor = MIN_PANE_PX / containerPx
+  const ceiling = 1 - floor
+  return Math.min(ceiling, Math.max(floor, clampRatio(ratio)))
 }

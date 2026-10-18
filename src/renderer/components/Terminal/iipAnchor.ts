@@ -66,6 +66,9 @@ export function isIipSlotPresent(
 
 
    
+export const FALLBACK_CACHE_LIMIT = 20
+
+
 export function commitIipPlacement(
   prev: readonly IipOverlayItem[],
   next: IipOverlayItem,
@@ -77,7 +80,13 @@ export function commitIipPlacement(
     return prev.map((x) => (x.id === erased.id ? { ...next, id: erased.id } : x))
   }
   const id = prev.reduce((m, x) => Math.max(m, x.id), 0) + 1
-  return [...prev, { ...next, id }]
+  const placed = [...prev, { ...next, id }]
+  if (next.fromSlot !== false) return placed
+  const anchored: IipOverlayItem[] = []
+  const fallback: IipOverlayItem[] = []
+  for (const x of placed) (x.fromSlot === false ? fallback : anchored).push(x)
+  const kept = fallback.length > FALLBACK_CACHE_LIMIT ? fallback.slice(-FALLBACK_CACHE_LIMIT) : fallback
+  return [...anchored, ...kept]
 }
 
 

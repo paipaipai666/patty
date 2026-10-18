@@ -53,8 +53,11 @@ describe('ErrorBoundary', () => {
     expect(container.textContent).toContain('disk full')
   })
 
-  it('reload button resets error state and shows children again', () => {
-    const { container, root } = render(
+  it('keeps showing the error after a click, because the page is reloading', () => {
+    const reload = vi.fn()
+    vi.stubGlobal('location', { ...window.location, reload })
+
+    const { container } = render(
       <ErrorBoundary>
         <ThrowingChild message="first error" />
       </ErrorBoundary>
@@ -64,13 +67,29 @@ describe('ErrorBoundary', () => {
     const reloadBtn = container.querySelector('button')!
     act(() => {
       reloadBtn.click()
-      root.render(
-        <ErrorBoundary>
-          <SafeChild label="after reset" />
-        </ErrorBoundary>
-      )
     })
 
-    expect(container.textContent).toBe('after reset')
+    expect(reload).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('first error')
+    vi.unstubAllGlobals()
+  })
+
+  it('reload button reloads the document so a deterministic error cannot persist', () => {
+    const reload = vi.fn()
+    vi.stubGlobal('location', { ...window.location, reload })
+
+    const { container } = render(
+      <ErrorBoundary>
+        <ThrowingChild message="fatal" />
+      </ErrorBoundary>
+    )
+
+    const reloadBtn = container.querySelector('button')!
+    act(() => {
+      reloadBtn.click()
+    })
+
+    expect(reload).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
   })
 })

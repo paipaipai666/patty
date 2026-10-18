@@ -97,6 +97,7 @@ describe('Sash', () => {
       sash.dispatchEvent(new PointerEvent('pointermove', {
         bubbles: true,
         pointerId: 1,
+        buttons: 1,
         clientX: 250,
         clientY: 0
       }))
@@ -131,10 +132,101 @@ describe('Sash', () => {
       sash.dispatchEvent(new PointerEvent('pointermove', {
         bubbles: true,
         pointerId: 1,
+        buttons: 1,
         clientX: 0,
         clientY: 200
       }))
     })
     expect(setSplitRatio).toHaveBeenCalledWith('s1', 0.5)
   })
+
+  it('ends the drag when the pointer is cancelled', () => {
+    const { container } = renderSash()
+    const sash = container.querySelector('[role="separator"]')!
+
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
+    })
+    expect(sash.className).toContain('sashDragging')
+
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 }))
+    })
+    expect(sash.className).not.toContain('sashDragging')
+
+    parent_rect_after_cancel(sash.parentElement!)
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 1,
+        clientX: 250
+      }))
+    })
+    expect(useWorkspaceStore.getState().setSplitRatio).not.toHaveBeenCalled()
+  })
+
+  it('releases capture on pointer cancel', () => {
+    const { container } = renderSash()
+    const sash = container.querySelector('[role="separator"]')!
+
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
+    })
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 }))
+    })
+    expect(releasePointerCapture).toHaveBeenCalledWith(1)
+  })
+
+  it('ends the drag when a move arrives with no button pressed', () => {
+    const setSplitRatio = useWorkspaceStore.getState().setSplitRatio
+    const { container } = renderSash()
+    const sash = container.querySelector('[role="separator"]')!
+
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
+    })
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 1,
+        buttons: 0,
+        clientX: 250
+      }))
+    })
+    expect(setSplitRatio).not.toHaveBeenCalled()
+    expect(sash.className).not.toContain('sashDragging')
+
+    parent_rect_after_cancel(sash.parentElement!)
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 250 }))
+    })
+    expect(setSplitRatio).not.toHaveBeenCalled()
+  })
+
+  it('clamps the ratio so neither pane collapses below the minimum pixel width', () => {
+    const setSplitRatio = useWorkspaceStore.getState().setSplitRatio
+    const { container } = renderSash('horizontal')
+    const sash = container.querySelector('[role="separator"]')!
+    const parent = sash.parentElement!
+    parent.getBoundingClientRect = () => new DOMRect(0, 0, 300, 400)
+
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
+    })
+    act(() => {
+      sash.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 1,
+        buttons: 1,
+        clientX: 5,
+        clientY: 0
+      }))
+    })
+    expect(setSplitRatio).toHaveBeenCalledWith('s1', 80 / 300)
+  })
 })
+
+function parent_rect_after_cancel(parent: HTMLElement) {
+  parent.getBoundingClientRect = () => new DOMRect(0, 0, 500, 400)
+}

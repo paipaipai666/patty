@@ -105,6 +105,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const ptyRetryCountRef = useRef(0)
   const PTY_MAX_RETRIES = 5
 
+  const sessionRef = useRef(session)
+  sessionRef.current = session
+
   const iipPatcherRef = useRef<((data: string) => string) | null>(null)
   if (!iipPatcherRef.current) {
     iipPatcherRef.current = createIIPStreamPatcher()
@@ -132,7 +135,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   useEffect(() => {
     if (iipItems.length === 0) return
     let raf = 0
-    let last = -1
+    let last = ''
     let lastBufLen = -1
     const slotMisses: Record<number, number> = {}
 
@@ -143,7 +146,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       const baseY = buf?.baseY ?? 0
       const top = term?.element?.querySelector('.xterm-viewport')?.scrollTop ?? 0
       w.__iipLiveBaseY = baseY
-      const key = baseY * 100000 + top
+      const key = `${baseY}:${top}`
       if (key !== last) {
         last = key
         w.__iipTick = Date.now()
@@ -462,7 +465,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     if (perfEnabled) perfMeasure('terminal:term-open', 'terminal:term-open')
 
 
-    container.addEventListener('paste', (e) => { e.preventDefault(); e.stopPropagation() }, true)
+    const onPaste = (e: ClipboardEvent) => { e.preventDefault(); e.stopPropagation() }
+    container.addEventListener('paste', onPaste, true)
 
 
     const textarea = container.querySelector(
@@ -661,7 +665,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         for (const data of liveQueue) writeLive(data)
         liveQueue.length = 0
       }
-      const dataSub = window.terminalAPI.onData(session.id, (data) => {
+      const dataSub = window.terminalAPI.onData(sessionRef.current.id, (data) => {
         if (effectDisposed || generation !== ptyGenerationRef.current) return
         if (!replayWritten) {
           liveQueue.push(data)
@@ -669,14 +673,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         }
         writeLive(data)
       })
-      const exitSub = window.terminalAPI.onExit(session.id, () => {
+      const exitSub = window.terminalAPI.onExit(sessionRef.current.id, () => {
         if (effectDisposed || generation !== ptyGenerationRef.current) return
         ptyCreatedRef.current = false
         term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
 
         const store = useSessionStore.getState()
-        store.setAttention(session.id, null)
-        store.setAiType(session.id, null)
+        store.setAttention(sessionRef.current.id, null)
+        store.setAiType(sessionRef.current.id, null)
         ptyRetryCountRef.current++
         if (ptyRetryCountRef.current < PTY_MAX_RETRIES) {
           retryTimerRef.current = setTimeout(() => startPty(), 500)
@@ -689,8 +693,18 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
       void Promise.all([dataSub.ready, exitSub.ready]).then(() => {
         if (effectDisposed || generation !== ptyGenerationRef.current) return
+        const live = useSessionStore
+          .getState()
+          .sessions?.find((s) => s.id === sessionRef.current.id)
         window.terminalAPI
-          .createSession(session.id, session.cwd, session.shell, term.cols, term.rows, session.ssh ?? null)
+          .createSession(
+            sessionRef.current.id,
+            live?.cwd ?? sessionRef.current.cwd,
+            live?.shell ?? sessionRef.current.shell,
+            term.cols,
+            term.rows,
+            live?.ssh ?? sessionRef.current.ssh ?? null
+          )
           .then((result) => {
             if (effectDisposed || generation !== ptyGenerationRef.current) return
             if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
@@ -703,7 +717,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
               setHasData(true)
               return
             }
-            updatePid(session.id, result.pid)
+            updatePid(sessionRef.current.id, result.pid)
             ptyCreatedRef.current = true
             ptyRetryCountRef.current = 0
             if (result.replay) {
@@ -730,6 +744,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       effectDisposed = true
       container.removeEventListener('webglcontextlost', onContextLost, true)
       container.removeEventListener('webglcontextrestored', onContextRestored, true)
+      container.removeEventListener('paste', onPaste, true)
       osc7Disposable.dispose()
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current)

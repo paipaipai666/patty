@@ -187,9 +187,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }
       }
 
+      const attentionMap = { ...state.attentionMap }
+      delete attentionMap[id]
+
       return {
         sessions: filtered,
-        activeSessionId: newActiveId
+        activeSessionId: newActiveId,
+        attentionMap
       }
     })
     markDirty()
