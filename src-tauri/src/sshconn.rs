@@ -6,20 +6,55 @@ use russh::client::{self, AuthResult, Handle, KeyboardInteractiveAuthResponse, M
 use russh::keys::{self, PrivateKeyWithHashAlg, ssh_key};
 use russh::{ChannelMsg, ChannelWriteHalf, MethodKind};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use std::time::Duration;
 use tauri::AppHandle;
+use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
 
 use crate::ssh::SshTarget;
 
 pub struct SshSession {
     writer: ChannelWriteHalf<Msg>,
+    tx: UnboundedSender<WriterMsg>,
     handle: Handle<PattyHandler>,
     metrics_task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
 }
+
+enum WriterMsg {
+    Data(Bytes),
+    Resize(u32, u32),
+    Close,
+}
+
+#[derive(Default)]
+struct PendingInput {
+    chunks: VecDeque<Bytes>,
+    total: usize,
+    resize: Option<(u16, u16)>,
+}
+
+impl PendingInput {
+    fn push(&mut self, bytes: Bytes) {
+        self.total += bytes.len();
+        self.chunks.push_back(bytes);
+        while self.total > PENDING_INPUT_CAP && self.chunks.len() > 1 {
+            if let Some(front) = self.chunks.pop_front() {
+                self.total -= front.len();
+            }
+        }
+    }
+}
+
+const PENDING_INPUT_CAP: usize = 512 * 1024;
+
+const EOF_GRACE: Duration = Duration::from_secs(2);
+
+static PENDING_INPUT: LazyLock<Mutex<HashMap<String, PendingInput>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static SESSIONS: LazyLock<RwLock<HashMap<String, Arc<SshSession>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -310,26 +345,60 @@ pub fn exists(id: &str) -> bool {
     SESSIONS.read().unwrap().contains_key(id)
 }
 
+pub fn is_creating(id: &str) -> bool {
+    CREATING.lock().unwrap().contains_key(id)
+}
+
 pub fn write(id: &str, data: &str) {
-    let session = SESSIONS.read().unwrap().get(id).cloned();
-    if let Some(session) = session {
-        let bytes = Bytes::copy_from_slice(data.as_bytes());
-        tauri::async_runtime::spawn(async move {
-            let _ = session.writer.data_bytes(bytes).await;
-        });
+    let bytes = Bytes::copy_from_slice(data.as_bytes());
+    let map = SESSIONS.write().unwrap();
+    if let Some(session) = map.get(id) {
+        let _ = session.tx.send(WriterMsg::Data(bytes));
+        return;
+    }
+    if CREATING.lock().unwrap().contains_key(id) {
+        PENDING_INPUT
+            .lock()
+            .unwrap()
+            .entry(id.to_string())
+            .or_default()
+            .push(bytes);
     }
 }
 
 pub fn resize(id: &str, cols: u16, rows: u16) {
-    let session = SESSIONS.read().unwrap().get(id).cloned();
-    if let Some(session) = session {
-        tauri::async_runtime::spawn(async move {
-            let _ = session
-                .writer
-                .window_change(cols as u32, rows as u32, 0, 0)
-                .await;
-        });
+    let map = SESSIONS.write().unwrap();
+    if let Some(session) = map.get(id) {
+        let _ = session.tx.send(WriterMsg::Resize(cols as u32, rows as u32));
+        return;
     }
+    if CREATING.lock().unwrap().contains_key(id) {
+        PENDING_INPUT
+            .lock()
+            .unwrap()
+            .entry(id.to_string())
+            .or_default()
+            .resize = Some((cols, rows));
+    }
+}
+
+async fn run_writer(session: Arc<SshSession>, mut rx: UnboundedReceiver<WriterMsg>) {
+    while let Some(msg) = rx.recv().await {
+        match msg {
+            WriterMsg::Data(bytes) => {
+                let _ = session.writer.data_bytes(bytes).await;
+            }
+            WriterMsg::Resize(cols, rows) => {
+                let _ = session.writer.window_change(cols, rows, 0, 0).await;
+            }
+            WriterMsg::Close => break,
+        }
+    }
+    let _ = session.writer.close().await;
+    let _ = session
+        .handle
+        .disconnect(russh::Disconnect::ByApplication, "", "")
+        .await;
 }
 
 pub fn kill(id: &str) {
@@ -341,17 +410,12 @@ pub fn kill(id: &str) {
     crate::hooks::remove_pane(id);
     PENDING_AUTH.lock().unwrap().remove(id);
     PENDING_HOSTKEY.lock().unwrap().remove(id);
+    PENDING_INPUT.lock().unwrap().remove(id);
     if let Some(session) = victim {
         if let Some(task) = session.metrics_task.lock().unwrap().take() {
             task.abort();
         }
-        tauri::async_runtime::spawn(async move {
-            let _ = session.writer.close().await;
-            let _ = session
-                .handle
-                .disconnect(russh::Disconnect::ByApplication, "", "")
-                .await;
-        });
+        let _ = session.tx.send(WriterMsg::Close);
     }
 }
 
@@ -379,40 +443,52 @@ pub async fn create(
 
     let epoch = kill_epoch(id);
     let mut waited = false;
-    while CREATING.lock().unwrap().contains_key(id) {
-        waited = true;
-        if exists(id) {
+    let (abort_registration, claim_epoch) = loop {
+        let claim = {
+            let mut creating = CREATING.lock().unwrap();
+            match creating.entry(id.to_string()) {
+                Entry::Occupied(_) => None,
+                Entry::Vacant(slot) => {
+                    let (handle, registration) = AbortHandle::new_pair();
+                    slot.insert(handle);
+                    Some((registration, kill_epoch(id)))
+                }
+            }
+        };
+        let Some(claim) = claim else {
+            waited = true;
+            if kill_epoch(id) != epoch {
+                return json!({ "pid": 0, "success": false, "error": "cancelled" });
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            continue;
+        };
+        if !exists(id) {
+            break claim;
+        }
+        CREATING.lock().unwrap().remove(id);
+        if waited {
             return create_success();
         }
-        if !CREATING.lock().unwrap().contains_key(id) {
-            break;
-        }
-        if kill_epoch(id) != epoch {
-            return json!({ "pid": 0, "success": false, "error": "cancelled" });
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    if kill_epoch(id) != epoch {
-        return json!({ "pid": 0, "success": false, "error": "cancelled" });
-    }
-    if waited {
-
-        if exists(id) {
-            return create_success();
-        }
-    } else if exists(id) {
         kill(id);
-    }
+    };
 
-    let (abort_handle, abort_registration) = AbortHandle::new_pair();
-    CREATING.lock().unwrap().insert(id.to_string(), abort_handle);
     let result = Abortable::new(create_inner(app, id, target, cols, rows), abort_registration).await;
-    CREATING.lock().unwrap().remove(id);
+    release_claim(id, claim_epoch);
     match result {
         Ok(value) => value,
 
         Err(_) => json!({ "pid": 0, "success": false, "error": "cancelled" }),
     }
+}
+
+fn release_claim(id: &str, claim_epoch: u64) {
+    let mut creating = CREATING.lock().unwrap();
+    if kill_epoch(id) != claim_epoch {
+        return;
+    }
+    creating.remove(id);
+    PENDING_INPUT.lock().unwrap().remove(id);
 }
 
 async fn create_inner(
@@ -480,21 +556,49 @@ async fn create_inner(
     }
     let (mut read_half, write_half) = channel.split();
 
+    let (tx, rx) = mpsc::unbounded_channel();
     let session = Arc::new(SshSession {
         writer: write_half,
+        tx,
         handle,
         metrics_task: Mutex::new(None),
     });
-    SESSIONS.write().unwrap().insert(id.to_string(), session.clone());
+    tauri::async_runtime::spawn(run_writer(session.clone(), rx));
 
+    {
+        let mut map = SESSIONS.write().unwrap();
+        map.insert(id.to_string(), session.clone());
+        drop(map);
+        if let Some(pending) = PENDING_INPUT.lock().unwrap().get_mut(id) {
+            pending.total = 0;
+            for chunk in std::mem::take(&mut pending.chunks) {
+                let _ = session.tx.send(WriterMsg::Data(chunk));
+            }
+            if let Some((cols, rows)) = pending.resize.take() {
+                let _ = session.tx.send(WriterMsg::Resize(cols as u32, rows as u32));
+            }
+        }
+    }
 
     let loop_id = id.to_string();
     let loop_app = app.clone();
     let loop_session = session.clone();
+    let loop_epoch = kill_epoch(id);
     tauri::async_runtime::spawn(async move {
         let mut carry: Vec<u8> = Vec::new();
         let mut exit_status: i64 = 0;
-        while let Some(msg) = read_half.wait().await {
+        let mut eof_deadline: Option<tokio::time::Instant> = None;
+        loop {
+            let msg = match eof_deadline {
+                Some(deadline) => match tokio::time::timeout_at(deadline, read_half.wait()).await {
+                    Ok(Some(msg)) => msg,
+                    Ok(None) | Err(_) => break,
+                },
+                None => match read_half.wait().await {
+                    Some(msg) => msg,
+                    None => break,
+                },
+            };
             match msg {
                 ChannelMsg::Data { data } => {
                     let text = crate::pty::decode(&mut carry, &data);
@@ -509,10 +613,16 @@ async fn create_inner(
                     }
                 }
                 ChannelMsg::ExitStatus { exit_status: s } => exit_status = s as i64,
-                ChannelMsg::Eof | ChannelMsg::Close => break,
+                ChannelMsg::Eof => {
+                    if eof_deadline.is_none() {
+                        eof_deadline = Some(tokio::time::Instant::now() + EOF_GRACE);
+                    }
+                }
+                ChannelMsg::Close => break,
                 _ => {}
             }
         }
+        let _ = loop_session.tx.send(WriterMsg::Close);
         let still_registered = {
             let mut map = SESSIONS.write().unwrap();
             if map.get(&loop_id).is_some_and(|s| Arc::ptr_eq(s, &loop_session)) {
@@ -528,6 +638,10 @@ async fn create_inner(
         if still_registered {
             crate::hooks::remove_pane(&loop_id);
             emit(&loop_app, &format!("pty:exit:{loop_id}"), exit_status);
+        }
+        let mut epochs = KILL_EPOCH.lock().unwrap();
+        if epochs.get(&loop_id) == Some(&loop_epoch) {
+            epochs.remove(&loop_id);
         }
     });
 
@@ -798,6 +912,19 @@ mod tests {
             Ok(())
         }
 
+        async fn window_change_request(
+            &mut self,
+            _channel: ChannelId,
+            col_width: u32,
+            row_height: u32,
+            _pix_width: u32,
+            _pix_height: u32,
+            _session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            TEST_WINDOW.lock().unwrap().push((col_width, row_height));
+            Ok(())
+        }
+
         async fn exec_request(
             &mut self,
             channel: ChannelId,
@@ -825,6 +952,8 @@ mod tests {
 
 
     static INTEGRATION_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    static TEST_WINDOW: LazyLock<Mutex<Vec<(u32, u32)>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
     struct TestEnv {
         _guard: std::sync::MutexGuard<'static, ()>,
@@ -855,6 +984,7 @@ mod tests {
         let port = start_test_server().await;
         let guard = INTEGRATION_LOCK.lock().unwrap();
         TEST_EVENTS.lock().unwrap().clear();
+        TEST_WINDOW.lock().unwrap().clear();
         let id = format!("sshconn-test-{name}-{}", std::process::id());
         let dir = std::env::temp_dir().join(format!("patty-sshconn-test-{}", std::process::id()));
         let known_hosts = dir.join(format!("known_hosts-{name}"));
@@ -1316,6 +1446,250 @@ mod tests {
         assert!(
             torn_down,
             "server never observed connection teardown after channel-stage failure"
+        );
+    }
+
+
+    #[derive(Clone, Default)]
+    struct ExitOrderServer {
+        status_first: bool,
+        status: u32,
+    }
+
+    #[derive(Default)]
+    struct ExitOrderHandler {
+        status_first: bool,
+        status: u32,
+    }
+
+    impl server::Server for ExitOrderServer {
+        type Handler = ExitOrderHandler;
+        fn new_client(&mut self, _addr: Option<std::net::SocketAddr>) -> ExitOrderHandler {
+            ExitOrderHandler { status_first: self.status_first, status: self.status }
+        }
+    }
+
+    impl server::Handler for ExitOrderHandler {
+        type Error = russh::Error;
+
+        async fn auth_password(&mut self, user: &str, password: &str) -> Result<Auth, Self::Error> {
+            if user == "test" && password == "secret" {
+                Ok(Auth::Accept)
+            } else {
+                Ok(Auth::reject())
+            }
+        }
+
+        async fn channel_open_session(
+            &mut self,
+            _channel: Channel<server::Msg>,
+            reply: ChannelOpenHandle,
+            _session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            reply.accept().await;
+            Ok(())
+        }
+
+        async fn pty_request(
+            &mut self,
+            channel: ChannelId,
+            _term: &str,
+            _col_width: u32,
+            _row_height: u32,
+            _pix_width: u32,
+            _pix_height: u32,
+            _modes: &[(russh::Pty, u32)],
+            session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            session.channel_success(channel)?;
+            Ok(())
+        }
+
+        async fn shell_request(
+            &mut self,
+            channel: ChannelId,
+            session: &mut ServerSession,
+        ) -> Result<(), Self::Error> {
+            session.channel_success(channel)?;
+            session.data(channel, b"bye\r\n".to_vec())?;
+            if self.status_first {
+                session.exit_status_request(channel, self.status)?;
+                session.eof(channel)?;
+            } else {
+                session.eof(channel)?;
+                tokio::time::sleep(Duration::from_millis(300)).await;
+                session.exit_status_request(channel, self.status)?;
+            }
+            session.close(channel)?;
+            Ok(())
+        }
+    }
+
+    async fn start_exit_order_server(status_first: bool, status: u32) -> u16 {
+        let config = Arc::new(server::Config {
+            auth_rejection_time: Duration::from_millis(1),
+            auth_rejection_time_initial: Some(Duration::from_millis(1)),
+            keys: vec![keys::PrivateKey::random(&mut rand::rng(), keys::Algorithm::Ed25519)
+                .unwrap()],
+            ..Default::default()
+        });
+        let socket = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = socket.local_addr().unwrap().port();
+        let mut server = ExitOrderServer { status_first, status };
+        tokio::spawn(async move {
+            let _ = server.run_on_socket(config, &socket).await;
+        });
+        port
+    }
+
+    async fn connect_to(env: &TestEnv) -> Value {
+        let id = env.id.clone();
+        let target = env.target();
+        let task = tokio::spawn(async move { create(None, &id, target, 80, 24).await });
+        wait_event("ssh:hostkey").await;
+        hostkey_respond(&env.id, true);
+        answer_auth(&env.id, Some("secret")).await;
+        task.await.unwrap()
+    }
+
+    fn data_events(id: &str) -> String {
+        TEST_EVENTS
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(e, _)| e == &format!("pty:data:{id}"))
+            .map(|(_, p)| serde_json::from_str::<String>(p).unwrap_or_default())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn exit_status_survives_eof_before_close() {
+        let port = start_exit_order_server(false, 7).await;
+        let env = setup_on("eof-before-status", port).await;
+        let result = connect_to(&env).await;
+        assert_eq!(result["success"], true, "create failed: {result}");
+
+        let payload = wait_event(&format!("pty:exit:{}", env.id)).await;
+        assert_eq!(
+            payload, "7",
+            "the server sent EOF, then exit status 7, then closed; a loop that ends at EOF \
+             reports 0 for every remote exit code",
+        );
+    }
+
+    #[tokio::test]
+    async fn exit_status_recorded_when_status_precedes_eof() {
+        let port = start_exit_order_server(true, 9).await;
+        let env = setup_on("status-before-eof", port).await;
+        let result = connect_to(&env).await;
+        assert_eq!(result["success"], true, "create failed: {result}");
+
+        let payload = wait_event(&format!("pty:exit:{}", env.id)).await;
+        assert_eq!(payload, "9", "exit status must survive the EOF that follows it");
+    }
+
+    #[tokio::test]
+    async fn input_during_connect_reaches_the_server_in_order() {
+        let env = setup("pending-input").await;
+        let id = env.id.clone();
+        let target = env.target();
+        let task = tokio::spawn(async move { create(None, &id, target, 80, 24).await });
+
+        wait_event("ssh:hostkey").await;
+        hostkey_respond(&env.id, true);
+        wait_event("ssh:auth").await;
+        assert!(!exists(&env.id), "no session may exist before auth is answered");
+
+        write(&env.id, "early-1;");
+        write(&env.id, "early-2;");
+        resize(&env.id, 132, 43);
+        auth_respond(&env.id, Some("secret".into()));
+
+        let result = task.await.unwrap();
+        assert_eq!(result["success"], true, "create failed: {result}");
+        write(&env.id, "late;");
+
+        let echoed = wait_event_payload(&format!("pty:data:{}", env.id), "late;", 100).await;
+        assert!(echoed.is_some(), "the session never echoed the post-connect input");
+
+        let text = data_events(&env.id);
+        let early = text.find("early-1;early-2;").unwrap_or_else(|| {
+            panic!(
+                "input typed while the connection was still being established never reached \
+                 the server; session output was: {text:?}",
+            )
+        });
+        let late = text.find("late;").expect("late input missing");
+        assert!(early < late, "queued input must arrive before later input: {text:?}");
+
+        let windows = TEST_WINDOW.lock().unwrap().clone();
+        assert!(
+            windows.contains(&(132, 43)),
+            "a resize issued while the connection was being established never reached the \
+             server; window changes seen: {windows:?}",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn racing_creates_claim_the_channel_once() {
+        let env = setup("claim-race").await;
+        let start = Arc::new(tokio::sync::Barrier::new(4));
+        let mut tasks = Vec::new();
+        for _ in 0..4 {
+            let id = env.id.clone();
+            let target = env.target();
+            let start = start.clone();
+            tasks.push(tokio::spawn(async move {
+                start.wait().await;
+                create(None, &id, target, 80, 24).await
+            }));
+        }
+
+        wait_event("ssh:hostkey").await;
+        hostkey_respond(&env.id, true);
+        wait_event("ssh:auth").await;
+        auth_respond(&env.id, Some("secret".into()));
+
+        for task in tasks {
+            let result = task.await.unwrap();
+            assert_eq!(result["success"], true, "create failed: {result}");
+        }
+
+        let events = TEST_EVENTS.lock().unwrap();
+        let hostkeys = events.iter().filter(|(e, _)| e == "ssh:hostkey").count();
+        let auths = events.iter().filter(|(e, _)| e == "ssh:auth").count();
+        assert_eq!(
+            (hostkeys, auths),
+            (1, 1),
+            "a racing create must attach to the in-flight connection instead of opening a \
+             second one: {events:?}",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn queued_writes_keep_their_order_under_concurrency() {
+        let env = setup("write-order").await;
+        let result = connect_to(&env).await;
+        assert_eq!(result["success"], true, "create failed: {result}");
+
+        const COUNT: usize = 200;
+        for i in 0..COUNT {
+            write(&env.id, &format!("{i:03},"));
+        }
+
+        let last = format!("{:03},", COUNT - 1);
+        let echoed = wait_event_payload(&format!("pty:data:{}", env.id), &last, 100).await;
+        assert!(echoed.is_some(), "the server never received the last of {COUNT} writes");
+
+        let text = data_events(&env.id);
+        let seen: Vec<usize> = text
+            .split(',')
+            .filter_map(|chunk| chunk.trim().parse::<usize>().ok())
+            .collect();
+        assert_eq!(
+            seen,
+            (0..COUNT).collect::<Vec<_>>(),
+            "writes must reach the server in call order",
         );
     }
 }

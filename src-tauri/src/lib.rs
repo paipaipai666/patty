@@ -72,7 +72,7 @@ async fn create_pty(
 
 #[tauri::command]
 fn write_pty(id: &str, data: &str) {
-    if sshconn::exists(id) {
+    if sshconn::exists(id) || sshconn::is_creating(id) {
         sshconn::write(id, data)
     } else {
         pty::write(id, data)
@@ -81,7 +81,7 @@ fn write_pty(id: &str, data: &str) {
 
 #[tauri::command]
 fn resize_pty(id: &str, cols: u16, rows: u16) {
-    if sshconn::exists(id) {
+    if sshconn::exists(id) || sshconn::is_creating(id) {
         sshconn::resize(id, cols, rows)
     } else {
         pty::resize(id, cols, rows)

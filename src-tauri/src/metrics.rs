@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 use std::fs;
 use std::process::Command;
 use std::os::windows::process::CommandExt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -15,8 +15,16 @@ const MAX_SAMPLES: usize = 120;
 const MAX_FIRST_TERMINALS: usize = 30;
 
 
-const CPU_GPU_SCRIPT: &str = "$cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue; $gpu = $null; try { $gpu = ((Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Measure-Object -Property CookedValue -Sum).Sum } catch {}; Write-Output ('CPU:' + $cpu); Write-Output ('GPU:' + $gpu)";
-const CPU_ONLY_SCRIPT: &str = "Write-Output ('CPU:' + (Get-Counter '\\Processor(_Total)\\% Processor Time').CounterSamples[0].CookedValue)";
+const CPU_QUERY: &str = "$cpu = $null; try { $cpu = (Get-Counter '\\Processor(_Total)\\% Processor Time' -ErrorAction Stop).CounterSamples[0].CookedValue } catch {}; if ($null -eq $cpu) { try { $cpu = (Get-CimInstance -ClassName Win32_PerfFormattedData_PerfOS_Processor -Filter \"Name='_Total'\" -ErrorAction Stop).PercentProcessorTime } catch {} }; if ($null -ne $cpu) { Write-Output ('CPU:' + $cpu) }";
+const GPU_QUERY: &str = "$gpu = $null; try { $gpu = ((Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' -ErrorAction Stop).CounterSamples | Measure-Object -Property CookedValue -Sum).Sum } catch {}; if ($null -eq $gpu) { try { $gpu = ((Get-CimInstance -ClassName Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop | Where-Object { $_.Name -like '*engtype_3D*' }) | Measure-Object -Property UtilizationPercentage -Sum).Sum } catch {} }; if ($null -ne $gpu) { Write-Output ('GPU:' + $gpu) }";
+
+fn counter_script(gpu: bool) -> String {
+    if gpu {
+        format!("{CPU_QUERY}; {GPU_QUERY}")
+    } else {
+        CPU_QUERY.to_string()
+    }
+}
 
 struct MetricsData {
     first_terminal: Vec<Value>,
@@ -31,6 +39,9 @@ static DATA: LazyLock<Mutex<MetricsData>> = LazyLock::new(|| {
 });
 
 static SAMPLING: AtomicBool = AtomicBool::new(false);
+static SAMPLING_GEN: AtomicU64 = AtomicU64::new(0);
+static LOOP_LOCK: Mutex<()> = Mutex::new(());
+static SYS: LazyLock<Mutex<sysinfo::System>> = LazyLock::new(|| Mutex::new(sysinfo::System::new()));
 
 fn history_path() -> std::path::PathBuf {
     crate::store::data_dir().join("metrics-history.json")
@@ -140,8 +151,7 @@ fn run_powershell(script: &str) -> Option<std::process::Output> {
 }
 
 fn sample_counters(gpu_available: bool) -> (f64, Option<f64>) {
-    let script = if gpu_available { CPU_GPU_SCRIPT } else { CPU_ONLY_SCRIPT };
-    let Some(out) = run_powershell(script) else {
+    let Some(out) = run_powershell(&counter_script(gpu_available)) else {
         return (0.0, None);
     };
     let stdout = String::from_utf8_lossy(&out.stdout);
@@ -156,22 +166,24 @@ fn sample_counters(gpu_available: bool) -> (f64, Option<f64>) {
 
 static GPU_FAILURES: LazyLock<Mutex<u8>> = LazyLock::new(|| Mutex::new(0));
 
-fn capture_sample(app: &AppHandle) {
-
-    let mut sys = sysinfo::System::new();
+fn local_usage() -> (f64, f64, f64, f64) {
+    let mut sys = SYS.lock().unwrap();
     sys.refresh_memory();
-    let pid = sysinfo::get_current_pid().ok();
-    let (app_cpu, app_mem_mb) = if let Some(pid) = pid {
-        sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
-        match sys.process(pid) {
-            Some(p) => (f64::from(p.cpu_usage()), (p.memory() as f64) / 1024.0 / 1024.0),
-            None => (0.0, 0.0),
-        }
-    } else {
-        (0.0, 0.0)
+    let Ok(pid) = sysinfo::get_current_pid() else {
+        return (0.0, 0.0, 0.0, 0.0);
+    };
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+    let (app_cpu, app_mem_mb) = match sys.process(pid) {
+        Some(p) => (f64::from(p.cpu_usage()), (p.memory() as f64) / 1024.0 / 1024.0),
+        None => (0.0, 0.0),
     };
     let total_mb = (sys.total_memory() as f64) / 1024.0 / 1024.0;
     let used_mb = (sys.used_memory() as f64) / 1024.0 / 1024.0;
+    (app_cpu, app_mem_mb, used_mb, total_mb)
+}
+
+fn capture_sample(app: &AppHandle) {
+    let (app_cpu, app_mem_mb, used_mb, total_mb) = local_usage();
 
     let gpu_available = *GPU_FAILURES.lock().unwrap() < 3;
     let (system_cpu, gpu_util) = sample_counters(gpu_available);
@@ -210,30 +222,65 @@ fn capture_sample(app: &AppHandle) {
     }
 }
 
+fn begin_sampling() -> Option<u64> {
+    if SAMPLING.swap(true, Ordering::SeqCst) {
+        return None;
+    }
+    Some(SAMPLING_GEN.fetch_add(1, Ordering::SeqCst) + 1)
+}
+
+fn stop_sampling() {
+    SAMPLING.store(false, Ordering::SeqCst);
+    SAMPLING_GEN.fetch_add(1, Ordering::SeqCst);
+}
+
+fn sampling_active(gen: u64) -> bool {
+    SAMPLING.load(Ordering::SeqCst) && SAMPLING_GEN.load(Ordering::SeqCst) == gen
+}
+
+fn interruptible_sleep(gen: u64, total: Duration) -> bool {
+    let deadline = std::time::Instant::now() + total;
+    loop {
+        if !sampling_active(gen) {
+            return false;
+        }
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return true;
+        }
+        thread::sleep(remaining.min(Duration::from_millis(50)));
+    }
+}
+
+fn run_sampling_loop<F: FnMut()>(gen: u64, mut capture: F) {
+    let _owner = LOOP_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut last_persist = std::time::Instant::now();
+    while sampling_active(gen) {
+        let started = std::time::Instant::now();
+        capture();
+        if last_persist.elapsed() >= Duration::from_millis(PERSIST_INTERVAL_MS) {
+            persist();
+            last_persist = std::time::Instant::now();
+        }
+        let elapsed = started.elapsed();
+        if elapsed < Duration::from_millis(SAMPLE_INTERVAL_MS)
+            && !interruptible_sleep(gen, Duration::from_millis(SAMPLE_INTERVAL_MS) - elapsed)
+        {
+            break;
+        }
+    }
+    persist();
+}
+
 pub fn set_sampling(app: &AppHandle, enabled: bool) {
     if enabled {
-        if SAMPLING.swap(true, Ordering::SeqCst) {
+        let Some(gen) = begin_sampling() else {
             return;
-        }
+        };
         let app = app.clone();
-        thread::spawn(move || {
-            let mut last_persist = std::time::Instant::now();
-            while SAMPLING.load(Ordering::SeqCst) {
-                let started = std::time::Instant::now();
-                capture_sample(&app);
-                if last_persist.elapsed() >= Duration::from_millis(PERSIST_INTERVAL_MS) {
-                    persist();
-                    last_persist = std::time::Instant::now();
-                }
-                let elapsed = started.elapsed();
-                if elapsed < Duration::from_millis(SAMPLE_INTERVAL_MS) {
-                    thread::sleep(Duration::from_millis(SAMPLE_INTERVAL_MS) - elapsed);
-                }
-            }
-            persist();
-        });
+        thread::spawn(move || run_sampling_loop(gen, || capture_sample(&app)));
     } else {
-        SAMPLING.store(false, Ordering::SeqCst);
+        stop_sampling();
     }
 }
 
@@ -375,6 +422,189 @@ mod tests {
 
         crate::store::set_data_dir_for_test(old);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn busy_workers(count: usize) -> (std::sync::Arc<AtomicBool>, Vec<thread::JoinHandle<()>>) {
+        let stop = std::sync::Arc::new(AtomicBool::new(false));
+        let workers = (0..count)
+            .map(|_| {
+                let stop = stop.clone();
+                thread::spawn(move || {
+                    while !stop.load(Ordering::Relaxed) {
+                        std::hint::spin_loop();
+                    }
+                })
+            })
+            .collect();
+        (stop, workers)
+    }
+
+    fn stop_workers(stop: &AtomicBool, workers: Vec<thread::JoinHandle<()>>) {
+        stop.store(true, Ordering::Relaxed);
+        for worker in workers {
+            let _ = worker.join();
+        }
+    }
+
+    #[test]
+    fn sampling_generation_supersedes_previous_loop() {
+        let _g = serial();
+        stop_sampling();
+        let first = begin_sampling().expect("first enable starts a loop");
+        assert!(sampling_active(first));
+        assert!(
+            begin_sampling().is_none(),
+            "a second enable while running must not start another loop"
+        );
+        stop_sampling();
+        assert!(!sampling_active(first));
+        let second = begin_sampling().expect("enable after stop starts a loop");
+        assert!(sampling_active(second));
+        assert!(
+            !sampling_active(first),
+            "the superseded loop must see itself as inactive"
+        );
+        stop_sampling();
+    }
+
+    #[test]
+    fn interruptible_sleep_returns_as_soon_as_sampling_stops() {
+        let _g = serial();
+        stop_sampling();
+        let gen = begin_sampling().unwrap();
+        let started = std::time::Instant::now();
+        stop_sampling();
+        assert!(!interruptible_sleep(gen, Duration::from_secs(30)));
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn superseded_sampling_loop_exits() {
+        let _g = serial();
+        let dir = std::env::temp_dir()
+            .join(format!("patty-metrics-loop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let old = crate::store::data_dir();
+        crate::store::set_data_dir_for_test(dir.clone());
+
+        stop_sampling();
+        let gen = begin_sampling().unwrap();
+        let ticks = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = ticks.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = thread::spawn(move || {
+            run_sampling_loop(gen, move || {
+                seen.fetch_add(1, Ordering::SeqCst);
+            });
+            let _ = tx.send(());
+        });
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while ticks.load(Ordering::SeqCst) == 0 && std::time::Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(ticks.load(Ordering::SeqCst) > 0, "an active loop must sample");
+        stop_sampling();
+        let restarted = begin_sampling().expect("a re-enable after a stop starts a loop");
+        assert!(sampling_active(restarted));
+        assert!(
+            rx.recv_timeout(Duration::from_secs(10)).is_ok(),
+            "a superseded sampling loop must exit"
+        );
+        let _ = worker.join();
+        stop_sampling();
+
+        crate::store::set_data_dir_for_test(old);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn re_enable_does_not_overlap_the_retiring_loop() {
+        let _g = serial();
+        stop_sampling();
+        let gen = begin_sampling().unwrap();
+        let ticks = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = ticks.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let worker = thread::spawn(move || {
+            run_sampling_loop(gen, move || {
+                seen.fetch_add(1, Ordering::SeqCst);
+            });
+            let _ = tx.send(());
+        });
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while ticks.load(Ordering::SeqCst) == 0 && std::time::Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(5));
+        }
+        let before = ticks.load(Ordering::SeqCst);
+        assert!(before > 0, "the first loop must sample");
+
+        stop_sampling();
+        let restarted = begin_sampling().expect("a re-enable after a stop starts a loop");
+        thread::sleep(Duration::from_millis(400));
+        assert_eq!(
+            ticks.load(Ordering::SeqCst),
+            before,
+            "the retiring loop must stop sampling once a newer loop owns the toggle",
+        );
+        assert!(sampling_active(restarted));
+
+        let _ = rx.recv_timeout(Duration::from_secs(10));
+        let _ = worker.join();
+
+        let after = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = after.clone();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let fresh = thread::spawn(move || {
+            run_sampling_loop(restarted, move || {
+                seen.fetch_add(1, Ordering::SeqCst);
+            });
+            let _ = done_tx.send(());
+        });
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while after.load(Ordering::SeqCst) == 0 && std::time::Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            after.load(Ordering::SeqCst) > 0,
+            "the retired loop must release the sampling lock so a fresh loop can run",
+        );
+        stop_sampling();
+        let _ = done_rx.recv_timeout(Duration::from_secs(10));
+        let _ = fresh.join();
+    }
+
+    #[test]
+    fn local_usage_reports_process_activity() {
+        let _g = serial();
+        let (stop, workers) = busy_workers(2);
+        let _ = local_usage();
+        thread::sleep(Duration::from_millis(400));
+        let (app_cpu, app_mem_mb, used_mb, total_mb) = local_usage();
+        stop_workers(&stop, workers);
+        assert!(
+            app_cpu > 0.0,
+            "a busy process must report nonzero cpu usage, got {app_cpu}"
+        );
+        assert!(app_mem_mb > 0.0, "app memory must be reported, got {app_mem_mb}");
+        assert!(
+            used_mb > 0.0 && total_mb > 0.0,
+            "system memory must be reported, got {used_mb}/{total_mb}"
+        );
+    }
+
+    #[test]
+    fn system_counters_report_load_on_this_machine() {
+        let _g = serial();
+        let (stop, workers) = busy_workers(3);
+        thread::sleep(Duration::from_millis(800));
+        let (system_cpu, _gpu) = sample_counters(true);
+        stop_workers(&stop, workers);
+        assert!(
+            system_cpu > 0.0,
+            "expected a nonzero system cpu reading from powershell counters, got {system_cpu}"
+        );
     }
 
     #[test]

@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::os::windows::process::CommandExt;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
@@ -709,26 +709,31 @@ pub fn create(
     let _spawn_guard = begin_spawn(id);
     let cwd = normalize_cwd(cwd);
 
-    let mut map = SESSIONS.write().unwrap();
-    if let Some(existing) = map.get(id) {
-        let matches = existing.cwd.as_deref() == cwd
-            && existing.shell.as_deref() == shell;
-        if !existing.shared.attached.load(Ordering::Relaxed) && matches {
-            existing.shared.attached.store(true, Ordering::Relaxed);
-            let replay = take_buffer(&existing.shared);
-            let _ = existing.master.lock().unwrap().resize(PtySize {
-                rows: rows.unwrap_or(24),
-                cols: cols.unwrap_or(80),
-                pixel_width: 0,
-                pixel_height: 0,
-            });
-            return json!({ "pid": existing.pid, "success": true, "replay": replay });
+    let victim = {
+        let mut map = SESSIONS.write().unwrap();
+        match map.get(id) {
+            Some(existing)
+                if existing.cwd.as_deref() == cwd
+                    && existing.shell.as_deref() == shell
+                    && !existing.shared.attached.load(Ordering::Relaxed) =>
+            {
+                existing.shared.attached.store(true, Ordering::Relaxed);
+                let replay = take_buffer(&existing.shared);
+                let _ = existing.master.lock().unwrap().resize(PtySize {
+                    rows: rows.unwrap_or(24),
+                    cols: cols.unwrap_or(80),
+                    pixel_width: 0,
+                    pixel_height: 0,
+                });
+                return json!({ "pid": existing.pid, "success": true, "replay": replay });
+            }
+            Some(_) => map.remove(id),
+            None => None,
         }
-
-        let victim = map.remove(id).unwrap();
-        let _ = victim.child.lock().unwrap().kill();
+    };
+    if let Some(victim) = victim {
+        terminate(&victim);
     }
-    drop(map);
 
     match spawn_inner(Some(app), id, cwd, shell, cols, rows, true) {
         Ok(pid) => json!({ "pid": pid, "success": true, "replay": Value::Null }),
@@ -836,10 +841,31 @@ pub fn resize(id: &str, cols: u16, rows: u16) {
 pub fn kill(id: &str) -> Value {
     let victim = SESSIONS.write().unwrap().remove(id);
     if let Some(session) = victim {
-        let _ = session.child.lock().unwrap().kill();
+        terminate(&session);
     }
     crate::hooks::remove_pane(id);
     json!({ "success": true })
+}
+
+fn terminate(session: &Session) {
+    let alive = matches!(session.child.lock().unwrap().try_wait(), Ok(None));
+    if alive {
+        kill_process_tree(session.pid);
+    }
+    let _ = session.child.lock().unwrap().kill();
+}
+
+fn kill_process_tree(pid: u32) {
+    if pid == 0 {
+        return;
+    }
+    let _ = Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .creation_flags(0x08000000)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
 }
 
 pub fn session_exists(id: &str) -> bool {
@@ -1265,5 +1291,126 @@ mod tests {
              (completed={completed}), slowest single write {max_ms}ms — any \
              multi-second write on the main thread is a user-visible freeze",
         );
+    }
+
+    fn child_pids_of(parent: u32) -> Vec<(u32, String)> {
+        let mut sys = sysinfo::System::new();
+        sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        sys.processes()
+            .iter()
+            .filter(|(_, p)| p.parent().map(|pp| pp.as_u32()) == Some(parent))
+            .map(|(pid, p)| (pid.as_u32(), p.name().to_string_lossy().into_owned()))
+            .collect()
+    }
+
+    fn pid_alive(pid: u32) -> bool {
+        let mut sys = sysinfo::System::new();
+        let target = sysinfo::Pid::from_u32(pid);
+        sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[target]), true);
+        sys.process(target).is_some()
+    }
+
+    fn wait_for_child_named(parent: u32, needle: &str, timeout: Duration) -> Option<u32> {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if let Some((pid, _)) = child_pids_of(parent)
+                .into_iter()
+                .find(|(_, name)| name.to_lowercase().contains(needle))
+            {
+                return Some(pid);
+            }
+            if std::time::Instant::now() >= deadline {
+                return None;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    fn wait_until_gone(pid: u32, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if !pid_alive(pid) {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    struct TreeGuard(u32);
+
+    impl Drop for TreeGuard {
+        fn drop(&mut self) {
+            kill_process_tree(self.0);
+        }
+    }
+
+    #[test]
+    fn tree_kill_terminates_grandchildren() {
+        let mut parent = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Start-Process -NoNewWindow -FilePath powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 120'; Start-Sleep -Seconds 120",
+            ])
+            .creation_flags(0x08000000)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn parent powershell");
+        let root = parent.id();
+        let _guard = TreeGuard(root);
+
+        let grandchild = wait_for_child_named(root, "powershell", Duration::from_secs(15))
+            .expect("grandchild powershell never appeared under the parent");
+        assert!(pid_alive(grandchild), "grandchild must be running before the kill");
+
+        kill_process_tree(root);
+
+        assert!(
+            wait_until_gone(grandchild, Duration::from_secs(5)),
+            "grandchild {grandchild} survived kill_process_tree({root}) — a pane kill that \
+             leaves detached descendants alive also leaves their console host alive, which \
+             keeps the ConPTY output pipe open and parks the session reader forever",
+        );
+        assert!(
+            wait_until_gone(root, Duration::from_secs(5)),
+            "root {root} survived kill_process_tree",
+        );
+        let _ = parent.wait();
+    }
+
+    #[test]
+    fn terminate_after_child_exit_is_harmless() {
+        let id = format!("test-terminate-dead-{}", std::process::id());
+        spawn_inner(None, &id, None, Some("cmd"), None, None, true).expect("spawn cmd");
+        thread::sleep(Duration::from_millis(500));
+        let session = SESSIONS
+            .read()
+            .unwrap()
+            .get(&id)
+            .cloned()
+            .expect("session registered");
+        let shell_pid = session.pid;
+
+        write(&id, "exit\r");
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let mut exited = false;
+        while std::time::Instant::now() < deadline {
+            if matches!(session.child.lock().unwrap().try_wait(), Ok(Some(_))) {
+                exited = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert!(exited, "cmd should have exited on 'exit'");
+
+        terminate(&session);
+        assert!(wait_until_gone(shell_pid, Duration::from_secs(2)), "shell {shell_pid} should be gone");
+        let _ = kill(&id);
     }
 }
