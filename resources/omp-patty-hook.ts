@@ -45,9 +45,11 @@ export default function PattyNotifier(pi: OmpExtensionApi): void {
     try {
       const child = spawn(
         'curl',
-        ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '-d', hookBody(event)],
-        { detached: true, stdio: 'ignore' }
+        ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '--data-binary', '@-'],
+        { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'pipe'] }
       )
+      child.stdin?.write(hookBody(event))
+      child.stdin?.end()
       child.on('error', () => {})
       child.unref()
     } catch {

@@ -1,13 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="grad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#818cf8"/>
-      <stop offset="100%" stop-color="#4f46e5"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="#121217"/>
-  <text x="115" y="340" fill="url(#grad)"
-    font-family="Inter, -apple-system, system-ui, sans-serif"
-    font-size="300" font-weight="700">P</text>
-  <rect x="275" y="340" width="110" height="24" rx="8" fill="url(#grad)"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64"><title>Patty</title><rect x="1" y="1" width="62" height="62" rx="14" fill="#6366f1"/><g transform="translate(4 4) scale(1.166666667)"><g fill="#f7f7fc">
+    <rect x="4" y="6" width="8" height="36" rx="2"/>
+    <path d="M22 8 38.2 22a2.65 2.65 0 0 1 0 4L22 40l-5-5.8L28.8 24 17 13.8Z"/>
+    <rect x="31" y="37" width="13" height="5" rx="1.5"/>
+  </g></g></svg>

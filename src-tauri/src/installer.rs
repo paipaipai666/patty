@@ -95,7 +95,7 @@ pub fn ensure_hook_script_exists() -> PathBuf {
 fn cmd_hook(matcher: &str, command: String) -> Value {
     json!({
         "matcher": matcher,
-        "hooks": [{ "type": "command", "command": command }]
+        "hooks": [{ "type": "command", "command": command, "timeoutSec": 5 }]
     })
 }
 
@@ -586,6 +586,36 @@ mod tests {
         assert!(cmd.contains("-Source \"copilot-cli\""));
         assert!(cmd.contains("-EventType session_start"));
         assert_eq!(doc["hooks"]["sessionStart"][0]["timeoutSec"], 5);
+    }
+
+    #[test]
+    fn claude_hooks_carry_a_timeout_so_a_hung_hook_cannot_block_the_cli() {
+        let mut settings = json!({});
+        apply_claude_hooks(&mut settings, "X/patty-hook.ps1");
+        for key in ["Notification", "Stop", "StopFailure", "SessionStart", "SessionEnd", "PreToolUse", "PostToolUse", "UserPromptSubmit"] {
+            let entry = &settings["hooks"][key][0]["hooks"][0];
+            assert_eq!(entry["timeoutSec"], 5, "{key} is missing a timeout");
+        }
+    }
+
+    #[test]
+    fn codex_hooks_carry_a_timeout_so_a_hung_hook_cannot_block_the_cli() {
+        let mut settings = json!({});
+        apply_codex_hooks(&mut settings, "X/patty-hook.ps1");
+        for key in ["SessionStart", "PermissionRequest", "Stop", "PreToolUse", "PostToolUse", "UserPromptSubmit"] {
+            let entry = &settings["hooks"][key][0]["hooks"][0];
+            assert_eq!(entry["timeoutSec"], 5, "{key} is missing a timeout");
+        }
+    }
+
+    #[test]
+    fn qwen_hooks_carry_a_timeout_so_a_hung_hook_cannot_block_the_cli() {
+        let mut settings = json!({});
+        apply_qwen_hooks(&mut settings, "X/patty-hook.ps1");
+        for key in ["SessionStart", "SessionEnd", "Notification", "PermissionRequest", "Stop", "StopFailure", "PreToolUse", "PostToolUse", "UserPromptSubmit"] {
+            let entry = &settings["hooks"][key][0]["hooks"][0];
+            assert_eq!(entry["timeoutSec"], 5, "{key} is missing a timeout");
+        }
     }
 
     #[test]

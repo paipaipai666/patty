@@ -17,9 +17,6 @@
         background: var(--patty-boot-bg, #0a0a0c);
       }
 
-      /* Boot splash: renders from raw HTML before the JS bundle loads, so the
-         WebView2 init + bundle parse window shows a branded transition instead
-         of an empty window. Removed by App.tsx after first paint. */
       #patty-splash {
         position: fixed;
         inset: 0;
@@ -35,13 +32,6 @@
       #patty-splash.patty-splash-hide {
         opacity: 0;
         pointer-events: none;
-      }
-      /* Terminal-prompt mark: frame draws in, chevron + cursor fade up,
-         cursor blinks once settled. Accent matches Patty's brand indigo. */
-      #patty-splash .frame {
-        stroke-dasharray: 170;
-        stroke-dashoffset: 170;
-        animation: patty-frame 0.7s ease-out 0.05s forwards;
       }
       #patty-splash .prompt,
       #patty-splash .cursor {
@@ -78,11 +68,6 @@
         background: linear-gradient(90deg, transparent, #6366f1, transparent);
         animation: patty-sweep 1.15s ease-in-out 0.3s infinite;
       }
-      @keyframes patty-frame {
-        to {
-          stroke-dashoffset: 0;
-        }
-      }
       @keyframes patty-rise {
         to {
           opacity: 1;
@@ -111,10 +96,6 @@
         #patty-splash {
           transition: none;
         }
-        #patty-splash .frame {
-          stroke-dashoffset: 0;
-          animation: none;
-        }
         #patty-splash .prompt,
         #patty-splash .cursor,
         #patty-splash .word {
@@ -133,10 +114,10 @@
   <body>
     <div id="root"></div>
     <div id="patty-splash" aria-hidden="true">
-      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-        <rect class="frame" x="3" y="3" width="46" height="46" rx="12" stroke="#6366f1" stroke-width="2.5" />
-        <path class="prompt" d="M16 20 L24 26 L16 32" stroke="#6366f1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-        <line class="cursor" x1="28" y1="33" x2="36" y2="33" stroke="#6366f1" stroke-width="3" stroke-linecap="round" />
+      <svg width="52" height="52" viewBox="0 0 48 48" fill="#6366f1">
+        <rect class="prompt" x="4" y="6" width="8" height="36" rx="2" />
+        <path class="prompt" d="M22 8 38.2 22a2.65 2.65 0 0 1 0 4L22 40l-5-5.8L28.8 24 17 13.8Z" />
+        <rect class="cursor" x="31" y="37" width="13" height="5" rx="1.5" />
       </svg>
       <div class="word">Patty</div>
       <div class="bar"><i></i></div>

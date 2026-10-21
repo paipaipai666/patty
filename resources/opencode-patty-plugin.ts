@@ -1,6 +1,6 @@
 
 import { spawn } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, existsSync, renameSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -29,8 +29,14 @@ interface PluginContext {
 const active = () => Boolean(process.env.PATTY_PORT && process.env.PATTY_PANE_ID)
 
 const LOG_FILE = join(tmpdir(), 'patty-opencode-hook.log')
+const LOG_MAX_BYTES = 5 * 1024 * 1024
+
 const log = (msg: string) => {
+  if (!process.env.PATTY_DEBUG) return
   try {
+    if (existsSync(LOG_FILE) && statSync(LOG_FILE).size > LOG_MAX_BYTES) {
+      renameSync(LOG_FILE, `${LOG_FILE}.1`)
+    }
     appendFileSync(LOG_FILE, `${new Date().toISOString()} [pid ${process.pid}] [pane ${process.env.PATTY_PANE_ID}] ${msg}\n`)
   } catch {
 
@@ -90,9 +96,11 @@ const notifyPattyDetached = (event: string, role: SessionRole = 'main') => {
   try {
     const child = spawn(
       'curl',
-      ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${process.env.PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '-d', hookBody(event, role)],
-      { detached: true, stdio: 'ignore' }
+      ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${process.env.PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '--data-binary', '@-'],
+      { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'pipe'] }
     )
+    child.stdin?.write(hookBody(event, role))
+    child.stdin?.end()
     child.on('error', () => {})
     child.unref()
   } catch {

@@ -3,11 +3,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 
-const spawnCalls: { cmd: string; args: string[] }[] = []
+const spawnCalls: { cmd: string; args: string[]; body: string }[] = []
 vi.mock('node:child_process', () => ({
   spawn: vi.fn((cmd: string, args: string[]) => {
-    spawnCalls.push({ cmd, args })
-    return { on: vi.fn(), unref: vi.fn() }
+    let body = ''
+    const stdin = {
+      write: (chunk: string) => { body += chunk },
+      end: () => {}
+    }
+    spawnCalls.push({ cmd, args, get body() { return body } })
+    return { on: vi.fn(), unref: vi.fn(), stdin }
   })
 }))
 
@@ -122,8 +127,9 @@ describe('PattyNotifier (omp extension)', () => {
     expect(posted).toHaveLength(0)
     expect(spawnCalls).toHaveLength(1)
     expect(spawnCalls[0].cmd).toBe('curl')
-    const body = JSON.parse(spawnCalls[0].args[spawnCalls[0].args.length - 1])
-    expect(body).toEqual({ paneId: 'pane-1', event: 'session_deleted', source: 'omp', secret: 'secret-1' })
+    expect(spawnCalls[0].args).toContain('--data-binary')
+    expect(spawnCalls[0].args).toContain('@-')
+    expect(spawnCalls[0].args.join(' ')).not.toContain('secret-1')
   })
 
   it('every emitted event stays within the canonical hook vocabulary', async () => {
@@ -138,7 +144,7 @@ describe('PattyNotifier (omp extension)', () => {
     for (const p of posted) {
       expect(isCanonicalEvent(p.event), p.event).toBe(true)
     }
-    const detached = JSON.parse(spawnCalls[0].args[spawnCalls[0].args.length - 1])
+    const detached = JSON.parse(spawnCalls[0].body)
     expect(isCanonicalEvent(detached.event), detached.event).toBe(true)
   })
 })

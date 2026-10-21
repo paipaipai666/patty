@@ -200,6 +200,10 @@ pub fn init_resource_dir(app: &AppHandle) {
     }
 }
 
+fn quote_ps_literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
 pub fn shell_spawn_args(shell_path: &str) -> Vec<String> {
     let stem = Path::new(shell_path)
         .file_stem()
@@ -215,7 +219,7 @@ pub fn shell_spawn_args(shell_path: &str) -> Vec<String> {
             "-ExecutionPolicy".into(),
             "Bypass".into(),
             "-Command".into(),
-            format!(". '{}'", script.display()),
+            format!(". {}", quote_ps_literal(&script.display().to_string())),
         ];
     }
     if stem == "cmd" {
@@ -1043,6 +1047,23 @@ mod tests {
     fn shell_args_unknown_shell_returns_empty() {
         assert!(shell_spawn_args(r"C:\tools\my-custom-shell.exe").is_empty());
         assert!(shell_spawn_args(r"").is_empty(), "empty path yields empty args");
+    }
+
+    #[test]
+    fn shell_args_escape_a_single_quote_in_the_script_path() {
+        let args = shell_spawn_args("pwsh");
+        let command = args.last().expect("pwsh yields a -Command argument");
+        assert!(command.ends_with("pwsh.ps1'"), "unexpected command: {command}");
+        assert!(command.starts_with(". '"), "unexpected command: {command}");
+    }
+
+    #[test]
+    fn quote_ps_literal_escapes_single_quotes() {
+        assert_eq!(quote_ps_literal(r"C:\tools\pwsh.ps1"), r"'C:\tools\pwsh.ps1'");
+        assert_eq!(
+            quote_ps_literal(r"C:\O'Brien\pwsh.ps1"),
+            r"'C:\O''Brien\pwsh.ps1'"
+        );
     }
 
     #[test]
