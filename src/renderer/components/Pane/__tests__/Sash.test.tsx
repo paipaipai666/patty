@@ -44,6 +44,24 @@ function renderSash(direction: 'horizontal' | 'vertical' = 'horizontal') {
 }
 
 describe('Sash', () => {
+  it('allows keyboard users to resize a pane without dragging', () => {
+    const { container } = renderSash('horizontal')
+    const sash = container.querySelector<HTMLElement>('[role="separator"]')!
+    sash.parentElement!.getBoundingClientRect = () => new DOMRect(0, 0, 500, 400)
+    expect(sash.tabIndex).toBe(0)
+    expect(sash.getAttribute('aria-valuenow')).toBe('50')
+    act(() => { sash.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })
+    expect(useWorkspaceStore.getState().setSplitRatio).toHaveBeenCalledWith('s1', 0.52)
+  })
+
+  it('keeps a minimum pane width when Home is pressed', () => {
+    const { container } = renderSash('horizontal')
+    const sash = container.querySelector<HTMLElement>('[role="separator"]')!
+    sash.parentElement!.getBoundingClientRect = () => new DOMRect(0, 0, 300, 400)
+    act(() => { sash.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })) })
+    expect(useWorkspaceStore.getState().setSplitRatio).toHaveBeenCalledWith('s1', 80 / 300)
+  })
+
   it('renders a sash div with role separator', () => {
     const { container } = renderSash()
     const sash = container.querySelector('[role="separator"]')

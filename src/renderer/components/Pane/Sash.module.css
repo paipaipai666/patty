@@ -2,48 +2,52 @@
   flex: 0 0 6px;
   position: relative;
   z-index: 2;
-  background: transparent;
+  touch-action: none;
 }
-
 .sash::before {
   content: '';
   position: absolute;
-  inset: 0;
   background: var(--border-subtle);
   transition: background var(--transition-fast);
 }
-
-.sash:hover::before,
-.sashDragging::before {
-  background: var(--accent);
-}
-
 .sashHorizontal {
   cursor: col-resize;
 }
-.sashHorizontal::after {
-  content: '';
-  position: absolute;
+.sashHorizontal::before {
   top: 0;
   bottom: 0;
-  left: -4px;
-  right: -4px;
+  left: 2px;
+  width: 1px;
 }
-
 .sashVertical {
   cursor: row-resize;
 }
-.sashVertical::after {
-  content: '';
-  position: absolute;
+.sashVertical::before {
   left: 0;
   right: 0;
-  top: -4px;
-  bottom: -4px;
+  top: 2px;
+  height: 1px;
 }
-
+.sash::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+}
+.sash:hover::before,
+.sashDragging::before,
+.sash:focus-visible::before {
+  background: var(--focus-ring);
+}
+.sash:focus-visible {
+  outline-offset: -1px;
+}
 @media (prefers-reduced-motion: reduce) {
   .sash::before {
     transition: none;
+  }
+}
+@media (forced-colors: active) {
+  .sash::before {
+    background: CanvasText;
   }
 }

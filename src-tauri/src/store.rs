@@ -64,7 +64,7 @@ pub fn default_state() -> Value {
         "collections": [],
         "activeSessionId": null,
         "sidebarVisible": true,
-        "sidebarWidth": 220,
+        "sidebarWidth": 264,
         "workspaces": [],
         "activeWorkspaceId": null
     })
@@ -360,7 +360,7 @@ mod tests {
     fn default_state_shape() {
         let s = default_state();
         assert_eq!(s["sessions"], json!([]));
-        assert_eq!(s["sidebarWidth"], 220);
+        assert_eq!(s["sidebarWidth"], 264);
         assert!(s["activeSessionId"].is_null());
         assert!(s["sidebarVisible"].as_bool().unwrap());
     }
@@ -434,6 +434,12 @@ mod tests {
         let merged = merge_state(&parsed, &default_state());
         assert_eq!(merged["extraField"], "hello");
         assert_eq!(merged["sessions"], json!([]));
+    }
+
+    #[test]
+    fn merge_state_preserves_saved_sidebar_width() {
+        let merged = merge_state(&json!({"sidebarWidth": 220}), &default_state());
+        assert_eq!(merged["sidebarWidth"], 220);
     }
 
     #[test]

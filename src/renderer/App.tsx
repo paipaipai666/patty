@@ -396,7 +396,7 @@ export default function App() {
 
   return (
     <div className={styles.app}>
-      <TitleBar onOpenSettings={openSettings} sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
+      <TitleBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         <div ref={sidebarWrapperRef} className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
           <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
@@ -409,7 +409,7 @@ export default function App() {
           const activeId = useSessionStore.getState().activeSessionId
           if (activeId) handleContextMenu(e, activeId)
         }}>
-          <TerminalArea />
+          <TerminalArea onNewTerminal={handleNewTerminal} />
           <CommandBar />
           <StatusBar
             metricsOpen={metricsOpen}

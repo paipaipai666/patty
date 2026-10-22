@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "node e2e/smoke.test.mjs",
+    "test:e2e:graphite": "node e2e/graphite.test.mjs",
     "benchmark:startup": "node scripts/benchmark-startup.mjs",
     "typecheck": "tsc -b --noEmit",
     "check:comments": "node scripts/no-comments.mjs --check",
@@ -22,6 +23,7 @@
     "version": "node scripts/sync-version.mjs"
   },
   "dependencies": {
+    "@fluentui/react-icons": "^2.0.344",
     "@tauri-apps/api": "^2.11.1",
     "@xterm/addon-canvas": "^0.7.0",
     "@xterm/addon-fit": "^0.10.0",

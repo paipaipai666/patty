@@ -2,7 +2,7 @@
    
 import { launchApp, waitForProcessDeath } from './harness.mjs'
 
-const SESSION_TAB = '[aria-label="Terminal sessions"] [role="tab"]'
+const SESSION_TAB = '[aria-label="Terminal sessions"] [role="treeitem"][aria-selected]'
 const NEW_BTN = 'button[aria-label="New terminal or collection"]'
 
 async function main() {

@@ -84,7 +84,7 @@ describe('init', () => {
     expect(state.settings.theme).toBe('dark')
     expect(localStorage.setItem).toHaveBeenCalledWith('patty-theme', 'dark')
 
-    expect(localStorage.setItem).toHaveBeenCalledWith('patty-boot-bg', '#0a0a0c')
+    expect(localStorage.setItem).toHaveBeenCalledWith('patty-boot-bg', '#141517')
     expect(mockSetProperty).toHaveBeenCalled()
   })
 
@@ -109,7 +109,7 @@ describe('updateSetting', () => {
     expect(mockSetProperty).toHaveBeenCalled()
 
     expect(localStorage.setItem).toHaveBeenCalledWith('patty-theme', 'light')
-    expect(localStorage.setItem).toHaveBeenCalledWith('patty-boot-bg', '#f6f7f9')
+    expect(localStorage.setItem).toHaveBeenCalledWith('patty-boot-bg', '#eef0f3')
   })
 
   it('applies theme when customThemes changes', async () => {
@@ -148,7 +148,7 @@ describe('updateSetting', () => {
     expect(themeWrites.at(-1)?.[1]).toBe('dark')
 
     const bgWrites = mockSetProperty.mock.calls.filter((c) => c[0] === '--bg-app')
-    expect(bgWrites.at(-1)?.[1]).toBe('#0a0a0c')
+    expect(bgWrites.at(-1)?.[1]).toBe('#141517')
   })
 })
 

@@ -8,7 +8,9 @@
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   width: 100%;
   overflow: hidden;
@@ -16,7 +18,8 @@ html, body, #root {
 
 body {
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--text-primary);
   background: var(--bg-app);
   -webkit-font-smoothing: antialiased;
@@ -25,23 +28,11 @@ body {
   position: relative;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 60% 45% at 15% 20%, var(--accent-glow-light) 0%, transparent 60%),
-    radial-gradient(ellipse 45% 55% at 85% 80%, var(--cyan-glow) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
 #root {
   position: relative;
   z-index: 1;
 }
 
-                     
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -61,20 +52,17 @@ body::before {
   background: var(--accent);
 }
 
-                             
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
-                       
 button {
   border: none;
   background: none;
   color: inherit;
   font: inherit;
   cursor: pointer;
-  outline: none;
 }
 
 input {
@@ -82,10 +70,8 @@ input {
   background: none;
   color: inherit;
   font: inherit;
-  outline: none;
 }
 
-                      
 .xterm {
   padding: 8px;
 }
@@ -99,13 +85,34 @@ input {
   border-radius: 2px;
 }
 
-
-   
-
-                  
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+:where(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.xterm-helper-textarea:focus-visible {
+  outline: none;
+}
+input,
+textarea {
+  user-select: text;
+}
+button:disabled {
+  cursor: default;
+}
+@media (forced-colors: active) {
+  :where(button, input, select, textarea, [tabindex]):focus-visible {
+    outline-color: Highlight;
+  }
+  button {
+    border-color: ButtonText;
   }
 }

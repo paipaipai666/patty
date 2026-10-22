@@ -1,90 +1,113 @@
 .paneView {
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   background: var(--bg-terminal);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
   overflow: hidden;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
-
 .paneViewFocused {
-  border-color: var(--accent-alpha);
-  box-shadow: 0 0 0 1px var(--accent-alpha), 0 0 18px var(--accent-glow-soft);
+  border-color: var(--focus-ring);
+  outline: 1px solid var(--focus-ring);
+  outline-offset: -1px;
 }
-
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  flex-shrink: 0;
+  padding: 0 10px 0 12px;
+  background: var(--bg-titlebar);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+.paneViewFocused .header {
+  color: var(--text-primary);
+}
+.sessionIcon {
+  display: flex;
+  align-items: center;
+  color: var(--color-blue);
+  flex-shrink: 0;
+}
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cwd {
+  flex: 1;
+  min-width: 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-left: auto;
+}
+.action {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+.action:hover {
+  background: var(--bg-item-hover);
+  color: var(--text-primary);
+}
+.close:hover {
+  color: var(--red);
+  background: var(--bg-error);
+}
 .paneContent {
   flex: 1 1 auto;
   position: relative;
   min-width: 0;
   min-height: 0;
 }
-
 .panePlaceholder {
-  position: absolute;
-  inset: 0;
   display: flex;
+  height: 100%;
   align-items: center;
   justify-content: center;
-  font-family: 'Cascadia Code', Consolas, monospace;
-  font-size: 13px;
   color: var(--text-muted);
-  opacity: 0.6;
+  font-size: 13px;
 }
-
-
-                                                                
 .dropHint {
   position: absolute;
   inset: 0;
   z-index: 4;
   pointer-events: none;
-  border: 1.5px dashed var(--accent);
+  border: 1px dashed var(--accent);
   border-radius: 4px;
-  opacity: 0.3;
 }
-.dropHint::before,
-.dropHint::after {
-  content: '';
-  position: absolute;
-  background: var(--accent);
-  opacity: 0.5;
-}
-.dropHint::before {
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-}
-.dropHint::after {
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 1px;
-}
-
-                                                                            
-.paneView {
-  animation: paneIn 140ms var(--ease-out);
-}
-@keyframes paneIn {
-  from {
-    opacity: 0;
-    transform: scale(0.985);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
+@container (max-width: 420px) {
+  .cwd {
+    display: none;
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .paneView {
-    transition: none;
-    animation: none;
+@media (forced-colors: active) {
+  .paneViewFocused {
+    border-color: Highlight;
+    outline-color: Highlight;
   }
 }

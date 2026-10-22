@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { useSessionStore } from '../../store/sessionStore'
 import { useWorkspaceStore, getFocusedSessionId } from '../../store/workspaceStore'
 import styles from './CommandBar.module.css'
@@ -38,6 +38,7 @@ export function CommandBar() {
   const session = useSessionStore((s) => s.sessions.find((x) => x.id === sessionId))
 
   const [value, setValue] = useState('')
+  const composing = useRef(false)
 
   const [histIdx, setHistIdx] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
@@ -56,6 +57,7 @@ export function CommandBar() {
   if (!session || session.shell !== 'ssh') return null
 
   const send = () => {
+    if (composing.current) return
     const cmd = value.replace(/[\r\n]+/g, ' ').trim()
     if (!cmd) return
 
@@ -68,6 +70,7 @@ export function CommandBar() {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (composing.current || e.nativeEvent.isComposing) return
     const history = loadHistory()
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -136,6 +139,8 @@ export function CommandBar() {
             setValue(e.target.value)
             setHistIdx(null)
           }}
+          onCompositionStart={() => { composing.current = true }}
+          onCompositionEnd={() => { composing.current = false }}
           onKeyDown={handleKeyDown}
         />
         {ghost && (

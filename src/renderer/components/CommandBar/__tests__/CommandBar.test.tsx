@@ -82,6 +82,34 @@ function keydown(input: HTMLInputElement, key: string) {
 }
 
 describe('CommandBar', () => {
+  it('does not send or navigate history during IME composition', () => {
+    localStorage.setItem('patty-cmd-history', JSON.stringify(['previous']))
+    const { container } = render()
+    const input = inputOf(container)
+    typeValue(input, '中文命令')
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }))
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', isComposing: true, bubbles: true }))
+    })
+    expect(mockWrite).not.toHaveBeenCalled()
+    expect(input.value).toBe('中文命令')
+    keydown(input, 'Enter')
+    expect(mockWrite).toHaveBeenCalledWith('s1', '中文命令\r')
+  })
+
+  it('keeps the draft between compositionstart and compositionend', () => {
+    const { container } = render()
+    const input = inputOf(container)
+    typeValue(input, '正在选词')
+    act(() => { input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })) })
+    keydown(input, 'Enter')
+    expect(mockWrite).not.toHaveBeenCalled()
+    expect(input.value).toBe('正在选词')
+    act(() => { input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '正在选词' })) })
+    keydown(input, 'Enter')
+    expect(mockWrite).toHaveBeenCalledWith('s1', '正在选词\r')
+  })
+
   it('renders the input when the focused session is ssh', () => {
     const { container } = render()
     expect(inputOf(container)).not.toBeNull()

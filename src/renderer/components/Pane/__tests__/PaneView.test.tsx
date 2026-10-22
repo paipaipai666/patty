@@ -125,14 +125,14 @@ describe('PaneView', () => {
   it('shows drop hint when another session is being dragged', () => {
     useSessionStore.getState().draggingSessionId = 's2'
     const { container } = renderPaneView()
-    const hint = container.querySelector('[aria-hidden]')
+    const hint = container.querySelector('[data-testid="pane-drop-hint"]')
     expect(hint).not.toBeNull()
   })
 
   it('does not show drop hint when dragging own session', () => {
     useSessionStore.getState().draggingSessionId = 's1'
     const { container } = renderPaneView()
-    const hint = container.querySelector('[aria-hidden]')
+    const hint = container.querySelector('[data-testid="pane-drop-hint"]')
     expect(hint).toBeNull()
   })
 

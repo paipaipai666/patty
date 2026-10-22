@@ -1,3 +1,8 @@
+import {
+  useWorkspaceStore,
+  getFocusedSessionId
+} from '../../store/workspaceStore'
+import { useSessionStore } from '../../store/sessionStore'
 import { useState, useEffect } from 'react'
 import styles from './TitleBar.module.css'
 
@@ -12,7 +17,16 @@ function MinimizeIcon() {
 function MaximizeIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14">
-      <rect x="1" y="1" width="12" height="12" rx="2" stroke="currentColor" fill="none" strokeWidth="1.4" />
+      <rect
+        x="1"
+        y="1"
+        width="12"
+        height="12"
+        rx="2"
+        stroke="currentColor"
+        fill="none"
+        strokeWidth="1.4"
+      />
     </svg>
   )
 }
@@ -20,9 +34,36 @@ function MaximizeIcon() {
 function RestoreIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14">
-      <rect x="3" y="0.5" width="10" height="10" rx="2" stroke="currentColor" fill="none" strokeWidth="1.4" />
-      <rect x="0.5" y="3.5" width="10" height="10" rx="2" stroke="currentColor" fill="var(--bg-titlebar)" strokeWidth="1.4" />
-      <rect x="0.5" y="3.5" width="10" height="10" rx="2" stroke="currentColor" fill="none" strokeWidth="1.4" />
+      <rect
+        x="3"
+        y="0.5"
+        width="10"
+        height="10"
+        rx="2"
+        stroke="currentColor"
+        fill="none"
+        strokeWidth="1.4"
+      />
+      <rect
+        x="0.5"
+        y="3.5"
+        width="10"
+        height="10"
+        rx="2"
+        stroke="currentColor"
+        fill="var(--bg-titlebar)"
+        strokeWidth="1.4"
+      />
+      <rect
+        x="0.5"
+        y="3.5"
+        width="10"
+        height="10"
+        rx="2"
+        stroke="currentColor"
+        fill="none"
+        strokeWidth="1.4"
+      />
     </svg>
   )
 }
@@ -30,7 +71,12 @@ function RestoreIcon() {
 function CloseIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14">
-      <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path
+        d="M1 1L13 13M13 1L1 13"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }
@@ -53,15 +99,47 @@ function SidebarIcon({ open }: { open: boolean }) {
   if (open) {
     return (
       <svg width="18" height="18" viewBox="0 0 18 18">
-        <rect x="1.5" y="2" width="15" height="14" rx="2" stroke="currentColor" fill="none" strokeWidth="1.4" />
-        <line x1="6.5" y1="2" x2="6.5" y2="16" stroke="currentColor" strokeWidth="1.4" />
+        <rect
+          x="1.5"
+          y="2"
+          width="15"
+          height="14"
+          rx="2"
+          stroke="currentColor"
+          fill="none"
+          strokeWidth="1.4"
+        />
+        <line
+          x1="6.5"
+          y1="2"
+          x2="6.5"
+          y2="16"
+          stroke="currentColor"
+          strokeWidth="1.4"
+        />
       </svg>
     )
   }
   return (
     <svg width="18" height="18" viewBox="0 0 18 18">
-      <rect x="1.5" y="2" width="15" height="14" rx="2" stroke="currentColor" fill="none" strokeWidth="1.4" />
-      <line x1="11.5" y1="2" x2="11.5" y2="16" stroke="currentColor" strokeWidth="1.4" />
+      <rect
+        x="1.5"
+        y="2"
+        width="15"
+        height="14"
+        rx="2"
+        stroke="currentColor"
+        fill="none"
+        strokeWidth="1.4"
+      />
+      <line
+        x1="11.5"
+        y1="2"
+        x2="11.5"
+        y2="16"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
     </svg>
   )
 }
@@ -72,17 +150,27 @@ interface TitleBarProps {
   onToggleSidebar: () => void
 }
 
-export function TitleBar({ onOpenSettings, sidebarVisible, onToggleSidebar }: TitleBarProps) {
+export function TitleBar({
+  onOpenSettings,
+  sidebarVisible,
+  onToggleSidebar
+}: TitleBarProps) {
   const [maximized, setMaximized] = useState(false)
+  const workspaces = useWorkspaceStore((state) => state.workspaces)
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId
+  )
 
   useEffect(() => {
-    const cleanup = window.terminalAPI.onMaximizeChange((val) => setMaximized(val))
+    const cleanup = window.terminalAPI.onMaximizeChange((val) =>
+      setMaximized(val)
+    )
     return cleanup
   }, [])
 
   return (
     <div className={styles.titlebar}>
-      <div className={styles.dragRegion}>
+      <div className={styles.dragRegion} data-tauri-drag-region="deep">
         <button
           type="button"
           onClick={onToggleSidebar}
@@ -93,7 +181,29 @@ export function TitleBar({ onOpenSettings, sidebarVisible, onToggleSidebar }: Ti
         >
           <SidebarIcon open={sidebarVisible} />
         </button>
+        <img className={styles.logo} src="icon.ico" alt="" />
         <span className={styles.title}>Patty</span>
+        {workspaces.length > 0 && (
+          <div className={styles.workspaceContext}>
+            <span>Workspaces</span>
+            <select
+              className={styles.workspaceSelect}
+              aria-label="Switch workspace"
+              value={activeWorkspaceId ?? ''}
+              onChange={(event) => {
+                useWorkspaceStore.getState().switchWorkspace(event.target.value)
+                const focused = getFocusedSessionId()
+                if (focused) useSessionStore.getState().setActive(focused)
+              }}
+            >
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
       <div className={styles.controls}>
         {onOpenSettings && (

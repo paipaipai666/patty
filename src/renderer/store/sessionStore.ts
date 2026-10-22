@@ -100,7 +100,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   collections: [],
   activeSessionId: null,
   sidebarVisible: true,
-  sidebarWidth: 220,
+  sidebarWidth: 264,
   sidebarTransitioning: false,
   loaded: false,
   attentionMap: {},

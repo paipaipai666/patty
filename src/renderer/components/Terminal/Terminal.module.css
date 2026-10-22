@@ -1,112 +1,67 @@
 .area {
   flex: 1;
+  min-height: 0;
   position: relative;
-  margin: var(--space-2);
-  border-radius: var(--radius-lg);
+  padding: 6px 6px 6px 5px;
   overflow: hidden;
-  background: var(--bg-terminal);
-  border: 1px solid var(--border-light);
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--transition-normal);
+  background: var(--bg-app);
 }
-
-.area::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--radius-lg);
-  transition: opacity var(--transition-fast);
-  pointer-events: none;
-  opacity: 0;
-}
-
-.area:hover {
-  box-shadow: var(--shadow-md);
-}
-
 .pane {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: var(--bg-terminal);
-  transition: opacity 120ms var(--ease-out);
 }
-
 .emptyArea {
-  flex: 1;
   display: flex;
+  flex: 1;
+  min-height: 0;
   align-items: center;
   justify-content: center;
   background: var(--bg-terminal);
-  margin: var(--space-2);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-light);
 }
-
 .emptyContent {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
-  opacity: 0.35;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
 }
-
 .emptyLogo {
-  margin-bottom: 2px;
+  color: var(--text-muted);
+  font-size: 36px;
 }
-
 .emptyTitle {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
-  letter-spacing: -0.2px;
+  color: var(--text-primary);
+}
+.emptyDesc {
+  max-width: 40ch;
+  font-size: 14px;
+  line-height: 22px;
   color: var(--text-secondary);
 }
-
-.emptyDesc {
-  font-size: 12.5px;
-  color: var(--text-muted);
+.emptyAction {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  margin-top: 8px;
+  background: var(--accent);
+  color: var(--btn-active-text);
+  border-radius: var(--radius-sm);
 }
-
-                                                                                 
+.emptyAction:hover {
+  filter: brightness(1.1);
+}
 .pane :global(.xterm-image-layer) {
   pointer-events: none;
 }
-
-
-                                                             
 .bootShimmer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(
-    100deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.05) 50%,
-    transparent 70%
-  );
-  background-size: 200% 100%;
-  animation: bootShimmerSweep 1.4s linear infinite;
-}
-
-@keyframes bootShimmerSweep {
-  from {
-    background-position: 150% 0;
-  }
-  to {
-    background-position: -50% 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .area {
-    transition: none;
-  }
-  .area::after {
-    transition: none;
-  }
-  .bootShimmer {
-    animation: none;
-  }
+  background: var(--bg-terminal);
 }

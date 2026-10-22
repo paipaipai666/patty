@@ -65,12 +65,12 @@ export function StatusBar({ metricsOpen = false, onToggleMetrics, sshMonitorOpen
             }}
             aria-label={activeSession.color}
           />
-          {activeSession.title}
+          <span className={styles.sessionName} title={activeSession.title}>{activeSession.title}</span>
         </span>
         <span className={styles.separator}>│</span>
         <span className={styles.item}>{SHELL_LABELS[activeSession.shell] || activeSession.shell}</span>
         <span className={styles.separator}>│</span>
-        <span className={styles.item}>
+        <span className={`${styles.item} ${styles.cwd}`} title={activeSession.cwd}>
           {activeSession.shell === 'ssh' && activeSession.ssh
             ? activeSession.ssh.user
               ? `${activeSession.ssh.user}@${activeSession.ssh.host}`
@@ -79,8 +79,8 @@ export function StatusBar({ metricsOpen = false, onToggleMetrics, sshMonitorOpen
         </span>
         {activeSession.pid > 0 && (
           <>
-            <span className={styles.separator}>│</span>
-            <span className={styles.item}>PID {activeSession.pid}</span>
+            <span className={`${styles.separator} ${styles.pidSeparator}`}>│</span>
+            <span className={`${styles.item} ${styles.pid}`}>PID {activeSession.pid}</span>
           </>
         )}
       </span>

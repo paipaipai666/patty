@@ -84,6 +84,27 @@ function render(props: Partial<Parameters<typeof Sidebar>[0]> = {}) {
 }
 
 describe('Sidebar', () => {
+  it('creates a terminal directly from the primary action', () => {
+    const { container, props } = render()
+    const button = Array.from(container.querySelectorAll('button')).find((item) => item.textContent?.trim() === 'New terminal')!
+    act(() => { button.click() })
+    expect(props.onNewTerminal).toHaveBeenCalledTimes(1)
+  })
+
+  it('moves focus through the create menu and restores it on Escape', () => {
+    const { container } = render()
+    const trigger = container.querySelector<HTMLButtonElement>('[aria-label="New terminal or collection"]')!
+    act(() => { trigger.click() })
+    const items = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+    expect(document.activeElement).toBe(items[0])
+    act(() => { items[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })) })
+    expect(document.activeElement).toBe(items[1])
+    act(() => { items[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(container.querySelector('[role="menu"]')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('renders sidebar with search input', () => {
     const { container } = render()
     const search = container.querySelector('input[aria-label="Search sessions"]')

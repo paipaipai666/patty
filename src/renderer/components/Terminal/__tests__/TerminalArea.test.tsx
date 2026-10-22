@@ -45,7 +45,7 @@ describe('TerminalArea', () => {
   it('shows empty state when sessions.length === 0', () => {
     const { container } = render()
     expect(container.querySelector('h2')?.textContent).toBe('Patty')
-    expect(container.querySelector('p')?.textContent).toContain('Ctrl+T')
+    expect(container.querySelector('p')?.textContent).toContain('Create a terminal')
   })
 
   it('shows empty state when no active workspace pane tree exists', () => {

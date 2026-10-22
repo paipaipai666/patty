@@ -96,7 +96,7 @@ function renderSplit(
       <div className={styles.first} style={{ flexBasis: firstBasis, flexGrow: 0, flexShrink: 0 }}>
         {renderNode(node.first, node.first.id, focusedPaneId, focusPane, sessionById, visible)}
       </div>
-      <Sash splitId={node.id} direction={node.direction} />
+      <Sash splitId={node.id} direction={node.direction} ratio={node.ratio} />
       <div className={styles.second}>
         {renderNode(node.second, node.second.id, focusedPaneId, focusPane, sessionById, visible)}
       </div>

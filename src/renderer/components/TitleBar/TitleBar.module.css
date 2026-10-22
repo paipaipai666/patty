@@ -1,83 +1,103 @@
 .titlebar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: var(--titlebar-height);
-  padding: 0 var(--space-5);
   background: var(--bg-titlebar);
-  backdrop-filter: blur(var(--glass-blur-sm));
-  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
   border-bottom: 1px solid var(--border-subtle);
-  -webkit-app-region: drag;
   flex-shrink: 0;
   position: relative;
-  z-index: 2;
+  z-index: 5;
 }
-
 .dragRegion {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding-left: 12px;
   flex: 1;
   min-width: 0;
+  height: 100%;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
-
+.logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
 .title {
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.01em;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-
+.workspaceContext {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 10px;
+  padding-left: 20px;
+  border-left: 1px solid var(--border-medium);
+  color: var(--text-secondary);
+  min-width: 0;
+  font-size: 12px;
+}
+.workspaceSelect {
+  max-width: 220px;
+  height: 28px;
+  color: var(--text-primary);
+  background: var(--bg-titlebar);
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
 .controls {
   display: flex;
-  align-items: center;
-  -webkit-app-region: no-drag;
   height: 100%;
 }
-
-.btnControl {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  color: var(--text-secondary);
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
+.btnControl,
 .btnToggle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-right: 2px;
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-md);
   color: var(--text-secondary);
-  cursor: pointer;
   flex-shrink: 0;
   -webkit-app-region: no-drag;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  app-region: no-drag;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
-
+.btnControl {
+  width: 46px;
+  height: 100%;
+}
+.btnToggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+.btnControl:hover,
 .btnToggle:hover {
-  background: var(--bg-hover);
+  background: var(--bg-item-hover);
   color: var(--text-primary);
 }
-
-.btnControl:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
 .btnClose:hover {
   background: var(--btn-close-hover);
   color: var(--btn-close-text);
+}
+.btnControl:focus-visible {
+  outline-offset: -3px;
+}
+@media (max-width: 700px) {
+  .workspaceContext > span {
+    display: none;
+  }
+  .workspaceContext {
+    padding-left: 12px;
+    margin-left: 0;
+  }
+  .workspaceSelect {
+    max-width: 140px;
+  }
 }

@@ -2,95 +2,74 @@
   display: flex;
   align-items: center;
   height: var(--statusbar-height);
-  padding: 0 var(--space-5);
+  padding: 0 12px;
   background: var(--bg-statusbar);
-  backdrop-filter: blur(var(--glass-blur-sm));
-  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
   border-top: 1px solid var(--border-subtle);
   font-size: 12px;
-  gap: 6px;
+  gap: 10px;
   flex-shrink: 0;
-  position: relative;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
 }
-
-.statusbar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: var(--space-5);
-  right: var(--space-5);
-  height: 1px;
-  background: var(--border-light);
-  pointer-events: none;
+.swap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+  max-width: calc(100% - 70px);
 }
-
 .item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   white-space: nowrap;
-  font-weight: 500;
   color: var(--text-secondary);
-  transition: color var(--transition-fast);
+  min-width: 0;
+  flex-shrink: 0;
 }
-
-                                                                               
-.swap {
-  display: contents;
-  animation: statusSwapIn 110ms var(--ease-out);
+.sessionName {
+  max-width: min(20vw, 180px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-@keyframes statusSwapIn {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+.cwd {
+  flex-shrink: 1;
+  max-width: 32vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
-@media (prefers-reduced-motion: reduce) {
-  .swap {
-    animation: none;
-  }
-}
-
-.item:hover {
-  color: var(--text-primary);
-}
-
 .dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--color-gray);
+  flex-shrink: 0;
 }
-
 .separator {
   color: var(--border-strong);
-  font-size: 10px;
-  font-weight: 400;
+  flex-shrink: 0;
 }
-
 .spacer {
   flex: 1;
 }
-
 .toggleBtn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  transition: color var(--transition-fast), background var(--transition-fast);
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
 }
-
 .toggleBtn:hover {
   color: var(--text-primary);
-  background: var(--bg-hover);
+  background: var(--bg-item-hover);
 }
-
 .active {
-  color: var(--accent);
-  background: var(--accent-alpha);
+  color: var(--text-primary);
+  background: var(--bg-item-active);
+}
+@media (max-width: 850px) {
+  .pid,
+  .pidSeparator {
+    display: none;
+  }
 }

@@ -93,6 +93,18 @@ describe('createTerminalInCollection', () => {
 })
 
 describe('createTerminalSplit', () => {
+  it('keeps the SSH target when creating a neighboring terminal', () => {
+    const base = createSshTerminal({ id: 'ssh-profile', name: 'production', host: 'example.test', user: 'deploy', port: 2222 })
+    selectSession(base)
+    const id = createTerminalSplit('horizontal')
+    expect(useSessionStore.getState().sessions.find((session) => session.id === id)).toMatchObject({
+      shell: 'ssh',
+      ssh: { host: 'example.test', user: 'deploy', port: 2222 }
+    })
+    expect(getFocusedSessionId()).toBe(id)
+    expect(useWorkspaceStore.getState().workspaces).toHaveLength(1)
+  })
+
   it('inherits the focused session cwd and shell, and focuses the new leaf', () => {
     const base = createTerminal({ cwd: 'C:\\proj', shell: 'pwsh' })
     selectSession(base)

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import { useSessionStore, type Collection } from '../../store/sessionStore'
 import styles from './Sidebar.module.css'
 
@@ -19,6 +19,15 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
   const [editValue, setEditValue] = useState(collection.name)
   const [isDragOver, setIsDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const itemRef = useRef<HTMLDivElement>(null)
+  const restoreFocus = useRef(false)
+
+  useLayoutEffect(() => {
+    if (!isEditing && restoreFocus.current) {
+      restoreFocus.current = false
+      itemRef.current?.focus()
+    }
+  }, [isEditing])
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -36,10 +45,14 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing || (e.target !== e.currentTarget && !isEditing)) return
     if (isEditing) {
+      e.stopPropagation()
       if (e.key === 'Enter') {
+        restoreFocus.current = true
         handleRename()
       } else if (e.key === 'Escape') {
+        restoreFocus.current = true
         setIsEditing(false)
         setEditValue(collection.name)
       }
@@ -48,6 +61,9 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       toggleCollectionCollapse(collection.id)
+    } else if (e.key === 'Delete') {
+      e.preventDefault()
+      removeCollection(collection.id)
     } else if (e.key === 'F2') {
       e.preventDefault()
       setIsEditing(true)
@@ -115,11 +131,17 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
   return (
     <div className={styles.collectionGroup}>
       <div
+        ref={itemRef}
         className={`${styles.collectionItem} ${isDragOver ? styles.dragOver : ''}`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         role="treeitem"
         aria-expanded={!collection.collapsed}
         aria-label={collection.name}
+        aria-level={depth + 1}
+        aria-controls={`collection-${collection.id}-children`}
+        aria-owns={collection.collapsed ? undefined : `collection-${collection.id}-children`}
+        data-tree-id={`collection:${collection.id}`}
+        data-collection-id={collection.id}
         tabIndex={isEditing ? -1 : 0}
         onKeyDown={handleKeyDown}
         draggable={!isEditing}
@@ -132,6 +154,7 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
       >
         <button
           type="button"
+          tabIndex={-1}
           className={styles.collapseBtn}
           onClick={(e) => {
             e.stopPropagation()
@@ -170,11 +193,13 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
             autoFocus
           />
         ) : (
-          <span className={styles.collectionName}>{collection.name}</span>
+          <span className={styles.collectionName} title={collection.name}>{collection.name}</span>
         )}
 
         <button
           type="button"
+          tabIndex={-1}
+          title={`Delete ${collection.name} (Delete)`}
           className={styles.closeBtn}
           onClick={handleDelete}
           aria-label={`Delete ${collection.name}`}
@@ -185,7 +210,7 @@ export function CollectionItem({ collection, depth, children, onContextMenu }: C
         </button>
       </div>
 
-      <div className={`${styles.collectionChildren} ${collection.collapsed ? styles.collectionCollapsed : ''}`}>
+      <div id={`collection-${collection.id}-children`} role="group" hidden={collection.collapsed} className={`${styles.collectionChildren} ${collection.collapsed ? styles.collectionCollapsed : ''}`}>
         {children}
       </div>
     </div>

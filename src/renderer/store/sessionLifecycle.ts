@@ -62,7 +62,8 @@ export function createTerminalSplit(direction: SplitDirection): string {
   const focused = focusedSessionId ? sessions.find((s) => s.id === focusedSessionId) : undefined
   const id = useSessionStore.getState().addSession({
     cwd: focused?.cwd || undefined,
-    shell: focused?.shell
+    shell: focused?.shell,
+    ...(focused?.ssh ? { ssh: focused.ssh } : {})
   })
   useWorkspaceStore.getState().splitFocused(id, direction)
   return id

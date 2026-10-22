@@ -1,10 +1,24 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useLayoutEffect
+} from 'react'
+import {
+  Add16Regular,
+  Search16Regular,
+  ChevronDown16Regular,
+  Folder16Regular,
+  Globe16Regular,
+  Settings20Regular,
+  Code16Regular
+} from '@fluentui/react-icons'
 import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { SessionList } from './SessionList'
 import type { SshProfile } from '../../../shared/settingsTypes'
 import styles from './Sidebar.module.css'
-import { MarqueeText } from './MarqueeText'
 
 interface SidebarProps {
   onNewTerminal: () => void
@@ -15,7 +29,14 @@ interface SidebarProps {
   onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
 
-export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onNewSsh, onCloseSession, onSelectSession, onCollectionContextMenu }: SidebarProps) {
+export function Sidebar({
+  onNewTerminal,
+  onNewTerminalPickFolder,
+  onNewSsh,
+  onCloseSession,
+  onSelectSession,
+  onCollectionContextMenu
+}: SidebarProps) {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const addCollection = useSessionStore((s) => s.addCollection)
@@ -23,234 +44,344 @@ export function Sidebar({ onNewTerminal, onNewTerminalPickFolder, onNewSsh, onCl
   const sshProfiles = useSettingsStore((s) => s.settings.sshProfiles)
   const openSettings = useSettingsStore((s) => s.openSettings)
   const [searchQuery, setSearchQuery] = useState('')
-  const [showMenu, setShowMenu] = useState(false)
-  const [showSshPicker, setShowSshPicker] = useState(false)
+  const [menu, setMenu] = useState<'create' | 'ssh' | null>(null)
   const [isCreatingCollection, setIsCreatingCollection] = useState(false)
   const [newCollectionName, setNewCollectionName] = useState('')
+  const [menuPosition, setMenuPosition] = useState({
+    left: 12,
+    top: 100,
+    maxHeight: 400
+  })
+  const headerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
   const newCollectionInputRef = useRef<HTMLInputElement>(null)
-  const isDragging = useRef(false)
-  const startX = useRef(0)
-  const startWidth = useRef(0)
+  const dragRef = useRef<{ x: number; width: number } | null>(null)
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      isDragging.current = true
-      startX.current = e.clientX
-      startWidth.current = sidebarWidth
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-    },
-    [sidebarWidth]
-  )
+  const endResize = useCallback(() => {
+    if (!dragRef.current) return
+    dragRef.current = null
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }, [])
 
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return
-      const delta = e.clientX - startX.current
-      const adjusted = sidebarPosition === 'right' ? -delta : delta
-      setSidebarWidth(startWidth.current + adjusted)
+    const move = (event: MouseEvent) => {
+      const drag = dragRef.current
+      if (!drag) return
+      const delta = event.clientX - drag.x
+      setSidebarWidth(
+        drag.width + (sidebarPosition === 'right' ? -delta : delta)
+      )
     }
-
-    const handleMouseUp = () => {
-      if (isDragging.current) {
-        isDragging.current = false
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    }
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
+    document.addEventListener('mousemove', move)
+    document.addEventListener('mouseup', endResize)
+    window.addEventListener('blur', endResize)
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener('mousemove', move)
+      document.removeEventListener('mouseup', endResize)
+      window.removeEventListener('blur', endResize)
+      endResize()
     }
-  }, [setSidebarWidth, sidebarPosition])
+  }, [setSidebarWidth, sidebarPosition, endResize])
+
+  useLayoutEffect(() => {
+    if (!menu) return
+    const updatePosition = () => {
+      const rect = headerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const top = Math.min(
+        rect.bottom + 2,
+        Math.max(12, window.innerHeight - 80)
+      )
+      setMenuPosition({
+        left: Math.max(12, Math.min(rect.left + 12, window.innerWidth - 284)),
+        top,
+        maxHeight: Math.max(60, window.innerHeight - top - 12)
+      })
+    }
+    updatePosition()
+    menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    window.addEventListener('resize', updatePosition)
+    const outside = (event: MouseEvent) => {
+      if (
+        event.target instanceof Node &&
+        !menuRef.current?.contains(event.target) &&
+        !menuButtonRef.current?.contains(event.target)
+      )
+        setMenu(null)
+    }
+    document.addEventListener('mousedown', outside)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      document.removeEventListener('mousedown', outside)
+    }
+  }, [menu])
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false)
-        setShowSshPicker(false)
-      }
-    }
-    if (showMenu || showSshPicker) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showMenu, showSshPicker])
+    if (isCreatingCollection) newCollectionInputRef.current?.focus()
+  }, [isCreatingCollection])
 
-  const handleNewCollection = () => {
-    setIsCreatingCollection(true)
-    setNewCollectionName('')
-    setShowMenu(false)
-    setTimeout(() => newCollectionInputRef.current?.focus(), 0)
+  const closeMenu = () => {
+    setMenu(null)
+    menuButtonRef.current?.focus()
   }
 
-  const handleCreateCollection = () => {
-    const trimmed = newCollectionName.trim()
-    if (trimmed) {
-      addCollection(trimmed)
+  const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape' || event.key === 'Tab') {
+      if (event.key === 'Escape') event.preventDefault()
+      event.stopPropagation()
+      closeMenu()
+      return
     }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const buttons = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('button')
+    )
+    const index = buttons.findIndex(
+      (button) => button === document.activeElement
+    )
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? buttons.length - 1
+          : (index + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) %
+            buttons.length
+    buttons[next]?.focus()
+  }
+
+  const createCollection = () => {
+    const trimmed = newCollectionName.trim()
+    if (trimmed) addCollection(trimmed)
     setIsCreatingCollection(false)
     setNewCollectionName('')
   }
 
-  const handleCollectionKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleCreateCollection()
-    } else if (e.key === 'Escape') {
-      setIsCreatingCollection(false)
-      setNewCollectionName('')
-    }
-  }
-
-  const handleNewTerminalClick = () => {
-    setShowMenu(false)
-    onNewTerminal()
-  }
-
-  const handleNewTerminalPickFolderClick = () => {
-    setShowMenu(false)
-    onNewTerminalPickFolder()
-  }
-
-  const handleNewSshClick = () => {
-    setShowMenu(false)
-    setShowSshPicker(true)
-  }
-
-  const handleSshProfilePick = (profile: SshProfile) => {
-    setShowSshPicker(false)
-    onNewSsh(profile)
-  }
-
-  const handleManageSsh = () => {
-    setShowSshPicker(false)
-    openSettings('ssh')
-  }
-
   return (
     <div className={styles.sidebar} style={{ width: sidebarWidth }}>
-      <div className={styles.header}>
-        <input
-          type="text"
-          className={styles.searchInput}
-          placeholder="Search sessions..."
-          aria-label="Search sessions"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
-        <div className={styles.menuContainer} ref={menuRef}>
+      <div className={styles.header} ref={headerRef}>
+        <div className={styles.search}>
+          <Search16Regular aria-hidden />
+          <input
+            type="search"
+            className={styles.searchInput}
+            placeholder="Search sessions..."
+            aria-label="Search sessions"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
+        <div className={styles.createRow}>
           <button
             type="button"
-            className={styles.newBtn}
-            onClick={() => setShowMenu(!showMenu)}
-            aria-label="New terminal or collection"
-            title="New terminal or collection"
+            className={styles.newTerminal}
+            title="New terminal"
+            onClick={onNewTerminal}
           >
-            <svg width="14" height="14" viewBox="0 0 14 14">
-              <path
-                d="M7 1V13M1 7H13"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <Add16Regular aria-hidden />
+            <span>New terminal</span>
           </button>
-          {showMenu && (
-            <div className={styles.dropdownMenu}>
-              <button type="button" className={styles.menuItem} onClick={handleNewTerminalClick}>
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <rect x="1" y="2" width="10" height="8" rx="1" stroke="currentColor" fill="none" strokeWidth="1" />
-                  <path d="M4 6L5.5 7.5L8 5" stroke="currentColor" strokeWidth="1" fill="none" />
-                </svg>
-                <MarqueeText text="New Terminal" />
-              </button>
-              <button type="button" className={styles.menuItem} onClick={handleNewTerminalPickFolderClick}>
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <path
-                    d="M1 3C1 2.45 1.45 2 2 2H4.5L5.5 3H10C10.55 3 11 3.45 11 4V9C11 9.55 10.55 10 10 10H2C1.45 10 1 9.55 1 9V3Z"
-                    stroke="currentColor"
-                    fill="none"
-                    strokeWidth="1"
-                  />
-                </svg>
-                <MarqueeText text="New Terminal (Choose Folder)…" />
-              </button>
-              <button type="button" className={styles.menuItem} onClick={handleNewSshClick}>
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <circle cx="6" cy="6" r="4.5" stroke="currentColor" fill="none" strokeWidth="1" />
-                  <path d="M1.5 6H10.5M6 1.5C7.2 3 7.2 9 6 10.5C4.8 9 4.8 3 6 1.5Z" stroke="currentColor" fill="none" strokeWidth="1" />
-                </svg>
-                <MarqueeText text="New SSH Connection…" />
-              </button>
-              <button type="button" className={styles.menuItem} onClick={handleNewCollection}>
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <path
-                    d="M1 3C1 2.45 1.45 2 2 2H4.5L5.5 3H10C10.55 3 11 3.45 11 4V9C11 9.55 10.55 10 10 10H2C1.45 10 1 9.55 1 9V3Z"
-                    stroke="currentColor"
-                    fill="none"
-                    strokeWidth="1"
-                  />
-                </svg>
-                <MarqueeText text="New Collection" />
-              </button>
-            </div>
-          )}
-          {showSshPicker && (
-            <div className={styles.dropdownMenu}>
-              {sshProfiles.length === 0 && (
-                <div className={styles.menuItemDisabled}>No SSH profiles</div>
-              )}
-              {sshProfiles.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className={styles.menuItem}
-                  onClick={() => handleSshProfilePick(p)}
-                >
-                  <MarqueeText text={p.name} />
-                  <MarqueeText
-                    className={styles.menuItemSub}
-                    text={`${p.user ? `${p.user}@` : ''}${p.host}:${p.port ?? 22}`}
-                  />
-                </button>
-              ))}
-              <button type="button" className={styles.menuItem} onClick={handleManageSsh}>
-                <MarqueeText text="Manage SSH Profiles…" />
-              </button>
-            </div>
-          )}
+          <div className={styles.menuContainer}>
+            <button
+              ref={menuButtonRef}
+              type="button"
+              className={styles.newBtn}
+              onClick={() => setMenu(menu ? null : 'create')}
+              aria-label="New terminal or collection"
+              title="More ways to create a terminal"
+              aria-haspopup="menu"
+              aria-expanded={menu !== null}
+              aria-controls={menu ? 'terminal-create-menu' : undefined}
+            >
+              <ChevronDown16Regular aria-hidden />
+            </button>
+            {menu && (
+              <div
+                id="terminal-create-menu"
+                ref={menuRef}
+                className={styles.dropdownMenu}
+                style={menuPosition}
+                role="menu"
+                aria-label={
+                  menu === 'ssh'
+                    ? 'SSH profiles'
+                    : 'Create terminal or collection'
+                }
+                onKeyDown={handleMenuKeyDown}
+              >
+                {menu === 'create' ? (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.menuItem}
+                      onClick={() => {
+                        setMenu(null)
+                        onNewTerminal()
+                      }}
+                    >
+                      <Code16Regular aria-hidden />
+                      <span>New Terminal</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.menuItem}
+                      onClick={() => {
+                        setMenu(null)
+                        onNewTerminalPickFolder()
+                      }}
+                    >
+                      <Folder16Regular aria-hidden />
+                      <span>New Terminal (Choose Folder)…</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.menuItem}
+                      onClick={() => setMenu('ssh')}
+                    >
+                      <Globe16Regular aria-hidden />
+                      <span>New SSH Connection…</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.menuItem}
+                      onClick={() => {
+                        setMenu(null)
+                        setNewCollectionName('')
+                        setIsCreatingCollection(true)
+                      }}
+                    >
+                      <Folder16Regular aria-hidden />
+                      <span>New Collection</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {sshProfiles.length === 0 && (
+                      <div className={styles.menuItemDisabled}>
+                        No SSH profiles
+                      </div>
+                    )}
+                    {sshProfiles.map((profile) => (
+                      <button
+                        key={profile.id}
+                        type="button"
+                        role="menuitem"
+                        className={styles.menuItem}
+                        onClick={() => {
+                          setMenu(null)
+                          onNewSsh(profile)
+                        }}
+                      >
+                        <Globe16Regular aria-hidden />
+                        <span
+                          className={styles.menuItemText}
+                          title={profile.host}
+                        >
+                          {profile.name}
+                          <span className={styles.menuItemSub}>
+                            {profile.user ? profile.user + '@' : ''}
+                            {profile.host}:{profile.port ?? 22}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.menuItem}
+                      onClick={() => {
+                        setMenu(null)
+                        openSettings('ssh')
+                      }}
+                    >
+                      Manage SSH Profiles…
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {isCreatingCollection && (
         <div className={styles.newCollectionRow}>
-          <svg className={styles.folderIcon} width="14" height="14" viewBox="0 0 14 14">
-            <path
-              d="M1 3.5C1 2.67 1.67 2 2.5 2H5L6.5 3.5H11.5C12.33 3.5 13 4.17 13 5V10.5C13 11.33 12.33 12 11.5 12H2.5C1.67 12 1 11.33 1 10.5V3.5Z"
-              fill="currentColor"
-              opacity="0.6"
-            />
-          </svg>
+          <Folder16Regular className={styles.folderIcon} aria-hidden />
           <input
             ref={newCollectionInputRef}
             className={styles.renameInput}
             placeholder="Collection name..."
+            aria-label="Collection name"
             value={newCollectionName}
-            onChange={(e) => setNewCollectionName(e.target.value)}
-            onBlur={handleCreateCollection}
-            onKeyDown={handleCollectionKeyDown}
-            autoFocus
+            onChange={(event) => setNewCollectionName(event.target.value)}
+            onBlur={createCollection}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return
+              if (event.key === 'Enter') createCollection()
+              if (event.key === 'Escape') {
+                setIsCreatingCollection(false)
+                setNewCollectionName('')
+              }
+            }}
           />
         </div>
       )}
-      <SessionList onClose={onCloseSession} onSelect={onSelectSession} onCollectionContextMenu={onCollectionContextMenu} searchQuery={searchQuery} />
+      <SessionList
+        onClose={onCloseSession}
+        onSelect={onSelectSession}
+        onCollectionContextMenu={onCollectionContextMenu}
+        searchQuery={searchQuery}
+      />
+      <div className={styles.footer}>
+        <button
+          type="button"
+          className={styles.settingsBtn}
+          onClick={() => openSettings()}
+        >
+          <Settings20Regular aria-hidden />
+          <span>Settings</span>
+        </button>
+      </div>
       <div
         className={styles.resizeHandle}
-        style={sidebarPosition === 'right' ? { left: -2, right: 'auto' } : undefined}
-        onMouseDown={handleMouseDown}
+        role="separator"
+        tabIndex={0}
+        aria-label="Sidebar width"
+        aria-orientation="vertical"
+        aria-valuemin={160}
+        aria-valuemax={320}
+        aria-valuenow={sidebarWidth}
+        style={
+          sidebarPosition === 'right' ? { left: 0, right: 'auto' } : undefined
+        }
+        onMouseDown={(event) => {
+          event.preventDefault()
+          dragRef.current = { x: event.clientX, width: sidebarWidth }
+          document.body.style.cursor = 'col-resize'
+          document.body.style.userSelect = 'none'
+        }}
+        onKeyDown={(event) => {
+          const delta = sidebarPosition === 'right' ? -16 : 16
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault()
+            setSidebarWidth(
+              sidebarWidth + (event.key === 'ArrowRight' ? delta : -delta)
+            )
+          }
+          if (event.key === 'Home') {
+            event.preventDefault()
+            setSidebarWidth(160)
+          }
+          if (event.key === 'End') {
+            event.preventDefault()
+            setSidebarWidth(320)
+          }
+        }}
       />
     </div>
   )

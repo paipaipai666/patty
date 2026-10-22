@@ -1,6 +1,11 @@
-import { useState, useRef, useEffect, memo } from 'react'
-import { useSessionStore, SESSION_COLOR_VARS, type TerminalSession } from '../../store/sessionStore'
-import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
+import { useState, useRef, useLayoutEffect, memo } from 'react'
+import { Code20Regular, Globe20Regular } from '@fluentui/react-icons'
+import {
+  useSessionStore,
+  SESSION_COLOR_VARS,
+  type TerminalSession
+} from '../../store/sessionStore'
+import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import styles from './Sidebar.module.css'
 
 interface SessionItemProps {
@@ -11,37 +16,45 @@ interface SessionItemProps {
   depth?: number
 }
 
-export const SessionItem = memo(function SessionItem({ session, isActive, onClose, onSelect, depth = 0 }: SessionItemProps) {
+export const SessionItem = memo(function SessionItem({
+  session,
+  isActive,
+  onClose,
+  onSelect,
+  depth = 0
+}: SessionItemProps) {
   const renameSession = useSessionStore((s) => s.renameSession)
-  const attentionType = useSessionStore((s) => s.attentionMap[session.id] ?? null)
+  const attentionType = useSessionStore(
+    (s) => s.attentionMap[session.id] ?? null
+  )
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(session.title)
   const inputRef = useRef<HTMLInputElement>(null)
-  const prevAttention = useRef<string | null>(null)
+  const itemRef = useRef<HTMLDivElement>(null)
+  const restoreFocus = useRef(false)
 
-
-  const [glowNonce, setGlowNonce] = useState(0)
-  useEffect(() => {
-    if (attentionType && attentionType !== prevAttention.current) {
-      setGlowNonce((n) => n + 1)
+  useLayoutEffect(() => {
+    if (!isEditing && restoreFocus.current) {
+      restoreFocus.current = false
+      itemRef.current?.focus()
     }
-    prevAttention.current = attentionType
-  }, [attentionType])
-
-
-  const getAttentionClass = () => {
-    if (!attentionType) return ''
-    switch (attentionType) {
-      case 'permission':
-        return styles['itemAttention-permission']
-      case 'complete':
-        return styles['itemAttention-complete']
-      case 'error':
-        return styles['itemAttention-error']
-      default:
-        return ''
-    }
-  }
+  }, [isEditing])
+  const statusText =
+    attentionType === 'permission'
+      ? 'Needs input'
+      : attentionType === 'complete'
+        ? 'Completed'
+        : attentionType === 'error'
+          ? 'Error'
+          : SHELL_LABELS[session.shell]
+  const statusClass =
+    attentionType === 'permission'
+      ? styles.permission
+      : attentionType === 'complete'
+        ? styles.complete
+        : attentionType === 'error'
+          ? styles.error
+          : ''
 
   const handleDoubleClick = () => {
     setIsEditing(true)
@@ -58,10 +71,18 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (
+      e.nativeEvent.isComposing ||
+      (e.target !== e.currentTarget && !isEditing)
+    )
+      return
     if (isEditing) {
+      e.stopPropagation()
       if (e.key === 'Enter') {
+        restoreFocus.current = true
         handleRename()
       } else if (e.key === 'Escape') {
+        restoreFocus.current = true
         setIsEditing(false)
         setEditValue(session.title)
       }
@@ -70,6 +91,9 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       onSelect(session.id)
+    } else if (e.key === 'Delete') {
+      e.preventDefault()
+      onClose(session.id)
     } else if (e.key === 'F2') {
       e.preventDefault()
       handleDoubleClick()
@@ -78,10 +102,13 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
 
   const handleDragStart = (e: React.DragEvent) => {
     e.stopPropagation()
-    e.dataTransfer.setData('application/json', JSON.stringify({
-      type: 'session',
-      id: session.id
-    }))
+    e.dataTransfer.setData(
+      'application/json',
+      JSON.stringify({
+        type: 'session',
+        id: session.id
+      })
+    )
     e.dataTransfer.effectAllowed = 'move'
     useSessionStore.getState().setDraggingSession(session.id)
   }
@@ -100,12 +127,25 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
     ),
     opencode: (
       <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor">
-        <path fill-rule="evenodd" clip-rule="evenodd" d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z" />
+        <path
+          fill-rule="evenodd"
+          clip-rule="evenodd"
+          d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z"
+        />
       </svg>
     ),
     codex: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" fillRule="evenodd">
-        <path clipRule="evenodd" d="M8.086.457a6.105 6.105 0 013.046-.415c1.333.153 2.521.72 3.564 1.7a.117.117 0 00.107.029c1.408-.346 2.762-.224 4.061.366l.063.03.154.076c1.357.703 2.33 1.77 2.918 3.198.278.679.418 1.388.421 2.126a5.655 5.655 0 01-.18 1.631.167.167 0 00.04.155 5.982 5.982 0 011.578 2.891c.385 1.901-.01 3.615-1.183 5.14l-.182.22a6.063 6.063 0 01-2.934 1.851.162.162 0 00-.108.102c-.255.736-.511 1.364-.987 1.992-1.199 1.582-2.962 2.462-4.948 2.451-1.583-.008-2.986-.587-4.21-1.736a.145.145 0 00-.14-.032c-.518.167-1.04.191-1.604.185a5.924 5.924 0 01-2.595-.622 6.058 6.058 0 01-2.146-1.781c-.203-.269-.404-.522-.551-.821a7.74 7.74 0 01-.495-1.283 6.11 6.11 0 01-.017-3.064.166.166 0 00.008-.074.115.115 0 00-.037-.064 5.958 5.958 0 01-1.38-2.202 5.196 5.196 0 01-.333-1.589 6.915 6.915 0 01.188-2.132c.45-1.484 1.309-2.648 2.577-3.493.282-.188.55-.334.802-.438.286-.12.573-.22.861-.304a.129.129 0 00.087-.087A6.016 6.016 0 015.635 2.31C6.315 1.464 7.132.846 8.086.457zm-.804 7.85a.848.848 0 00-1.473.842l1.694 2.965-1.688 2.848a.849.849 0 001.46.864l1.94-3.272a.849.849 0 00.007-.854l-1.94-3.393zm5.446 6.24a.849.849 0 000 1.695h4.848a.849.849 0 000-1.696h-4.848z" />
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        fillRule="evenodd"
+      >
+        <path
+          clipRule="evenodd"
+          d="M8.086.457a6.105 6.105 0 013.046-.415c1.333.153 2.521.72 3.564 1.7a.117.117 0 00.107.029c1.408-.346 2.762-.224 4.061.366l.063.03.154.076c1.357.703 2.33 1.77 2.918 3.198.278.679.418 1.388.421 2.126a5.655 5.655 0 01-.18 1.631.167.167 0 00.04.155 5.982 5.982 0 011.578 2.891c.385 1.901-.01 3.615-1.183 5.14l-.182.22a6.063 6.063 0 01-2.934 1.851.162.162 0 00-.108.102c-.255.736-.511 1.364-.987 1.992-1.199 1.582-2.962 2.462-4.948 2.451-1.583-.008-2.986-.587-4.21-1.736a.145.145 0 00-.14-.032c-.518.167-1.04.191-1.604.185a5.924 5.924 0 01-2.595-.622 6.058 6.058 0 01-2.146-1.781c-.203-.269-.404-.522-.551-.821a7.74 7.74 0 01-.495-1.283 6.11 6.11 0 01-.017-3.064.166.166 0 00.008-.074.115.115 0 00-.037-.064 5.958 5.958 0 01-1.38-2.202 5.196 5.196 0 01-.333-1.589 6.915 6.915 0 01.188-2.132c.45-1.484 1.309-2.648 2.577-3.493.282-.188.55-.334.802-.438.286-.12.573-.22.861-.304a.129.129 0 00.087-.087A6.016 6.016 0 015.635 2.31C6.315 1.464 7.132.846 8.086.457zm-.804 7.85a.848.848 0 00-1.473.842l1.694 2.965-1.688 2.848a.849.849 0 001.46.864l1.94-3.272a.849.849 0 00.007-.854l-1.94-3.393zm5.446 6.24a.849.849 0 000 1.695h4.848a.849.849 0 000-1.696h-4.848z"
+        />
       </svg>
     ),
     omp: (
@@ -136,12 +176,21 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
 
   return (
     <div
-      className={`${styles.item} ${isActive ? styles.itemActive : ''} ${getAttentionClass()}`}
-      style={{ paddingLeft: `${depth * 16 + 8}px`, position: 'relative', overflow: 'hidden' }}
+      ref={itemRef}
+      className={`${styles.item} ${isActive ? styles.itemActive : ''} ${isAi ? styles.itemAi : ''}`}
+      style={{
+        paddingLeft: `${depth * 16 + 8}px`,
+        position: 'relative',
+        overflow: 'hidden'
+      }}
       role="treeitem"
       tabIndex={isEditing ? -1 : 0}
       aria-selected={isActive}
       aria-label={session.title}
+      aria-description={isAi ? statusText : undefined}
+      aria-level={depth + 1}
+      aria-keyshortcuts="F2 Delete"
+      data-tree-id={`session:${session.id}`}
       onClick={() => onSelect(session.id)}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
@@ -149,10 +198,6 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {isAi && <ContributionGrid aiType={session.aiType!} />}
-      {attentionType && (
-        <div key={glowNonce} className={`${styles.glowFx} ${styles[`glow_${attentionType}`]}`} aria-hidden />
-      )}
       <div className={styles.itemContent}>
         {isAi ? (
           <span
@@ -162,9 +207,14 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
           </span>
         ) : (
           <span
-            className={styles.colorDot}
-            style={{ backgroundColor: SESSION_COLOR_VARS[session.color] || 'var(--color-blue)' }}
-          />
+            className={styles.sessionIcon}
+            style={{
+              color: SESSION_COLOR_VARS[session.color] || 'var(--color-blue)'
+            }}
+            aria-hidden
+          >
+            {session.shell === 'ssh' ? <Globe20Regular /> : <Code20Regular />}
+          </span>
         )}
         {isEditing ? (
           <input
@@ -178,10 +228,27 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
             autoFocus
           />
         ) : (
-          <span className={styles.itemTitle}>{session.title}</span>
+          <span className={styles.itemText}>
+            <span className={styles.itemTitle} title={session.title}>
+              {session.title}
+            </span>
+            {isAi && (
+              <span
+                className={`${styles.itemStatus} ${statusClass}`}
+                role={attentionType ? 'status' : undefined}
+              >
+                {attentionType && (
+                  <span className={styles.statusDot} aria-hidden />
+                )}
+                {statusText}
+              </span>
+            )}
+          </span>
         )}
         <button
           type="button"
+          tabIndex={-1}
+          title={`Close ${session.title} (Delete)`}
           className={styles.closeBtn}
           onClick={(e) => {
             e.stopPropagation()
@@ -190,7 +257,11 @@ export const SessionItem = memo(function SessionItem({ session, isActive, onClos
           aria-label={`Close ${session.title}`}
         >
           <svg width="8" height="8" viewBox="0 0 8 8">
-            <path d="M0.5 0.5L7.5 7.5M7.5 0.5L0.5 7.5" stroke="currentColor" strokeWidth="1" />
+            <path
+              d="M0.5 0.5L7.5 7.5M7.5 0.5L0.5 7.5"
+              stroke="currentColor"
+              strokeWidth="1"
+            />
           </svg>
         </button>
       </div>
