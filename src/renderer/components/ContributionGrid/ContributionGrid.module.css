@@ -57,3 +57,9 @@
 .grid[data-type="copilot"]::after {
   background: var(--fire-gradient-copilot);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .grid {
+    display: none;
+  }
+}

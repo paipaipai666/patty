@@ -1,8 +1,3 @@
-import {
-  useWorkspaceStore,
-  getFocusedSessionId
-} from '../../store/workspaceStore'
-import { useSessionStore } from '../../store/sessionStore'
 import { useState, useEffect } from 'react'
 import styles from './TitleBar.module.css'
 
@@ -156,10 +151,6 @@ export function TitleBar({
   onToggleSidebar
 }: TitleBarProps) {
   const [maximized, setMaximized] = useState(false)
-  const workspaces = useWorkspaceStore((state) => state.workspaces)
-  const activeWorkspaceId = useWorkspaceStore(
-    (state) => state.activeWorkspaceId
-  )
 
   useEffect(() => {
     const cleanup = window.terminalAPI.onMaximizeChange((val) =>
@@ -183,27 +174,6 @@ export function TitleBar({
         </button>
         <img className={styles.logo} src="icon.ico" alt="" />
         <span className={styles.title}>Patty</span>
-        {workspaces.length > 0 && (
-          <div className={styles.workspaceContext}>
-            <span>Workspaces</span>
-            <select
-              className={styles.workspaceSelect}
-              aria-label="Switch workspace"
-              value={activeWorkspaceId ?? ''}
-              onChange={(event) => {
-                useWorkspaceStore.getState().switchWorkspace(event.target.value)
-                const focused = getFocusedSessionId()
-                if (focused) useSessionStore.getState().setActive(focused)
-              }}
-            >
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
       <div className={styles.controls}>
         {onOpenSettings && (

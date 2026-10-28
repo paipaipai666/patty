@@ -114,6 +114,149 @@ async function verifyFocusContrast() {
   return { ...evidence, ratio }
 }
 
+async function verifyAgentAnimations(sessionId, theme) {
+  const rowSelector = `[data-tree-id="session:${sessionId}"]`
+  const sampleGrid = () =>
+    cdp.evaluate(`(() => {
+    const row = document.querySelector(${JSON.stringify(rowSelector)})
+    const grid = row.querySelector('[data-type]')
+    const canvas = grid?.querySelector('canvas')
+    if (!canvas) return null
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
+    let painted = 0
+    let checksum = 0
+    for (let index = 0; index < pixels.length; index++) {
+      checksum = (checksum * 31 + pixels[index]) >>> 0
+      if (index % 4 === 3 && pixels[index] > 0) painted++
+    }
+    const icon = row.querySelector('[data-testid="agent-icon"]')
+    const content = icon.parentElement
+    return { type: grid.dataset.type, painted, checksum, shadow: getComputedStyle(icon).boxShadow, contentLayer: getComputedStyle(content).zIndex, pointerEvents: getComputedStyle(grid).pointerEvents }
+  })()`)
+  const emit = (attention, aiType) =>
+    cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {
+    event: 'pty:attn', payload: [${JSON.stringify(sessionId)}, ${JSON.stringify(attention)}, ${JSON.stringify(aiType)}]
+  })`)
+  const animation = () =>
+    cdp.evaluate(`(() => {
+    const glow = document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-testid="agent-attention-glow"]')
+    const effect = glow?.getAnimations()[0]
+    return { state: glow?.dataset.attention, start: effect?.startTime, duration: effect?.effect.getTiming().duration, iterations: effect?.effect.getTiming().iterations, pointerEvents: glow && getComputedStyle(glow).pointerEvents }
+  })()`)
+  const brands = []
+  await cdp.evaluate(
+    `document.querySelector(${JSON.stringify(rowSelector)}).click()`
+  )
+  for (const aiType of [
+    'claude',
+    'opencode',
+    'codex',
+    'omp',
+    'qwen',
+    'copilot'
+  ]) {
+    await emit('permission', aiType)
+    await cdp.waitFor(
+      `document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type="${aiType}"] canvas') !== null`
+    )
+    await sleep(500)
+    const first = await sampleGrid()
+    await sleep(240)
+    const second = await sampleGrid()
+    assert.equal(second.type, aiType)
+    assert.ok(second.painted > 0, `${theme} ${aiType}: empty animation canvas`)
+    assert.notEqual(
+      first.checksum,
+      second.checksum,
+      `${theme} ${aiType}: frozen animation canvas`
+    )
+    assert.notEqual(
+      second.shadow,
+      'none',
+      `${theme} ${aiType}: selected icon has no glow`
+    )
+    assert.equal(second.contentLayer, '1')
+    assert.equal(second.pointerEvents, 'none')
+    brands.push(second)
+    const bounds = await cdp.evaluate(`(() => {
+      const row = document.querySelector(${JSON.stringify(rowSelector)}).getBoundingClientRect()
+      return { x: row.x, y: row.y, width: row.width, height: row.height }
+    })()`)
+    const { data } = await cdp.send('Page.captureScreenshot', {
+      format: 'png',
+      clip: { ...bounds, scale: 1 / nativeDensity }
+    })
+    writeFileSync(
+      join(output, `agent-${theme}-${aiType}.png`),
+      Buffer.from(data, 'base64')
+    )
+  }
+
+  const notifications = []
+  for (const [attention, label] of [
+    ['complete', 'Completed'],
+    ['error', 'Error'],
+    ['permission', 'Needs input']
+  ]) {
+    await emit(attention, 'claude')
+    await cdp.waitFor(
+      `document.querySelector(${JSON.stringify(rowSelector)}).innerText.includes(${JSON.stringify(label)})`
+    )
+    await sleep(60)
+    const effect = await animation()
+    assert.equal(effect.state, attention)
+    assert.equal(effect.duration, 1050)
+    assert.equal(effect.iterations, 1)
+    assert.equal(effect.pointerEvents, 'none')
+    assert.ok(typeof effect.start === 'number')
+    notifications.push(effect)
+  }
+  const beforeRepeat = await animation()
+  await emit('permission', 'claude')
+  await sleep(80)
+  assert.equal(
+    (await animation()).start,
+    beforeRepeat.start,
+    'Repeated notification restarted the glow'
+  )
+  await emit(null, null)
+  await cdp.waitFor(
+    `!document.querySelector(${JSON.stringify(rowSelector)}).querySelector('canvas, [data-testid="agent-attention-glow"]')`
+  )
+  await emit('permission', 'claude')
+  await cdp.waitFor(
+    `!!document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type="claude"] canvas')`
+  )
+  await cdp.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }]
+  })
+  await cdp.waitFor(`(() => {
+    const row = document.querySelector(${JSON.stringify(rowSelector)})
+    return getComputedStyle(row.querySelector('[data-type]')).display === 'none' && getComputedStyle(row.querySelector('[data-testid="agent-attention-glow"]')).display === 'none' && row.innerText.includes('Needs input')
+  })()`)
+  await cdp.send('Emulation.setEmulatedMedia', { features: [] })
+  await cdp.waitFor(
+    `getComputedStyle(document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type]')).display !== 'none'`
+  )
+  await cdp.evaluate(
+    `document.querySelector('[data-tree-id^="session:"]').click()`
+  )
+  assert.equal(
+    await cdp.evaluate(
+      `document.querySelector('[data-tree-id^="session:"]').querySelector('canvas') === null`
+    ),
+    true
+  )
+  return {
+    theme,
+    brands,
+    notifications,
+    repeatPreservesAnimation: true,
+    clearingRemovesEffects: true,
+    reducedMotion: true
+  }
+}
+
 try {
   assert.ok(
     resolve(app.appData).startsWith(resolve(tmpdir()) + sep + 'patty-e2e-')
@@ -150,6 +293,76 @@ try {
       'treeitem'
     )
   }
+  assert.equal(
+    await cdp.evaluate(
+      `document.querySelector('[aria-label="Switch workspace"]') === null`
+    ),
+    true
+  )
+  const splitRatioBeforeNavigation = await cdp.evaluate(
+    `document.querySelector('[aria-label="Resize terminal panes"]').getAttribute('aria-valuenow')`
+  )
+  await clickText('New terminal')
+  await cdp.waitFor(
+    `document.querySelectorAll('[data-tree-id^="session:"]').length === 3 && /PID [0-9]+/.test(document.body.innerText)`
+  )
+  await cdp.evaluate(
+    `(() => {
+      const row = document.querySelector('[role="treeitem"][aria-label="Terminal 3"]')
+      row.click()
+      row.focus()
+    })()`
+  )
+  await cdp.waitFor(
+    `document.activeElement?.getAttribute('aria-label') === 'Terminal 3'`
+  )
+  await press('F2', 113)
+  await cdp.waitFor(`document.activeElement?.tagName === 'INPUT'`)
+  await cdp.evaluate('document.activeElement.select()')
+  await cdp.insertText('编译日志')
+  await cdp.pressEnter()
+  await cdp.waitFor(
+    `document.querySelector('[aria-label="Close terminal 编译日志"]')?.offsetWidth > 0`
+  )
+  const visibleTerminalTitles = () =>
+    cdp.evaluate(
+      `Array.from(document.querySelectorAll('button[aria-label^="Close terminal "]')).filter(button => button.offsetWidth > 0).map(button => button.getAttribute('aria-label'))`
+    )
+  assert.deepEqual(await visibleTerminalTitles(), ['Close terminal 编译日志'])
+  await screenshot('sidebar-navigation')
+  await cdp.evaluate(
+    `document.querySelector('[role="treeitem"][aria-label="PowerShell"]').click()`
+  )
+  await cdp.waitFor(
+    `document.querySelector('[aria-label="Close terminal PowerShell"]')?.offsetWidth > 0`
+  )
+  assert.deepEqual(await visibleTerminalTitles(), [
+    'Close terminal PowerShell',
+    'Close terminal Claude Code'
+  ])
+  assert.equal(
+    await cdp.evaluate(
+      `document.querySelector('[aria-label="Resize terminal panes"]').getAttribute('aria-valuenow')`
+    ),
+    splitRatioBeforeNavigation
+  )
+  await screenshot('sidebar-split-navigation')
+  await cdp.evaluate(
+    `document.querySelector('[role="treeitem"][aria-label="编译日志"]').click()`
+  )
+  await cdp.waitFor(
+    `document.querySelector('[aria-label="Close terminal 编译日志"]')?.offsetWidth > 0`
+  )
+  assert.deepEqual(await visibleTerminalTitles(), ['Close terminal 编译日志'])
+  await cdp.evaluate(
+    `document.querySelector('[aria-label="Close terminal 编译日志"]').click()`
+  )
+  await cdp.waitFor(
+    `document.querySelectorAll('[data-tree-id^="session:"]').length === 2 && document.querySelectorAll('.xterm').length === 2`
+  )
+  await cdp.evaluate(
+    `document.querySelector('[role="treeitem"][aria-label="PowerShell"]').click()`
+  )
   for (const name of ['Patty', 'AgentNexus']) {
     await cdp.evaluate(
       `document.querySelector('[aria-label="New terminal or collection"]').click()`
@@ -218,6 +431,7 @@ try {
     join(output, 'render-metrics.json'),
     JSON.stringify(metrics, null, 2)
   )
+  const darkAgentAnimations = await verifyAgentAnimations(agentId, 'dark')
 
   const ratio = await cdp.evaluate(`(() => {
     const splitter = document.querySelector('[aria-label="Resize terminal panes"]')
@@ -366,6 +580,15 @@ try {
   await cdp.waitFor(`document.querySelectorAll('.xterm').length === 2`)
   await screenshot('light-workbench')
   const lightFocusContrast = await verifyFocusContrast()
+  const lightAgentAnimations = await verifyAgentAnimations(agentId, 'light')
+  writeFileSync(
+    join(output, 'agent-animations.json'),
+    JSON.stringify(
+      { dark: darkAgentAnimations, light: lightAgentAnimations },
+      null,
+      2
+    )
+  )
   writeFileSync(
     join(output, 'focus-contrast.json'),
     JSON.stringify(
@@ -390,12 +613,16 @@ try {
         checks: [
           'real terminal creation and split',
           'real shell input',
+          'sidebar navigation across named sessions and split layouts without a header workspace selector',
           'keyboard splitter',
           'menu focus and Escape',
           'one tree tab stop',
           'computed focus contrast in dark and light themes',
           'collection keyboard collapse and expand',
           'synthetic attention event rendering',
+          'six agent brands animate in dark and light themes',
+          'notification glow, repeat suppression and selected icon glow',
+          'clearing agent effects and reduced motion',
           'responsive widths',
           'minimum sidebar width, long Chinese title and pointer resize',
           'settings dialog',
@@ -404,9 +631,11 @@ try {
           'no runtime exceptions'
         ],
         fixture:
-          'Two real PowerShell PTYs, renamed and grouped through UI events. Claude status uses a synthetic attention event; no AI agent or SSH connection was started.',
+          'Two real PowerShell PTYs, renamed and grouped through UI events. Agent statuses use synthetic attention events for all six supported brands; no AI agent or SSH connection was started.',
         screenshots: [
           'empty',
+          'sidebar-navigation',
+          'sidebar-split-navigation',
           'workbench',
           'create-menu',
           'keyboard-focus',

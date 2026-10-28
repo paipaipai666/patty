@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect, memo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, memo } from 'react'
 import { Code20Regular, Globe20Regular } from '@fluentui/react-icons'
 import {
   useSessionStore,
@@ -6,6 +6,7 @@ import {
   type TerminalSession
 } from '../../store/sessionStore'
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
+import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
 interface SessionItemProps {
@@ -32,6 +33,15 @@ export const SessionItem = memo(function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null)
   const itemRef = useRef<HTMLDivElement>(null)
   const restoreFocus = useRef(false)
+  const previousAttention = useRef<string | null>(null)
+  const [glowNonce, setGlowNonce] = useState(0)
+
+  useEffect(() => {
+    if (attentionType && attentionType !== previousAttention.current) {
+      setGlowNonce((value) => value + 1)
+    }
+    previousAttention.current = attentionType
+  }, [attentionType])
 
   useLayoutEffect(() => {
     if (!isEditing && restoreFocus.current) {
@@ -55,6 +65,14 @@ export const SessionItem = memo(function SessionItem({
         : attentionType === 'error'
           ? styles.error
           : ''
+  const attentionGlowClass =
+    attentionType === 'permission'
+      ? styles.glow_permission
+      : attentionType === 'complete'
+        ? styles.glow_complete
+        : attentionType === 'error'
+          ? styles.glow_error
+          : null
 
   const handleDoubleClick = () => {
     setIsEditing(true)
@@ -128,8 +146,8 @@ export const SessionItem = memo(function SessionItem({
     opencode: (
       <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor">
         <path
-          fill-rule="evenodd"
-          clip-rule="evenodd"
+          fillRule="evenodd"
+          clipRule="evenodd"
           d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z"
         />
       </svg>
@@ -198,10 +216,22 @@ export const SessionItem = memo(function SessionItem({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      {isAi && <ContributionGrid aiType={session.aiType ?? null} />}
+      {attentionGlowClass && (
+        <div
+          key={glowNonce}
+          className={`${styles.glowFx} ${attentionGlowClass}`}
+          data-testid="agent-attention-glow"
+          data-attention={attentionType}
+          aria-hidden
+        />
+      )}
       <div className={styles.itemContent}>
         {isAi ? (
           <span
             className={`${styles.aiIcon} ${AI_ICON_CLASS[session.aiType!]}`}
+            data-testid="agent-icon"
+            aria-hidden
           >
             {AI_ICONS[session.aiType!]}
           </span>

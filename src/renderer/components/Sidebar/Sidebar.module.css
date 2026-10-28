@@ -163,6 +163,8 @@
   gap: 10px;
   width: 100%;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 .item:hover,
 .collectionItem:hover {
@@ -236,21 +238,93 @@
 }
 .aiIconClaude {
   color: var(--ai-claude-color);
+  background: var(--ai-claude-bg);
 }
 .aiIconOpencode {
   color: var(--ai-opencode-color);
+  background: var(--ai-opencode-bg);
 }
 .aiIconCodex {
   color: var(--ai-codex-color);
+  background: var(--ai-codex-bg);
 }
 .aiIconOmp {
   color: var(--ai-omp-color);
+  background: var(--ai-omp-bg);
 }
 .aiIconQwen {
   color: var(--ai-qwen-color);
+  background: var(--ai-qwen-bg);
 }
 .aiIconCopilot {
   color: var(--ai-copilot-color);
+  background: var(--ai-copilot-bg);
+}
+.itemActive .aiIconClaude {
+  box-shadow: 0 0 6px var(--ai-claude-glow);
+}
+.itemActive .aiIconOpencode {
+  box-shadow: 0 0 6px var(--ai-opencode-glow);
+}
+.itemActive .aiIconCodex {
+  box-shadow: 0 0 6px var(--ai-codex-glow);
+}
+.itemActive .aiIconOmp {
+  box-shadow: 0 0 6px var(--ai-omp-glow);
+}
+.itemActive .aiIconQwen {
+  box-shadow: 0 0 6px var(--ai-qwen-glow);
+}
+.itemActive .aiIconCopilot {
+  box-shadow: 0 0 6px var(--ai-copilot-glow);
+}
+@keyframes attentionGlow {
+  0% {
+    transform: translateY(-50%) scale(0);
+    opacity: 0;
+  }
+  33% {
+    transform: translateY(-50%) scale(1.5);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-50%) scale(2.5);
+    opacity: 0;
+  }
+}
+.glowFx {
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0);
+  opacity: 0;
+  animation: attentionGlow 1.05s ease-out forwards;
+}
+.glow_permission {
+  background: radial-gradient(
+    circle,
+    var(--attention-permission-glow),
+    transparent
+  );
+}
+.glow_complete {
+  background: radial-gradient(
+    circle,
+    var(--attention-complete-glow),
+    transparent
+  );
+}
+.glow_error {
+  background: radial-gradient(circle, var(--attention-error-glow), transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .glowFx {
+    display: none;
+  }
 }
 .closeBtn {
   display: flex;

@@ -3,10 +3,12 @@ import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
 import { TitleBar } from '../TitleBar'
+import { useWorkspaceStore } from '../../../store/workspaceStore'
 
 let terminalAPI: Record<string, any>
 
 beforeEach(() => {
+  useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null })
   terminalAPI = {
     windowMinimize: vi.fn(),
     windowMaximize: vi.fn(),
@@ -22,14 +24,24 @@ afterEach(() => {
   delete (window as any).terminalAPI
 })
 
-function render(overrides: { onOpenSettings?: (() => void) | null; sidebarVisible?: boolean; onToggleSidebar?: () => void } = {}) {
+function render(
+  overrides: {
+    onOpenSettings?: (() => void) | null
+    sidebarVisible?: boolean
+    onToggleSidebar?: () => void
+  } = {}
+) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
     root.render(
       <TitleBar
-        onOpenSettings={overrides.onOpenSettings === undefined ? vi.fn() : (overrides.onOpenSettings as (() => void) | undefined)}
+        onOpenSettings={
+          overrides.onOpenSettings === undefined
+            ? vi.fn()
+            : (overrides.onOpenSettings as (() => void) | undefined)
+        }
         sidebarVisible={overrides.sidebarVisible ?? true}
         onToggleSidebar={overrides.onToggleSidebar ?? vi.fn()}
       />
@@ -39,6 +51,32 @@ function render(overrides: { onOpenSettings?: (() => void) | null; sidebarVisibl
 }
 
 describe('TitleBar', () => {
+  it('does not add another workspace selector when saved layouts exist', () => {
+    useWorkspaceStore.setState({
+      workspaces: ['Workspace 17', 'Workspace 17', 'Build logs'].map(
+        (name, index) => ({
+          id: `workspace-${index}`,
+          name,
+          collectionId: null,
+          paneTree: {
+            type: 'leaf',
+            id: `pane-${index}`,
+            sessionId: `session-${index}`
+          },
+          focusedPaneId: `pane-${index}`
+        })
+      ),
+      activeWorkspaceId: 'workspace-0'
+    })
+    const { container } = render()
+    expect(container.querySelector('select')).toBeNull()
+    expect(container.textContent).toContain('Patty')
+    expect(container.textContent).not.toContain('Workspaces')
+    expect(
+      container.querySelector('[aria-label="Hide sidebar"]')
+    ).not.toBeNull()
+  })
+
   it('renders title "Patty"', () => {
     const { container } = render()
     expect(container.textContent).toContain('Patty')
@@ -47,9 +85,13 @@ describe('TitleBar', () => {
   it('sidebar toggle button calls onToggleSidebar', () => {
     const onToggle = vi.fn()
     const { container } = render({ onToggleSidebar: onToggle })
-    const btn = container.querySelector<HTMLElement>('[aria-label="Hide sidebar"]')
+    const btn = container.querySelector<HTMLElement>(
+      '[aria-label="Hide sidebar"]'
+    )
     expect(btn).toBeTruthy()
-    act(() => { btn!.click() })
+    act(() => {
+      btn!.click()
+    })
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
 
@@ -58,12 +100,13 @@ describe('TitleBar', () => {
     const { container } = render({ onOpenSettings: onOpen })
     const btn = container.querySelector<HTMLElement>('[aria-label="Settings"]')
     expect(btn).toBeTruthy()
-    act(() => { btn!.click() })
+    act(() => {
+      btn!.click()
+    })
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
   it('settings button is hidden when onOpenSettings is not provided', () => {
-
     render({ onOpenSettings: null })
 
     document.body.innerHTML = ''
@@ -79,11 +122,23 @@ describe('TitleBar', () => {
 
   it('window control buttons call terminalAPI methods', () => {
     const { container } = render()
-    act(() => { (container.querySelector('[aria-label="Minimize"]') as HTMLButtonElement)?.click() })
+    act(() => {
+      ;(
+        container.querySelector('[aria-label="Minimize"]') as HTMLButtonElement
+      )?.click()
+    })
     expect(terminalAPI.windowMinimize).toHaveBeenCalledTimes(1)
-    act(() => { (container.querySelector('[aria-label="Maximize"]') as HTMLButtonElement)?.click() })
+    act(() => {
+      ;(
+        container.querySelector('[aria-label="Maximize"]') as HTMLButtonElement
+      )?.click()
+    })
     expect(terminalAPI.windowMaximize).toHaveBeenCalledTimes(1)
-    act(() => { (container.querySelector('[aria-label="Close"]') as HTMLButtonElement)?.click() })
+    act(() => {
+      ;(
+        container.querySelector('[aria-label="Close"]') as HTMLButtonElement
+      )?.click()
+    })
     expect(terminalAPI.windowClose).toHaveBeenCalledTimes(1)
   })
 

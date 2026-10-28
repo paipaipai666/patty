@@ -29,28 +29,6 @@
   font-weight: 600;
   color: var(--text-primary);
 }
-.workspaceContext {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: 10px;
-  padding-left: 20px;
-  border-left: 1px solid var(--border-medium);
-  color: var(--text-secondary);
-  min-width: 0;
-  font-size: 12px;
-}
-.workspaceSelect {
-  max-width: 220px;
-  height: 28px;
-  color: var(--text-primary);
-  background: var(--bg-titlebar);
-  border: 0;
-  border-radius: 4px;
-  font: inherit;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
 .controls {
   display: flex;
   height: 100%;
@@ -88,16 +66,4 @@
 }
 .btnControl:focus-visible {
   outline-offset: -3px;
-}
-@media (max-width: 700px) {
-  .workspaceContext > span {
-    display: none;
-  }
-  .workspaceContext {
-    padding-left: 12px;
-    margin-left: 0;
-  }
-  .workspaceSelect {
-    max-width: 140px;
-  }
 }
