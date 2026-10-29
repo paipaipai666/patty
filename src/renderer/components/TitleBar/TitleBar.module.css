@@ -19,11 +19,6 @@
   -webkit-app-region: drag;
   app-region: drag;
 }
-.logo {
-  width: 22px;
-  height: 22px;
-  object-fit: contain;
-}
 .title {
   font-size: 15px;
   font-weight: 600;

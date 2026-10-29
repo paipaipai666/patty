@@ -172,7 +172,6 @@ export function TitleBar({
         >
           <SidebarIcon open={sidebarVisible} />
         </button>
-        <img className={styles.logo} src="icon.ico" alt="" />
         <span className={styles.title}>Patty</span>
       </div>
       <div className={styles.controls}>

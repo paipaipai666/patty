@@ -90,4 +90,13 @@
 - 实机证据：`output/graphite/sidebar-navigation.png`、`sidebar-split-navigation.png` 与更新后的 `workbench.png`。对照截图确认标题栏不再显示 Workspaces，侧栏自定义名称及双窗格导航可用。
 - 657 项前端测试通过；类型检查、无注释检查、release 构建和更新后的 Graphite 原生验收通过。验收使用隔离 APPDATA，未写入用户会话配置。
 
+## 2026-10-28 移除标题栏 Logo
+
+按用户要求移除标题栏 Logo 图片及其独占样式，保留 Patty 文字、侧栏开关和原生窗口操作。
+
+- 9 项标题栏组件测试、类型检查及无注释检查通过。
+- 原运行实例关闭后，按原配置构建成功，产物仍为 `D:/rust-cache/target/release/patty.exe`。另存的临时构建及探测目录已清理。
+- 在该正式产物上验证标题栏图片数为 0、文字为 Patty，且侧栏可以正常收起和展开。证据为 `output/graphite/no-logo-titlebar.png` 与 `no-logo-verification.json`。
+- 未修改品牌图标在应用其他位置的使用，也未改变会话、分屏或 Agent 动画逻辑。
+
 final result: passed
