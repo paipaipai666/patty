@@ -21,7 +21,7 @@ fn boot_bg_reads_from_persisted_settings() {
     patty::store::save_settings(&settings).unwrap();
 
     let c = patty::boot_background_color();
-    assert_eq!(c, tauri::window::Color(246, 247, 249, 255));
+    assert_eq!(c, tauri::window::Color(238, 240, 243, 255));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -34,7 +34,7 @@ fn boot_bg_dark_default_from_no_settings() {
     patty::store::set_data_dir_for_test(dir.clone());
 
     let c = patty::boot_background_color();
-    assert_eq!(c, tauri::window::Color(10, 10, 12, 255));
+    assert_eq!(c, tauri::window::Color(20, 21, 23, 255));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

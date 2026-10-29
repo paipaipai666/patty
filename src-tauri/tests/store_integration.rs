@@ -46,7 +46,7 @@ fn load_state_returns_defaults_when_no_file() {
     let state = patty::store::load_state();
     assert_eq!(state["sessions"], serde_json::json!([]));
     assert!(state["activeSessionId"].is_null());
-    assert_eq!(state["sidebarWidth"], 220);
+    assert_eq!(state["sidebarWidth"], 264);
 }
 
 #[test]
@@ -158,7 +158,7 @@ fn corrupt_state_file_yields_defaults() {
     fs::write(dir.join("state.json"), "{not json").unwrap();
     let state = patty::store::load_state();
     assert_eq!(state["sessions"], serde_json::json!([]));
-    assert_eq!(state["sidebarWidth"], 220);
+    assert_eq!(state["sidebarWidth"], 264);
 }
 
 #[test]
