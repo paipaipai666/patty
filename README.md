@@ -1,12 +1,10 @@
 <div align="center">
 
-![Patty Logo](logo/patty-icon.svg)
+![Patty logo](logo/patty-icon.svg)
 
 # Patty
 
-A modern, minimal terminal manager for Windows with a sidebar layout.
-
-> **Platform: Windows-only by design.** The backend deliberately uses Windows APIs (ConPTY, registry, WMI via PowerShell); do not add cross-platform abstraction layers.
+A Windows terminal manager for local shells, SSH connections, and AI coding tools.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
@@ -14,204 +12,208 @@ A modern, minimal terminal manager for Windows with a sidebar layout.
 
 </div>
 
+Patty keeps sessions in a searchable sidebar and displays them in split workspaces. It uses Tauri 2, React, and xterm.js, with a Rust backend for local terminals, SSH, and resource monitoring.
+
 ## Features
 
-- **Multi-tab Terminal** - Create and manage multiple terminal sessions with independent PTY processes
-- **Collection System** - Organize terminals into nested folders with full drag-and-drop support
-- **5 Shell Support** - PowerShell 7, Windows PowerShell, CMD, Git Bash, and WSL
-- **Fully Customizable UI** - Dark/Light themes plus fully custom themes with visual color picker and JSON editor; import/export themes
-- **Customizable Terminal** - Font family (with system font picker), font size (8-32), cursor style (block/underline/bar), cursor blink, terminal opacity (40-100%)
-- **Resizable Sidebar** - Left or right positioning with session search/filter
-- **Context Menus** - Rename, recolor, close sessions; create, rename, delete subcollections
-- **Status Bar** - Shows active session name, shell type, current working directory, and PID
-- **Configurable Shortcuts** - All keyboard shortcuts remappable in settings
-- **Session Persistence** - Sessions, workspaces, pane layouts, and collections survive restarts with auto-save; state files written atomically
-- **Split Panes & Workspaces** - Split any pane horizontally/vertically (tmux-style, inheriting cwd); sessions live in workspaces, drag between panes
-- **SSH Sessions** - Connect to remote hosts over SSH (in-process russh, no external ssh.exe): saved profiles, `~/.ssh/config` import, password/public-key auth via in-app prompts, TOFU host-key verification, remote CPU/memory/network/disk monitor
-- **Metrics Dashboard** - Local CPU/memory/GPU/process metrics sampled on demand (PowerShell counters, only while the dashboard is open)
-- **AI Attention Notifications** - Visual indicators when Claude Code, OpenCode, Codex CLI, Oh My Pi, Qwen Code, or GitHub Copilot CLI needs your input
+- **Sessions and collections.** Rename and color sessions, organize them in nested collections, and move them with drag and drop. Navigate the sidebar with the keyboard.
+- **Split workspaces.** Split to the right or below, resize panes, and drag sessions into a layout. Selecting a sidebar session returns to its workspace and focuses its pane. Local splits inherit the shell and working directory.
+- **Local shells.** Use PowerShell 7, Windows PowerShell, CMD, Git Bash, or WSL. Local terminals use a bundled Microsoft ConPTY runtime for resizing and text reflow.
+- **SSH.** Save connection profiles, import `~/.ssh/config`, and connect with passwords or private keys. An SSH command bar provides command history and suggestions. The remote monitor displays CPU, memory, network, and disk usage on Linux hosts.
+- **Terminal display.** Choose system fonts, cursor shape, blinking, opacity, and scrollback size. Terminal output supports Unicode and inline image previews.
+- **Themes.** Choose Dark, Light, Dracula, Nord, Tokyo Night, or Solarized Light. Create custom themes with color pickers or JSON, and import or export them.
+- **AI attention indicators.** See when supported coding tools need input, finish a turn, or report an error, with tool icons, animated activity grids, and status labels in the sidebar.
+- **Local metrics.** Open the Metrics dashboard for CPU, memory, GPU, and process information. Local metrics are sampled while the dashboard is open.
 
-## Screenshot
+## Screenshots
 
-### Dark
+### Dark theme
 
-<div align="center">
+![Dark theme with two terminal panes, collections, and an AI attention indicator](main-dark.png)
 
-![Patty-dark](main-dark.png)
+### Light theme
 
-</div>
+![Light theme with two terminal panes and sidebar session navigation](main-light.png)
 
-### Light
+These previews were captured during the Graphite workbench validation on 2026-10-28, using demonstration sessions and a simulated AI attention event. The title-bar logo visible in these captures has since been removed.
 
-<div align="center">
+## Install
 
-![Patty-light](main-light.png)
+Download a Windows installer from [Releases](https://github.com/paipaipai666/patty/releases). The NSIS installer installs Patty for the current user.
 
-</div>
+Patty requires Windows and Microsoft Edge WebView2. PowerShell 7, Git Bash, WSL, and AI tools must be installed separately to use them. The ConPTY runtime is included with Patty.
 
-## Supported Shells
+## Use sessions and workspaces
+
+1. Click **New terminal** in the sidebar to open the default shell. Use its dropdown to choose a folder, create a collection, or open an SSH profile. Change the default shell under **Settings → Terminal**.
+2. Use the pane header buttons to split to the right or below. Drag the divider to resize the panes.
+3. Select a session in the sidebar to focus it and return to its saved workspace layout. Drag sidebar sessions into panes to rearrange the layout.
+4. Double-click a session name or press `F2` while its sidebar row is focused to rename it. Right-click a session or collection for more actions.
+
+The status bar shows the selected session, shell, directory or SSH target, and local process ID when available. **Metrics** opens the local dashboard; **Monitor** is available for SSH sessions.
+
+Patty saves session definitions, collections, workspace layouts, and settings automatically. Restarting Patty opens new shell processes; it does not resume running commands or restore terminal scrollback.
+
+### Supported shells
 
 | Shell | ID |
-|-------|-----|
+| --- | --- |
 | PowerShell 7 | `pwsh` |
 | Windows PowerShell | `powershell` |
 | Command Prompt | `cmd` |
 | Git Bash | `gitbash` |
 | WSL | `wsl` |
+| SSH connection | `ssh` |
 
-SSH sessions use the `ssh` shell type. Host keys are verified TOFU-style against your `~/.ssh/known_hosts` plus Patty's own known_hosts, with an in-app trust prompt on first contact.
+Manage SSH profiles under **Settings → SSH**. Patty uses an in-process SSH client and prompts for credentials, private-key passphrases, and unknown host keys. Host-key checks use your `~/.ssh/known_hosts` and Patty's own known-hosts file.
 
-## AI Attention Notifications
+## AI attention indicators
 
-Patty integrates with AI coding assistants to show colored visual indicators on sidebar items when they need your attention:
+Run supported AI tools inside a local Patty terminal so their hooks can identify the session.
 
-| Event | Color | Description |
-|-------|-------|-------------|
-| Permission Request | 🔵 Blue | Tool needs permission to run |
-| Question | 🔵 Blue | AI is asking for clarification |
-| Task Complete | 🟢 Green | AI finished responding |
-| Error | 🔴 Red | Execution error occurred |
+| Tool | Adapter |
+| --- | --- |
+| Claude Code | Lifecycle hooks |
+| OpenCode | TypeScript plugin |
+| Codex CLI | Lifecycle hooks |
+| Oh My Pi | TypeScript extension |
+| Qwen Code | Lifecycle hooks |
+| GitHub Copilot CLI | Hook configuration |
 
-Notification events trigger an animated contribution-grid style effect and a colored glow on the session item.
+| Sidebar status | Meaning |
+| --- | --- |
+| Needs input | A permission request or question needs attention |
+| Completed | The tool finished responding |
+| Error | The tool reported an error |
 
-### Supported AI Tools
-
-- **Claude Code** - Via Notification/Stop/SessionStart/SessionEnd hooks (PowerShell hook script)
-- **OpenCode** - Via plugin system (TypeScript plugin)
-- **Codex CLI** - Via lifecycle hooks (PowerShell hook script)
-- **Oh My Pi (omp)** - Via agent extension (TypeScript)
-- **Qwen Code** - Via `settings.json` lifecycle hooks (PowerShell hook script)
-- **GitHub Copilot CLI** - Via `~/.copilot/hooks/*.json` (PowerShell hook script)
-
-All adapters translate native events into the shared wire vocabulary pinned by `resources/hook-protocol.json` — consumed by both the Rust hook server's consistency test and the adapters' contract tests, so a vocabulary drift fails CI instead of silently dimming the indicators.
-
-### Configuration
-
-Go to **Settings → Notifications** to enable or disable for each AI tool independently. Toggling a tool **off removes** Patty's hooks from that tool's config (Claude Code `settings.json`, Codex `hooks.json`, the OpenCode/omp plugin files); toggling on reinstalls them.
+Use **Settings → Notifications** to enable or disable each adapter. Enabling an adapter installs Patty's integration in that tool's configuration; disabling it removes Patty's integration. Restart an already-running AI tool after changing its hook configuration. Available events depend on the tool's hooks.
 
 ## Settings
 
-The settings modal covers 6 categories:
-
 | Category | Options |
-|----------|---------|
-| **Appearance** | Dark/Light/Custom themes, font family (system font picker), font size |
-| **Terminal** | Cursor style (block/underline/bar), cursor blink, terminal opacity (40-100%), default shell |
-| **Shortcuts** | Remap all keyboard shortcuts via key capture |
-| **Layout** | Sidebar position (left/right) |
-| **Notifications** | Toggle AI notifications for Claude Code, OpenCode, Codex CLI, Oh My Pi, Qwen Code, and Copilot CLI independently |
-| **SSH** | Manage saved SSH profiles (host/port/user/identity file), import from `~/.ssh/config` |
+| --- | --- |
+| Appearance | Built-in and custom themes, theme import and export, system font picker, font size from 8 to 32 |
+| Terminal | Default shell, cursor shape and blinking, opacity from 40% to 100%, scrollback of 1,000, 2,000, 5,000, or 10,000 lines |
+| Shortcuts | Remap application shortcuts by recording a key combination |
+| Layout | Place the sidebar on the left or right |
+| Notifications | Enable or disable individual AI adapters |
+| SSH | Create and edit connection profiles, select identity files, import SSH config |
 
-Custom themes can be edited visually with color pickers or directly as JSON, with import/export support.
+Scrollback changes apply to newly created terminals. The sidebar width can be adjusted by dragging its divider.
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
+
+These are the default application shortcuts. Remap them under **Settings → Shortcuts**.
 
 | Shortcut | Action |
-|----------|--------|
+| --- | --- |
 | `Ctrl+T` | New terminal |
-| `Ctrl+W` | Close current terminal |
-| `Ctrl+]` / `Ctrl+[` | Next / Previous terminal |
-| `Ctrl+B` | Toggle sidebar |
-| `Ctrl+1-9` | Jump to terminal by index |
-| `Ctrl+Shift+D` | Split focused pane horizontally |
-| `Ctrl+Shift+E` | Split focused pane vertically |
-| `Ctrl+Shift+W` | Close focused pane |
-| `Ctrl+C` | Copy selection in terminal, or send interrupt if no selection |
-| `Ctrl+V` | Paste in terminal |
-| `Ctrl+Shift+C` | Copy in terminal |
-| `Ctrl+Shift+V` | Paste in terminal |
+| `Ctrl+W` | Close the current terminal |
+| `Ctrl+]` | Next session |
+| `Ctrl+[` | Previous session |
+| `Ctrl+B` | Toggle the sidebar |
+| `Ctrl+,` | Open settings |
+| `Ctrl+Shift+D` | Split to the right |
+| `Ctrl+Shift+E` | Split below |
+| `Ctrl+Shift+W` | Close the focused pane |
 
-All shortcuts are remappable in Settings.
+`Ctrl+1` through `Ctrl+9` select sessions by index. With a sidebar row focused, `F2` renames it and `Delete` closes a session. These bindings are separate from the remappable shortcuts above. When terminal input has focus, terminal and shell key bindings take precedence.
 
-## Installation
+In the terminal, `Ctrl+C` copies selected text or sends an interrupt when nothing is selected. `Ctrl+V` pastes; `Ctrl+Shift+C` and `Ctrl+Shift+V` also copy and paste.
 
-### From Source
+## Build from source
 
-Prerequisites: Node.js 20+ and a stable Rust toolchain (1.85+, per `rust-version` in Cargo.toml).
+Development requires Windows with:
 
-```bash
-# Clone the repository
+- Git.
+- Node.js compatible with the installed tools: 20.19+ within 20.x, 22.13+ within 22.x, or 24+. CI uses Node.js 20.x and npm 11.
+- A current stable Rust toolchain with the MSVC target.
+- Visual Studio Build Tools with **Desktop development with C++** and a Windows SDK.
+- Microsoft Edge WebView2 Runtime.
+
+Install dependencies and start the desktop app:
+
+```powershell
 git clone https://github.com/paipaipai666/patty.git
 cd patty
-
-# Install dependencies
-npm install
-
-# Run in development mode
+npm ci
 npm run dev
 ```
 
-### Build Installer
+On Windows, `npm ci` downloads and verifies the pinned Microsoft ConPTY package through `postinstall`. Tauri's development and build hooks also prepare the native files. For offline preparation and integrity checks, see [Bundled ConPTY runtime](resources/conpty.md).
 
-```bash
-# Package as NSIS installer
-npm run package
+### Build an installer
+
+```powershell
+npm run package:nsis
 ```
 
-The installer will be created in `src-tauri/target/release/bundle/nsis`.
+`npm run package` also builds the configured NSIS bundle. The default output directory is `src-tauri/target/release/bundle/nsis/`; a custom Cargo target directory changes that location. Keep the bundled ConPTY files with the application when distributing a build.
 
-## Tech Stack
+`npm run build` only builds the frontend into `out/renderer/`. Use a package command to compile the Rust application and produce an installer.
 
-- **Framework**: Tauri 2 (Rust backend + system WebView2)
-- **Language**: TypeScript 5.7 (strict mode) + Rust (edition 2021)
-- **UI**: React 18.3 + CSS Modules
-- **Terminal**: xterm.js 5.5 (WebGL renderer with canvas fallback, Fit, WebLinks, Unicode11 addons)
-- **PTY**: portable-pty (Windows ConPTY)
-- **State**: Zustand 5
-- **Packaging**: tauri-bundler (NSIS installer)
+## Run checks
 
-## Project Structure
+After `npm ci`, run the same checks used by CI:
 
+```powershell
+npm test
+npm run typecheck
+npm run check:comments
+cargo test --manifest-path src-tauri/Cargo.toml --all-targets
 ```
-patty/
-├── src-tauri/
-│   ├── src/
-│   │   ├── main.rs              # Thin entry — delegates to lib.rs::run()
-│   │   ├── lib.rs               # Window bootstrap, IPC command registration, startup wiring
-│   │   ├── pty.rs               # PTY sessions (spawn/write/resize/kill, preheat, ConPTY DSR)
-│   │   ├── sshconn.rs           # SSH sessions over russh (auth/host-key prompts, metrics channels)
-│   │   ├── ssh.rs               # ~/.ssh/config import parser
-│   │   ├── hooks.rs             # Hook HTTP server (loopback + per-process secret), heartbeat watchdog
-│   │   ├── installer.rs         # AI-tool hook install/remove (Claude Code, OpenCode, Codex, omp)
-│   │   ├── store.rs             # Settings/state JSON persistence (atomic writes, merge, validation)
-│   │   ├── metrics.rs           # Local resource metrics (PowerShell counters, on-demand sampling)
-│   │   └── fonts.rs             # System font enumeration (registry)
-│   ├── tauri.conf.json          # Window, bundle (NSIS), resource mapping
-│   └── capabilities/            # IPC permission set
-├── src/
-│   ├── renderer/                # React application
-│   │   ├── api.ts               # window.terminalAPI shim over Tauri invoke/listen
-│   │   ├── components/
-│   │   │   ├── TitleBar/        # Custom frameless title bar
-│   │   │   ├── Sidebar/         # Sidebar, session tree, collection tree
-│   │   │   ├── Terminal/        # xterm.js terminal panes
-│   │   │   ├── Pane/            # Split tree, sash, drag-drop targets
-│   │   │   ├── StatusBar/       # Session info bar
-│   │   │   ├── Settings/        # Settings modal (6 categories)
-│   │   │   ├── SshMonitor/      # SSH remote metrics panel
-│   │   │   ├── MetricsDashboard/ # Local metrics dashboard
-│   │   │   ├── ContributionGrid/ # Animated AI activity indicator
-│   │   │   └── App/             # ContextMenu, PromptDialog, Toasts
-│   │   ├── store/               # Zustand stores (session, workspace, settings, toast, metrics)
-│   │   ├── hooks/               # Shared React hooks
-│   │   └── styles/              # Global CSS, theme definitions
-│   └── shared/                  # Shared TypeScript types + pure normalizers
-├── resources/                   # App icon, hook adapters (ps1/ts), hook-protocol.json (wire vocabulary)
-├── scripts/shell-integration/   # Shell startup scripts injected into PTYs
-├── e2e/                         # Release-binary smoke test + startup benchmark (CDP)
-├── logo/                        # Logo assets
-├── vite.config.ts
-├── package.json
-├── tsconfig.json
-└── ...
+
+To verify the prepared native files:
+
+```powershell
+npm run check:conpty
 ```
+
+If installation scripts were skipped, run `npm run prepare:conpty` before invoking Cargo directly.
+
+### Test the desktop app
+
+Build the release executable first with `npm run package:nsis`. Save your work and close other Patty instances before running UI tests, because the application runs as a single instance.
+
+```powershell
+npm run test:e2e
+npm run test:e2e:graphite
+New-Item -ItemType Directory -Force output/resize | Out-Null
+node e2e/resize.test.mjs . output/resize
+```
+
+The UI harness launches the release executable with isolated `APPDATA` and controls WebView2 through CDP. The tests cover terminal lifecycle, layout and themes, and continuous output during maximize, divider dragging, and sibling-pane closure. The resize test also checks Unicode, alternate buffers, resize failure recovery, and bounded scrollback. Set `PATTY_EXE` to test a release executable at another path.
+
+`npm run test:e2e:graphite` writes UI screenshots under `output/graphite/`. `npm run benchmark:startup` measures startup using the same harness.
+
+## Project structure
+
+| Path | Purpose |
+| --- | --- |
+| `src/renderer/` | React UI, Zustand stores, themes, and terminal rendering |
+| `src/renderer/components/Pane/` | Stable terminal hosts, split layout, dividers, and drop targets |
+| `src/renderer/components/Terminal/` | xterm.js panes, resize queue, and inline image handling |
+| `src/shared/` | Shared types, persistence models, and normalizers |
+| `src-tauri/src/lib.rs` | Window startup and Tauri commands |
+| `src-tauri/src/pty.rs` | Local PTY lifecycle, preheated sessions, input queue, and output delivery |
+| `src-tauri/src/conpty.rs` | Bundled ConPTY runtime loading |
+| `src-tauri/src/sshconn.rs` | SSH connections, authentication, host-key prompts, and remote metrics |
+| `src-tauri/src/hooks.rs` and `installer.rs` | AI hook event server and adapter installation |
+| `src-tauri/src/store.rs` | Settings and workspace persistence |
+| `resources/` | Hook adapters, app icon, hook protocol, and ConPTY manifest |
+| `scripts/` | ConPTY preparation, shell integration, version sync, and development checks |
+| `e2e/` | Desktop UI tests and CDP harness |
+| `.github/workflows/` | Windows build, test, and release workflows |
+
+The backend uses Windows APIs for terminals, fonts, and local metrics. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Patty is licensed under the [MIT License](LICENSE). The bundled Microsoft ConPTY runtime includes its [MIT notice](licenses/conpty-LICENSE.txt).
 
 ## Acknowledgments
 
-- [xterm.js](https://xtermjs.org/) - Terminal emulator for the web
-- [Tauri](https://v2.tauri.app/) - Build tiny, fast desktop apps with a web frontend
-- [Zustand](https://github.com/pmndrs/zustand) - State management
+- [Tauri](https://v2.tauri.app/)
+- [xterm.js](https://xtermjs.org/)
+- [Zustand](https://github.com/pmndrs/zustand)
+- [Microsoft Terminal and ConPTY](https://github.com/microsoft/terminal)

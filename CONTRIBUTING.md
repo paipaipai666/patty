@@ -1,69 +1,45 @@
 # Contributing to Patty
 
-Thank you for your interest in contributing to Patty! This document provides guidelines and instructions for contributing.
+Patty is a Windows application built with Tauri 2, a Rust backend, and a React frontend. Follow the [source build instructions](README.md#build-from-source) before making changes.
 
-## How to Contribute
+## Report a bug or request a feature
 
-### Reporting Bugs
+Search [existing issues](https://github.com/paipaipai666/patty/issues) before opening a new report.
 
-1. Check existing [issues](https://github.com/paipaipai666/patty/issues) to avoid duplicates
-2. Use the [Bug Report](https://github.com/paipaipai666/patty/issues/new?template=bug_report.yml) template
-3. Include detailed steps to reproduce the issue
-4. Add screenshots if applicable
+For a bug, use the [bug report template](https://github.com/paipaipai666/patty/issues/new?template=bug_report.yml). Include the Patty version, Windows version, shell, reproduction steps, and expected behavior. Include screenshots or logs when they help explain the problem, with credentials and other private data removed.
 
-### Suggesting Features
+For a feature, use the [feature request template](https://github.com/paipaipai666/patty/issues/new?template=feature_request.yml). Describe the problem you want to solve and how you would use the feature.
 
-1. Check existing [issues](https://github.com/paipaipai666/patty/issues) to avoid duplicates
-2. Use the [Feature Request](https://github.com/paipaipai666/patty/issues/new?template=feature_request.yml) template
-3. Describe the problem and your proposed solution
+## Submit a change
 
-### Submitting Changes
+1. Fork the repository and create a branch for your change.
+2. Install dependencies with `npm ci` and start Patty with `npm run dev`.
+3. Make one focused change and add regression coverage for behavior changes.
+4. Run the [CI checks](README.md#run-checks). For terminal, pane, or interaction changes, also run the relevant [desktop UI tests](README.md#test-the-desktop-app).
+5. Commit with a conventional prefix such as `fix:`, `feat:`, `refactor:`, `test:`, `docs:`, or `chore:`.
+6. Open a pull request describing the problem, the resulting behavior, and the checks you ran. Include updated screenshots for visible UI changes.
 
-1. Fork the repository
-2. Create a new branch: `git checkout -b feature/your-feature`
-3. Make your changes
-4. Test your changes: `npm run dev`
-5. Commit your changes: `git commit -m "Add your feature"`
-6. Push to your fork: `git push origin feature/your-feature`
-7. Create a Pull Request
+## Work in the correct module
 
-## Development Setup
+| Area | Location |
+| --- | --- |
+| UI components and CSS Modules | `src/renderer/components/` |
+| Client state and persistence scheduling | `src/renderer/store/` |
+| Built-in themes | `src/renderer/themes/` |
+| Shared TypeScript types and normalizers | `src/shared/` |
+| Native terminal, SSH, hooks, metrics, and persistence | `src-tauri/src/` |
+| Rust integration tests | `src-tauri/tests/` |
+| AI hook adapters and ConPTY manifest | `resources/` |
+| Native UI tests | `e2e/` |
 
-```bash
-# Clone your fork
-git clone https://github.com/paipaipai666/patty.git
-cd patty
+Use TypeScript for frontend code, Rust for native behavior, and CSS Modules for component styles. Follow the existing module boundaries. The backend targets Windows.
 
-# Install dependencies
-npm install
+Write code whose names and tests explain its behavior. Explanatory code comments are rejected by `npm run check:comments`; tool directives are allowed by that check.
 
-# Run in development mode
-npm run dev
+Keep generated dependencies, build output, ConPTY binaries, and test captures out of commits. The ConPTY package version and hashes belong in `resources/conpty.lock.json`; preparation and offline usage are documented in [Bundled ConPTY runtime](resources/conpty.md).
 
-# Build for production
-npm run build
-```
+## Update documentation and screenshots
 
-## Code Style
+Keep README instructions consistent with `package.json`, Tauri configuration, and the current UI. Document application behavior rather than historical implementation details.
 
-- Use TypeScript for all new code
-- Follow existing code conventions
-- Use CSS Modules for styling
-- Keep components small and focused
-
-## Project Structure
-
-```
-src/
-├── main/          # Electron main process
-├── preload/       # Preload scripts
-├── renderer/      # React application
-│   ├── components/
-│   ├── store/
-│   └── styles/
-└── shared/        # Shared types
-```
-
-## Questions?
-
-Feel free to open an issue for any questions about contributing.
+The [Graphite UI test](README.md#test-the-desktop-app) captures demonstration sessions in dark and light themes under `output/graphite/`. Inspect those captures before using them to replace `main-dark.png` and `main-light.png`. Identify simulated AI events in screenshot captions.
