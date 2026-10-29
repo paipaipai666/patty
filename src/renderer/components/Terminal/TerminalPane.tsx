@@ -28,6 +28,7 @@ import {
 import { IipOverlay } from './IipOverlay'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
 import { markTerminalOpen } from '../../utils/shellReadiness'
+import { createPtyResizeQueue } from './ptyResizeQueue'
 
 interface TerminalPaneProps {
   session: TerminalSession
@@ -95,6 +96,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const ptyResizeRef = useRef<ReturnType<typeof createPtyResizeQueue> | null>(null)
   const webglAddonRef = useRef<WebglAddon | null>(null)
   const canvasAddonRef = useRef<CanvasAddon | null>(null)
 
@@ -107,6 +109,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
   const sessionRef = useRef(session)
   sessionRef.current = session
+  const onUsedRef = useRef(onUsed)
+  onUsedRef.current = onUsed
 
   const iipPatcherRef = useRef<((data: string) => string) | null>(null)
   if (!iipPatcherRef.current) {
@@ -306,16 +310,16 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     (skipResize = false) => {
       if (fitAddonRef.current && termRef.current) {
         try {
+          const term = termRef.current
           fitAddonRef.current.fit()
           const measured = readCellSize(termRef.current)
           if (measured) applyCellSize(measured)
 
-          if (!skipResize) {
-            const term = termRef.current
-            window.terminalAPI.resize(session.id, term.cols, term.rows)
+          if (!skipResize && ptyCreatedRef.current) {
+            ptyResizeRef.current?.request({ cols: term.cols, rows: term.rows })
           }
-        } catch {
-
+        } catch (error) {
+          toast(`Failed to resize terminal: ${String(error)}`)
         }
       }
     },
@@ -566,6 +570,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     term.unicode.activeVersion = '11'
 
     termRef.current = term
+    ptyResizeRef.current = createPtyResizeQueue(
+      ({ cols, rows }) => window.terminalAPI.resize(session.id, cols, rows),
+      (error) => toast(`Failed to resize terminal: ${String(error)}`)
+    )
     fitAddonRef.current = fitAddon
     webglAddonRef.current = webglAddon
     canvasAddonRef.current = canvasAddon
@@ -625,7 +633,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
       useSessionStore.getState().resetAttention(session.id)
-      onUsed?.(session.id)
+      onUsedRef.current?.(session.id)
     })
 
 
@@ -676,6 +684,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       const exitSub = window.terminalAPI.onExit(sessionRef.current.id, () => {
         if (effectDisposed || generation !== ptyGenerationRef.current) return
         ptyCreatedRef.current = false
+        ptyResizeRef.current?.reset(null)
         term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
 
         const store = useSessionStore.getState()
@@ -696,13 +705,14 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         const live = useSessionStore
           .getState()
           .sessions?.find((s) => s.id === sessionRef.current.id)
+        const createdSize = { cols: term.cols, rows: term.rows }
         window.terminalAPI
           .createSession(
             sessionRef.current.id,
             live?.cwd ?? sessionRef.current.cwd,
             live?.shell ?? sessionRef.current.shell,
-            term.cols,
-            term.rows,
+            createdSize.cols,
+            createdSize.rows,
             live?.ssh ?? sessionRef.current.ssh ?? null
           )
           .then((result) => {
@@ -718,6 +728,9 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
               return
             }
             updatePid(sessionRef.current.id, result.pid)
+            if (result.windowsPty) term.options.windowsPty = result.windowsPty
+            ptyResizeRef.current?.reset(createdSize)
+            ptyResizeRef.current?.request({ cols: term.cols, rows: term.rows })
             ptyCreatedRef.current = true
             ptyRetryCountRef.current = 0
             if (result.replay) {
@@ -765,6 +778,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       cleanupExitRef.current?.()
       webglAddonRef.current?.dispose()
       canvasAddonRef.current?.dispose()
+      ptyResizeRef.current?.dispose()
+      ptyResizeRef.current = null
       term.dispose()
       termRef.current = null
       fitAddonRef.current = null

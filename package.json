@@ -3,7 +3,13 @@
   "version": "2.0.16",
   "description": "Patty",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "postinstall": "node scripts/prepare-conpty.mjs --postinstall",
+    "prepare:conpty": "node scripts/prepare-conpty.mjs",
+    "check:conpty": "node scripts/prepare-conpty.mjs --check",
     "dev": "tauri dev",
     "build": "vite build",
     "preview": "vite preview",

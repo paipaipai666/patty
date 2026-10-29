@@ -1,127 +1,83 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, type CSSProperties } from 'react'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { useSessionStore } from '../../store/sessionStore'
-import type { PaneTree as PaneTreeNode, PaneSplit } from '../../../shared/paneTypes'
 import { PaneView } from './PaneView'
 import { Sash } from './Sash'
+import { layoutPanes } from './paneLayout'
 import styles from './PaneTree.module.css'
 
+interface SashStyle extends CSSProperties {
+  '--sash-offset': string
+}
 
-   
 export function PaneTreeRoot() {
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const focusPane = useWorkspaceStore((s) => s.focusPane)
   const sessions = useSessionStore((s) => s.sessions)
+  const mountedWorkspacesRef = useRef(new Set<string>())
+  const mountedSessionsRef = useRef(new Set<string>())
+  const sessionById = useMemo(() => new Map(sessions.map(session => [session.id, session])), [sessions])
+  const layouts = useMemo(() => workspaces.map(workspace => ({
+    workspace,
+    layout: layoutPanes(workspace.paneTree)
+  })), [workspaces])
+  const activeId = activeWorkspaceId ?? workspaces[0]?.id
 
-
-  const mountedRef = useRef<Set<string>>(new Set())
-
-  const sessionById = useMemo(() => {
-    const m = new Map<string, (typeof sessions)[number]>()
-    for (const s of sessions) m.set(s.id, s)
-    return m
-  }, [sessions])
-
-  const list = useMemo((): { id: string; tree: PaneTreeNode; focusedPaneId: string | null }[] => {
-    return workspaces.map((w) => ({ id: w.id, tree: w.paneTree, focusedPaneId: w.focusedPaneId }))
-  }, [workspaces])
-
-  const activeId = activeWorkspaceId ?? (list[0]?.id ?? null)
-
-  if (list.length === 0) return null
+  if (workspaces.length === 0) return null
+  if (activeId) mountedWorkspacesRef.current.add(activeId)
 
   return (
-    <>
-      {list.map((ws) => {
-        const active = ws.id === activeId
-        if (active) mountedRef.current.add(ws.id)
-        if (!active && !mountedRef.current.has(ws.id)) return null
-        return (
-          <div
-            key={ws.id}
-            className={active ? styles.workspaceActive : styles.workspaceHidden}
-          >
-            {ws.tree && renderNode(ws.tree, ws.tree.id, ws.focusedPaneId, focusPane, sessionById, active)}
-          </div>
-        )
+    <div className={styles.paneTree}>
+      {layouts.flatMap(({ workspace, layout }) => {
+        const visible = workspace.id === activeId
+        const visited = mountedWorkspacesRef.current.has(workspace.id)
+        return layout.panes.flatMap(({ leaf, style }) => {
+          if (!visited && !mountedSessionsRef.current.has(leaf.sessionId)) return []
+          mountedSessionsRef.current.add(leaf.sessionId)
+          const session = sessionById.get(leaf.sessionId)
+          const focused = workspace.focusedPaneId === leaf.id
+          return (
+            <div
+              key={leaf.sessionId}
+              className={`${styles.paneSlot} ${visible ? styles.workspaceActive : styles.workspaceHidden}`}
+              style={style}
+            >
+              {session ? (
+                <PaneView
+                  session={session}
+                  paneId={leaf.id}
+                  focused={focused}
+                  onFocus={focusPane}
+                  visible={visible}
+                />
+              ) : (
+                <div
+                  className={`${styles.placeholder} ${focused ? styles.placeholderFocused : ''}`}
+                  onPointerDown={() => focusPane(leaf.id)}
+                >
+                  session missing
+                </div>
+              )}
+            </div>
+          )
+        })
       })}
-    </>
-  )
-}
-
-function renderNode(
-  node: PaneTreeNode,
-  key: string,
-  focusedPaneId: string | null,
-  focusPane: (id: string) => void,
-  sessionById: Map<string, import('../../store/sessionStore').TerminalSession>,
-  visible: boolean = true
-): React.ReactNode {
-  if (node.type === 'leaf') {
-    const session = sessionById.get(node.sessionId)
-    if (!session) {
-
-      return <PaneViewPlaceholder key={key} paneId={node.id} focused={focusedPaneId === node.id} onFocus={focusPane} />
-    }
-    return (
-      <PaneView
-        key={node.id}
-        session={session}
-        paneId={node.id}
-        focused={focusedPaneId === node.id}
-        onFocus={focusPane}
-        visible={visible}
-      />
-    )
-  }
-
-  return renderSplit(node, key, focusedPaneId, focusPane, sessionById, visible)
-}
-
-function renderSplit(
-  node: PaneSplit,
-  key: string,
-  focusedPaneId: string | null,
-  focusPane: (id: string) => void,
-  sessionById: Map<string, import('../../store/sessionStore').TerminalSession>,
-  visible: boolean = true
-): React.ReactNode {
-  const dirClass = node.direction === 'horizontal' ? styles.splitHorizontal : styles.splitVertical
-
-  const firstBasis = `${(node.ratio * 100).toFixed(4)}%`
-
-  return (
-    <div key={key} className={`${styles.split} ${dirClass}`}>
-      <div className={styles.first} style={{ flexBasis: firstBasis, flexGrow: 0, flexShrink: 0 }}>
-        {renderNode(node.first, node.first.id, focusedPaneId, focusPane, sessionById, visible)}
-      </div>
-      <Sash splitId={node.id} direction={node.direction} ratio={node.ratio} />
-      <div className={styles.second}>
-        {renderNode(node.second, node.second.id, focusedPaneId, focusPane, sessionById, visible)}
-      </div>
-    </div>
-  )
-}
-
-                                                                                      
-function PaneViewPlaceholder({
-  paneId,
-  focused,
-  onFocus
-}: {
-  paneId: string
-  focused: boolean
-  onFocus: (id: string) => void
-}) {
-  return (
-    <div
-      className={`${styles.paneView} ${focused ? styles.paneViewFocused : ''}`}
-      onPointerDown={() => onFocus(paneId)}
-    >
-      <div className={styles.paneContent}>
-        <div className={styles.panePlaceholder}>session missing</div>
-      </div>
+      {layouts.flatMap(({ workspace, layout }) => {
+        if (workspace.id !== activeId) return []
+        return layout.splits.map(({ split, style }) => {
+          const sashStyle: SashStyle = { ...style, '--sash-offset': `${split.ratio * 100}%` }
+          return (
+            <div
+              key={split.id}
+              className={`${styles.sashFrame} ${split.direction === 'horizontal' ? styles.horizontalSash : styles.verticalSash}`}
+              style={sashStyle}
+            >
+              <Sash splitId={split.id} direction={split.direction} ratio={split.ratio} />
+            </div>
+          )
+        })
+      })}
     </div>
   )
 }

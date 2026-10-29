@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../out/renderer",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeDevCommand": "npx vite",
-    "beforeBuildCommand": "npx vite build"
+    "beforeDevCommand": "node scripts/prepare-conpty.mjs && npx vite",
+    "beforeBuildCommand": "node scripts/prepare-conpty.mjs && npx vite build"
   },
   "app": {
     "security": {
@@ -23,6 +23,8 @@
       "../resources/icon.ico"
     ],
     "resources": {
+      "../resources/conpty/": "conpty/",
+      "../licenses/conpty-LICENSE.txt": "conpty/LICENSE.txt",
       "../resources/patty-hook.ps1": "resources/patty-hook.ps1",
       "../resources/opencode-patty-plugin.ts": "resources/opencode-patty-plugin.ts",
       "../resources/omp-patty-hook.ts": "resources/omp-patty-hook.ts",

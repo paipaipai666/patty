@@ -5,6 +5,7 @@ import { flushNow } from './store/dirtyScheduler'
 import type { AppSettings, CustomTheme, SshTarget, SshProfileDraft, RawStats, SshAuthRequest, SshHostkeyRequest } from '../shared/settingsTypes'
 import type { MetricSample, FirstTerminalEntry, MetricsSnapshot } from '../shared/metricsTypes'
 import type { PersistedState } from '../shared/stateTypes'
+import type { IWindowsPty } from '@xterm/xterm'
 
 const appWindow = getCurrentWindow()
 
@@ -32,7 +33,7 @@ const listenHandle = (registration: Promise<Unsubscribe>): ListenerHandle => ({
 export const terminalAPI = {
 
   createSession: (id: string, cwd?: string, shell?: string, cols?: number, rows?: number, ssh?: SshTarget | null) =>
-    invoke<{ pid: number; success: boolean; replay?: string | null; error?: string }>(
+    invoke<{ pid: number; success: boolean; replay?: string | null; error?: string; windowsPty?: IWindowsPty }>(
       'create_pty',
       { id, cwd, shell, cols, rows, ssh }
     ),
@@ -41,9 +42,7 @@ export const terminalAPI = {
     void invoke('write_pty', { id, data })
   },
 
-  resize: (id: string, cols: number, rows: number) => {
-    void invoke('resize_pty', { id, cols, rows })
-  },
+  resize: (id: string, cols: number, rows: number) => invoke<void>('resize_pty', { id, cols, rows }),
 
   kill: (id: string) => invoke<{ success: boolean; error?: string }>('kill_pty', { id }),
 

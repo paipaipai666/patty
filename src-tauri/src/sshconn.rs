@@ -442,7 +442,6 @@ pub async fn create(
 ) -> Value {
 
     let epoch = kill_epoch(id);
-    let mut waited = false;
     let (abort_registration, claim_epoch) = loop {
         let claim = {
             let mut creating = CREATING.lock().unwrap();
@@ -456,7 +455,6 @@ pub async fn create(
             }
         };
         let Some(claim) = claim else {
-            waited = true;
             if kill_epoch(id) != epoch {
                 return json!({ "pid": 0, "success": false, "error": "cancelled" });
             }
@@ -467,10 +465,8 @@ pub async fn create(
             break claim;
         }
         CREATING.lock().unwrap().remove(id);
-        if waited {
-            return create_success();
-        }
-        kill(id);
+        resize(id, cols, rows);
+        return create_success();
     };
 
     let result = Abortable::new(create_inner(app, id, target, cols, rows), abort_registration).await;
@@ -1664,6 +1660,37 @@ mod tests {
             "a racing create must attach to the in-flight connection instead of opening a \
              second one: {events:?}",
         );
+    }
+
+    #[tokio::test]
+    async fn repeated_create_reuses_connected_channel_and_applies_latest_size() {
+        let env = setup("sequential-ensure").await;
+        let first = connect_to(&env).await;
+        assert_eq!(first["success"], true, "create failed: {first}");
+        write(&env.id, "before-ensure;");
+        assert!(wait_event_payload(&format!("pty:data:{}", env.id), "before-ensure;", 100).await.is_some());
+
+        let second = tokio::time::timeout(
+            Duration::from_millis(500),
+            create(None, &env.id, env.target(), 132, 43),
+        )
+        .await
+        .expect("ensuring a connected channel must not reconnect or request authentication");
+        assert_eq!(second["success"], true);
+        assert_eq!(second["pid"], first["pid"]);
+        assert!(second.get("windowsPty").is_none());
+        write(&env.id, "after-ensure;");
+        assert!(wait_event_payload(&format!("pty:data:{}", env.id), "after-ensure;", 100).await.is_some());
+        for _ in 0..100 {
+            if TEST_WINDOW.lock().unwrap().contains(&(132, 43)) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(TEST_WINDOW.lock().unwrap().contains(&(132, 43)));
+        let events = TEST_EVENTS.lock().unwrap();
+        assert_eq!(events.iter().filter(|(event, _)| event == "ssh:auth").count(), 1);
+        assert!(!events.iter().any(|(event, _)| event == &format!("pty:exit:{}", env.id)));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

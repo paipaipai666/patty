@@ -60,3 +60,4 @@ temp/
 
 # CDP verification screenshots (scripts/*.mjs)
 /output/
+/resources/conpty/

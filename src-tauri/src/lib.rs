@@ -6,6 +6,7 @@ pub mod pty;
 pub mod ssh;
 pub mod sshconn;
 pub mod store;
+mod conpty;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -67,7 +68,7 @@ async fn create_pty(
         return sshconn::create(Some(app), &id, target, cols.unwrap_or(80), rows.unwrap_or(24))
             .await;
     }
-    pty::create(&app, &id, cwd.as_deref(), shell.as_deref(), cols, rows)
+    pty::create(Some(&app), &id, cwd.as_deref(), shell.as_deref(), cols, rows)
 }
 
 #[tauri::command]
@@ -80,9 +81,13 @@ fn write_pty(id: &str, data: &str) {
 }
 
 #[tauri::command]
-fn resize_pty(id: &str, cols: u16, rows: u16) {
+fn resize_pty(id: &str, cols: u16, rows: u16) -> Result<(), String> {
+    if cols == 0 || rows == 0 {
+        return Err("Terminal dimensions must be positive".into());
+    }
     if sshconn::exists(id) || sshconn::is_creating(id) {
-        sshconn::resize(id, cols, rows)
+        sshconn::resize(id, cols, rows);
+        Ok(())
     } else {
         pty::resize(id, cols, rows)
     }
@@ -328,6 +333,12 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resize_command_rejects_zero_dimensions() {
+        assert_eq!(resize_pty("zero-size", 0, 24), Err("Terminal dimensions must be positive".into()));
+        assert_eq!(resize_pty("zero-size", 80, 0), Err("Terminal dimensions must be positive".into()));
+    }
 
 
     struct EnvRestore {

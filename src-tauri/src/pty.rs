@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::os::windows::process::CommandExt;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
-use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
+use std::sync::{mpsc, Arc, LazyLock, Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
@@ -39,10 +39,30 @@ pub struct Session {
     pid: u32,
     cwd: Option<String>,
     shell: Option<String>,
-    writer: Mutex<Box<dyn Write + Send>>,
+    writer: mpsc::Sender<Vec<u8>>,
     master: Mutex<Box<dyn MasterPty + Send>>,
     child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
     shared: Arc<Shared>,
+}
+
+impl Session {
+    fn resize(&self, cols: Option<u16>, rows: Option<u16>) -> Result<(), String> {
+        if cols.is_none() && rows.is_none() {
+            return Ok(());
+        }
+        let master = self.master.lock().unwrap();
+        let current = master.get_size().map_err(|error| error.to_string())?;
+        let size = PtySize {
+            cols: cols.unwrap_or(current.cols),
+            rows: rows.unwrap_or(current.rows),
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+        if size.cols == current.cols && size.rows == current.rows {
+            return Ok(());
+        }
+        master.resize(size).map_err(|error| error.to_string())
+    }
 }
 
 static SESSIONS: LazyLock<RwLock<HashMap<String, Arc<Session>>>> =
@@ -476,6 +496,14 @@ pub fn take_image_rows(id: &str) -> Option<(u32, bool)> {
 
 
 
+fn writer_loop(mut writer: Box<dyn Write + Send>, receiver: mpsc::Receiver<Vec<u8>>) {
+    for data in receiver {
+        if writer.write_all(&data).and_then(|_| writer.flush()).is_err() {
+            break;
+        }
+    }
+}
+
 fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
     let shared = session.shared.clone();
     let mut carry: Vec<u8> = Vec::new();
@@ -497,9 +525,7 @@ fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Sen
                 session.shared.image_pending.store(image_tracker.is_pending(), Ordering::Relaxed);
                 let (forward, reply) = dsr_filter(&mut dsr, &text);
                 if reply {
-                    let mut writer = session.writer.lock().unwrap();
-                    let _ = writer.write_all(DSR_REPLY);
-                    let _ = writer.flush();
+                    let _ = session.writer.send(DSR_REPLY.to_vec());
                 }
                 let Some(text) = forward else { continue };
                 if text.is_empty() {
@@ -609,6 +635,7 @@ fn spawn_inner(
         .or_else(|| std::env::var("USERPROFILE").ok())
         .unwrap_or_else(|| r"C:\Users".to_string());
 
+    crate::conpty::ensure()?;
     let pair = native_pty_system()
         .openpty(PtySize {
             rows: rows.unwrap_or(24),
@@ -646,6 +673,7 @@ fn spawn_inner(
     let child = Arc::new(Mutex::new(child));
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+    let (writer_tx, writer_rx) = mpsc::channel();
 
     let shared = Arc::new(Shared {
         attached: AtomicBool::new(attached),
@@ -659,12 +687,13 @@ fn spawn_inner(
         pid,
         cwd: cwd.map(String::from),
         shell: shell.map(String::from),
-        writer: Mutex::new(writer),
+        writer: writer_tx,
         master: Mutex::new(pair.master),
         child: child.clone(),
         shared: shared.clone(),
     });
     SESSIONS.write().unwrap().insert(id.to_string(), session.clone());
+    thread::spawn(move || writer_loop(writer, writer_rx));
 
     let reader_id = id.to_string();
     let reader_session = session.clone();
@@ -703,7 +732,7 @@ fn buffer_push(shared: &Shared, text: String) {
 
 
 pub fn create(
-    app: &AppHandle,
+    app: Option<&AppHandle>,
     id: &str,
     cwd: Option<&str>,
     shell: Option<&str>,
@@ -717,19 +746,18 @@ pub fn create(
         let mut map = SESSIONS.write().unwrap();
         match map.get(id) {
             Some(existing)
-                if existing.cwd.as_deref() == cwd
-                    && existing.shell.as_deref() == shell
-                    && !existing.shared.attached.load(Ordering::Relaxed) =>
+                if existing.shared.attached.load(Ordering::Relaxed)
+                    || (existing.cwd.as_deref() == cwd
+                        && existing.shell.as_deref() == shell) =>
             {
-                existing.shared.attached.store(true, Ordering::Relaxed);
-                let replay = take_buffer(&existing.shared);
-                let _ = existing.master.lock().unwrap().resize(PtySize {
-                    rows: rows.unwrap_or(24),
-                    cols: cols.unwrap_or(80),
-                    pixel_width: 0,
-                    pixel_height: 0,
-                });
-                return json!({ "pid": existing.pid, "success": true, "replay": replay });
+                let existing = existing.clone();
+                drop(map);
+                if let Err(error) = existing.resize(cols, rows) {
+                    return json!({ "pid": existing.pid, "success": false, "error": error });
+                }
+                let was_attached = existing.shared.attached.swap(true, Ordering::Relaxed);
+                let replay = if was_attached { None } else { take_buffer(&existing.shared) };
+                return create_success(existing.pid, replay);
             }
             Some(_) => map.remove(id),
             None => None,
@@ -739,13 +767,21 @@ pub fn create(
         terminate(&victim);
     }
 
-    match spawn_inner(Some(app), id, cwd, shell, cols, rows, true) {
-        Ok(pid) => json!({ "pid": pid, "success": true, "replay": Value::Null }),
+    match spawn_inner(app, id, cwd, shell, cols, rows, true) {
+        Ok(pid) => create_success(pid, None),
         Err(e) => {
             eprintln!("[pty] create failed for {id}: {e}");
             json!({ "pid": 0, "success": false, "error": e })
         }
     }
+}
+
+fn create_success(pid: u32, replay: Option<String>) -> Value {
+    let windows_pty = json!({
+        "backend": "conpty",
+        "buildNumber": crate::conpty::XTERM_REFLOW_COMPATIBILITY_BUILD,
+    });
+    json!({ "pid": pid, "success": true, "replay": replay, "windowsPty": windows_pty })
 }
 
 
@@ -823,23 +859,18 @@ pub fn leaf_session_ids(tree: &Value) -> Vec<String> {
 pub fn write(id: &str, data: &str) {
     let session = SESSIONS.read().unwrap().get(id).cloned();
     if let Some(session) = session {
-        let mut writer = session.writer.lock().unwrap();
-
-        let _ = writer.write_all(data.as_bytes());
-        let _ = writer.flush();
+        let _ = session.writer.send(data.as_bytes().to_vec());
     }
 }
 
-pub fn resize(id: &str, cols: u16, rows: u16) {
-    let session = SESSIONS.read().unwrap().get(id).cloned();
-    if let Some(session) = session {
-        let _ = session.master.lock().unwrap().resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        });
-    }
+pub fn resize(id: &str, cols: u16, rows: u16) -> Result<(), String> {
+    let session = SESSIONS
+        .read()
+        .unwrap()
+        .get(id)
+        .cloned()
+        .ok_or_else(|| format!("Terminal session does not exist: {id}"))?;
+    session.resize(Some(cols), Some(rows))
 }
 
 pub fn kill(id: &str) -> Value {
@@ -879,6 +910,14 @@ pub fn session_exists(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bundled_conpty_advertises_reflow_capability_independently_of_the_os_build() {
+        assert_eq!(create_success(123, None)["windowsPty"], json!({
+            "backend": "conpty",
+            "buildNumber": 21376,
+        }));
+    }
 
 
     fn iip_image(height_cells: u32) -> String {
@@ -1178,9 +1217,8 @@ mod tests {
     }
 
     #[test]
-    fn resize_unknown_session_is_noop() {
-        resize("no-such-session", 80, 24);
-
+    fn resize_unknown_session_returns_error() {
+        assert!(resize("no-such-session", 80, 24).is_err());
     }
 
     #[test]
@@ -1235,6 +1273,153 @@ mod tests {
         buffer_push(&shared, " world".to_string());
         assert_eq!(take_buffer(&shared).as_deref(), Some("hello world"));
         assert!(shared.buffer.lock().unwrap().chunks.is_empty());
+    }
+
+    struct EnsureTestSession {
+        id: String,
+        marker: PathBuf,
+        cwd: PathBuf,
+    }
+
+    impl EnsureTestSession {
+        fn new(name: &str) -> Self {
+            let id = format!("test-ensure-{name}-{}", std::process::id());
+            let cwd = std::env::temp_dir();
+            let marker = cwd.join(format!("{id}.txt"));
+            let _ = std::fs::remove_file(&marker);
+            Self { id, marker, cwd }
+        }
+    }
+
+    impl Drop for EnsureTestSession {
+        fn drop(&mut self) {
+            kill(&self.id);
+            let _ = std::fs::remove_file(&self.marker);
+        }
+    }
+
+    #[test]
+    fn repeated_create_keeps_active_pid_and_running_command_after_cwd_change() {
+        let session = EnsureTestSession::new("active-cwd");
+        let first = create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(80), Some(24));
+        assert_eq!(first["success"], true);
+        assert_eq!(first["windowsPty"]["backend"], "conpty");
+        if let Some(build_number) = first["windowsPty"].get("buildNumber") {
+            assert!(build_number.as_u64().is_some_and(|number| number > 0));
+        }
+        write(
+            &session.id,
+            &format!(
+                "ping -n 3 127.0.0.1 >nul & echo STILL_RUNNING>\"{}\"\r",
+                session.marker.display()
+            ),
+        );
+        thread::sleep(Duration::from_millis(200));
+        let cwd = session.cwd.parent().expect("temporary directory has a parent");
+        let second = create(
+            None,
+            &session.id,
+            cwd.to_str(),
+            Some("cmd"),
+            Some(132),
+            Some(43),
+        );
+        assert_eq!(second["success"], true);
+        assert_eq!(second["pid"], first["pid"], "ensuring an active session must preserve its process");
+        assert!(second["replay"].is_null());
+        for _ in 0..60 {
+            if std::fs::read_to_string(&session.marker).is_ok_and(|s| s.trim() == "STILL_RUNNING") {
+                return;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        panic!("the command running before the repeated create did not finish");
+    }
+
+    #[test]
+    fn repeated_create_attaches_warm_process_and_replays_only_once() {
+        let session = EnsureTestSession::new("warm-once");
+        let pid = spawn_inner(None, &session.id, session.cwd.to_str(), Some("cmd"), None, None, false)
+            .expect("warm cmd");
+        write(&session.id, "echo PREHEAT_READY\r");
+        for _ in 0..60 {
+            let ready = SESSIONS.read().unwrap().get(&session.id).is_some_and(|s| {
+                s.shared.buffer.lock().unwrap().chunks.iter().any(|text| text.contains("PREHEAT_READY"))
+            });
+            if ready {
+                break;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        let first = create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(100), Some(30));
+        assert_eq!(first["pid"], pid);
+        assert!(first["replay"].as_str().is_some_and(|text| text.contains("PREHEAT_READY")));
+        let second = create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(100), Some(30));
+        assert_eq!(second["pid"], pid, "an already attached warm session must stay alive");
+        assert!(second["replay"].is_null(), "preheat output must be replayed once");
+    }
+
+    #[test]
+    fn create_replaces_incompatible_unattached_warm_process() {
+        let session = EnsureTestSession::new("warm-mismatch");
+        let pid = spawn_inner(None, &session.id, session.cwd.to_str(), Some("cmd"), None, None, false)
+            .expect("warm cmd");
+        let cwd = session.cwd.parent().expect("temporary directory has a parent");
+        let created = create(None, &session.id, cwd.to_str(), Some("cmd"), Some(80), Some(24));
+        assert_eq!(created["success"], true);
+        assert_ne!(created["pid"], pid);
+        assert!(created["replay"].is_null());
+    }
+
+    #[test]
+    fn native_resize_failure_reaches_the_caller_without_restarting_session() {
+        let session = EnsureTestSession::new("resize-failure");
+        let first = create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(80), Some(24));
+        assert_eq!(first["success"], true);
+        assert!(resize(&session.id, u16::MAX, 24).is_err());
+        let after = create(None, &session.id, None, Some("cmd"), None, None);
+        assert_eq!(after["pid"], first["pid"]);
+        assert_eq!(after["success"], true);
+    }
+
+    #[test]
+    fn repeated_create_preserves_unspecified_dimensions() {
+        let session = EnsureTestSession::new("partial-size");
+        let first = create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(80), Some(24));
+        assert_eq!(first["success"], true);
+        let wider = create(None, &session.id, None, Some("cmd"), Some(132), None);
+        assert_eq!(wider["pid"], first["pid"]);
+        let native = SESSIONS.read().unwrap().get(&session.id).cloned().unwrap();
+        let size = native.master.lock().unwrap().get_size().unwrap();
+        assert_eq!((size.cols, size.rows), (132, 24));
+        let taller = create(None, &session.id, None, Some("cmd"), None, Some(43));
+        assert_eq!(taller["pid"], first["pid"]);
+        let size = native.master.lock().unwrap().get_size().unwrap();
+        assert_eq!((size.cols, size.rows), (132, 43));
+        let unchanged = create(None, &session.id, None, Some("cmd"), None, None);
+        assert_eq!(unchanged["pid"], first["pid"]);
+        let size = native.master.lock().unwrap().get_size().unwrap();
+        assert_eq!((size.cols, size.rows), (132, 43));
+    }
+
+    #[test]
+    fn queued_input_preserves_command_bytes_across_write_boundaries() {
+        let session = EnsureTestSession::new("queued-input-order");
+        let created = create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(80), Some(24));
+        assert_eq!(created["success"], true);
+        for chunk in ["(echo FIFO_FIRST", "&echo ", "FIFO_SECOND", "&echo FIFO_THIRD)>", "\""] {
+            write(&session.id, chunk);
+        }
+        write(&session.id, &session.marker.display().to_string());
+        write(&session.id, "\"\r");
+        let expected = "FIFO_FIRST\r\nFIFO_SECOND\r\nFIFO_THIRD\r\n";
+        for _ in 0..60 {
+            if std::fs::read_to_string(&session.marker).is_ok_and(|text| text == expected) {
+                return;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert_eq!(std::fs::read_to_string(&session.marker).unwrap_or_default(), expected);
     }
 
     #[test]
