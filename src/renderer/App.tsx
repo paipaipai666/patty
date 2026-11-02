@@ -211,12 +211,8 @@ export default function App() {
 
 
   const handleClosePane = useCallback(() => {
-    const focusedId = getFocusedSessionId()
     useWorkspaceStore.getState().closeFocused()
 
-    if (focusedId) {
-      useSessionStore.getState().clearAgentState(focusedId)
-    }
 
     const nextFocused = getFocusedSessionId()
     const currentActive = useSessionStore.getState().activeSessionId

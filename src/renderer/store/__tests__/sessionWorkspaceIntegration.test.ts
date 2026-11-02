@@ -3,13 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 const mockStateSave = vi.fn()
 const mockStateLoad = vi.fn()
 const mockKill = vi.fn()
-const mockOnAgentUpdate = vi.fn(() => vi.fn())
+const mockOnAgentUpdate = vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: vi.fn() }))
 
 vi.stubGlobal('window', {
   terminalAPI: {
     stateLoad: mockStateLoad,
     stateSave: mockStateSave,
     kill: mockKill,
+    agentStateSnapshot: vi.fn(async () => ({ revision: 0, agents: [] })),
     onAgentUpdate: mockOnAgentUpdate,
   },
   addEventListener: vi.fn(),
@@ -33,7 +34,7 @@ function initStores() {
     sidebarWidth: 220,
     sidebarTransitioning: false,
     loaded: false,
-    agentStates: {},
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0,
     draggingSessionId: null,
   })
   useWorkspaceStore.setState({

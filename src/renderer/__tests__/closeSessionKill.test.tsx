@@ -64,6 +64,7 @@ vi.mock('../components/App/Toasts', () => ({ Toasts: () => null }))
 
 import App from '../App'
 import { useSessionStore } from '../store/sessionStore'
+import { useWorkspaceStore } from '../store/workspaceStore'
 
 let kill: ReturnType<typeof vi.fn>
 let roots: Array<ReturnType<typeof createRoot>>
@@ -84,7 +85,8 @@ beforeEach(() => {
       workspaces: [],
       activeWorkspaceId: null
     }),
-    onAgentUpdate: vi.fn(() => () => {}),
+    agentStateSnapshot: vi.fn(async () => ({ revision: 0, agents: [] })),
+    onAgentUpdate: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: vi.fn() })),
     metricsSetSampling: vi.fn(),
     onSshAuth: vi.fn(() => () => {}),
     onSshHostkey: vi.fn(() => () => {}),
@@ -99,7 +101,7 @@ beforeEach(() => {
     collections: [],
     activeSessionId: null,
     loaded: false,
-    agentStates: {}
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0
   })
 })
 
@@ -108,6 +110,23 @@ afterEach(() => {
 })
 
 describe('close-session kill ownership (REVIEW P1-6)', () => {
+  it('keeps the running agent when closing only its layout pane', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => { root.render(<App />) })
+    act(() => {
+      useWorkspaceStore.getState().createWorkspace('s1')
+      useSessionStore.getState().applyAgentUpdate({ paneId: 's1', revision: 1, agent: { aiType: 'codex', status: 'waiting_approval' } })
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', ctrlKey: true, shiftKey: true, bubbles: true }))
+    })
+    expect(kill).not.toHaveBeenCalled()
+    expect(useSessionStore.getState().sessions.map((s) => [s.id, s.aiType])).toEqual([['s1', 'codex']])
+    expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'waiting_approval', unread: true })
+    expect(useSessionStore.getState().activeSessionId).toBeNull()
+  })
+
   it('kills the PTY exactly once per close', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

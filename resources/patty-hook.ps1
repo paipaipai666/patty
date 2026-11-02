@@ -6,6 +6,7 @@ param(
 )
 
 $eventSequence = [System.Diagnostics.Stopwatch]::GetTimestamp()
+$eventEmittedAt = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 
 
 $logFile = "$env:TEMP\patty-hook-debug.log"
@@ -123,6 +124,7 @@ try {
         origin = @{
             processId = $PID
             sequence = $eventSequence
+            emittedAt = $eventEmittedAt
             conversationId = if ($inputData.session_id) { [string]$inputData.session_id } elseif ($inputData.sessionId) { [string]$inputData.sessionId } else { $null }
         }
     } | ConvertTo-Json -Compress

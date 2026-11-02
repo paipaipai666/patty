@@ -49,6 +49,7 @@ if (process.argv[2] === '--native') {
   }
 } else {
 const { cdp } = app
+let agentRevision = await cdp.evaluate('window.terminalAPI.agentStateSnapshot().then(snapshot => snapshot.revision)')
 const errors = []
 cdp.on('Runtime.exceptionThrown', (event) => errors.push(event.exceptionDetails.text))
 await cdp.send('Runtime.enable')
@@ -92,9 +93,9 @@ try {
   await cdp.waitFor('document.querySelector(\'.xterm-helper-textarea\')')
   await search('', ['review', 'scratch'])
   await cdp.evaluate(`Promise.all([
-    { paneId: 'server', agent: { aiType: 'codex', status: 'waiting_approval' } },
-    { paneId: 'review', agent: { aiType: 'claude', status: 'error' } },
-    { paneId: 'scratch', agent: { aiType: 'omp', status: 'complete' } }
+    { paneId: 'server', revision: ${++agentRevision}, agent: { aiType: 'codex', status: 'waiting_approval' } },
+    { paneId: 'review', revision: ${++agentRevision}, agent: { aiType: 'claude', status: 'error' } },
+    { paneId: 'scratch', revision: ${++agentRevision}, agent: { aiType: 'omp', status: 'complete' } }
   ].map(payload => window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:agent', payload })))`)
   await cdp.waitFor(`document.querySelector('option[value="attention"]').textContent === 'Needs attention (2)'`)
   await selectView('complete', ['scratch'])
@@ -113,7 +114,7 @@ try {
   await selectView('complete', [])
   await search('', ['scratch'])
   await selectView('attention', ['server', 'review'])
-  await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:agent', payload: { paneId: 'server', agent: null } })`)
+  await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:agent', payload: { paneId: 'server', revision: ${++agentRevision}, agent: null } })`)
   await cdp.waitFor(`JSON.stringify(${visibleSessions}) === '["review"]'`)
   const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
   writeFileSync(join(output, 'search.png'), Buffer.from(screenshot.data, 'base64'))

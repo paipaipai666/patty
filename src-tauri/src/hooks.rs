@@ -1,130 +1,83 @@
+use crate::hook_identity::{self, HookOrigin, ProcessKey};
+use crate::hook_state::{AgentRegistry, HookEvent};
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::io::Read;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 
-
-
-fn heartbeat_timeout_ms(source: &str) -> Option<u64> {
+pub(crate) fn heartbeat_timeout_ms(source: &str) -> Option<u64> {
     match source {
         "opencode" => Some(8_000),
         "omp" => Some(8_000),
 
-        "qwen-code" => Some(8_000),
-        "copilot-cli" => Some(8_000),
-        "claude-code" => Some(600_000),
-        "codex" => Some(600_000),
         _ => None,
     }
 }
 
-pub struct ActiveEntry {
-    source: String,
-    last_seen: u64,
+static REGISTRY: LazyLock<Mutex<AgentRegistry>> =
+    LazyLock::new(|| Mutex::new(AgentRegistry::default()));
+static HOOK_APP: OnceLock<AppHandle> = OnceLock::new();
+
+fn source_enabled(settings: &Value, source: &str) -> bool {
+    let key = match source {
+        "claude-code" => "claudeCode",
+        "opencode" => "openCode",
+        "codex" => "codex",
+        "omp" => "ohMyPi",
+        "qwen-code" => "qwenCode",
+        "copilot-cli" => "copilotCli",
+        _ => return false,
+    };
+    settings["notifications"][key].as_bool().unwrap_or(true)
 }
 
-static ACTIVE: LazyLock<Mutex<HashMap<String, ActiveEntry>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+pub fn clear_disabled_tools(settings: &Value) {
+    let mut registry = REGISTRY.lock().unwrap();
+    for update in registry.clear_disabled(|source| source_enabled(settings, source)) {
+        if let Some(app) = HOOK_APP.get() {
+            let _ = app.emit("pty:agent", update);
+        }
+    }
+}
 
 fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_millis() as u64
 }
 
-pub fn note_event_with_now(pane_id: &str, event: &str, source: &str, role: &str, now: u64) {
-    if heartbeat_timeout_ms(source).is_none() {
-        eprintln!("[heartbeat] unknown source \"{source}\", ignoring event \"{event}\"");
-        return;
-    }
-    let mut active = ACTIVE.lock().unwrap();
-    if role == "subagent" {
-
-        if let Some(entry) = active.get_mut(pane_id) {
-            entry.last_seen = now;
-            entry.source = source.to_string();
-        }
-        return;
-    }
-    match event {
-        "session_start" | "session_created" => {
-            active.insert(pane_id.to_string(), ActiveEntry { source: source.to_string(), last_seen: now });
-        }
-        "session_end" | "session_deleted" => {
-            active.remove(pane_id);
-        }
-
-        "alive" => {
-            if let Some(entry) = active.get_mut(pane_id) {
-                entry.last_seen = now;
-                entry.source = source.to_string();
-            }
-        }
-        _ => {
-
-            match active.get_mut(pane_id) {
-                Some(entry) => {
-                    entry.last_seen = now;
-                    entry.source = source.to_string();
-                }
-                None => {
-                    active.insert(pane_id.to_string(), ActiveEntry { source: source.to_string(), last_seen: now });
-                }
-            }
+pub(crate) fn remove_pane(app: Option<&AppHandle>, pane_id: &str, root: ProcessKey) {
+    let mut registry = REGISTRY.lock().unwrap();
+    if let Some(update) = registry.retire(pane_id, root) {
+        if let Some(app) = app {
+            let _ = app.emit("pty:agent", update);
         }
     }
 }
 
-pub fn note_event(pane_id: &str, event: &str, source: &str, role: &str) {
-    note_event_with_now(pane_id, event, source, role, now_ms());
-}
-
-pub fn remove_pane(pane_id: &str) {
-    ACTIVE.lock().unwrap().remove(pane_id);
-}
-
-fn collect_expired_with_now(active: &HashMap<String, ActiveEntry>, now: u64) -> Vec<String> {
-    active
-        .iter()
-        .filter(|(_, e)| {
-            heartbeat_timeout_ms(&e.source).is_some_and(|t| now.saturating_sub(e.last_seen) > t)
-        })
-        .map(|(id, _)| id.clone())
-        .collect()
+pub fn agent_snapshot() -> Value {
+    REGISTRY.lock().unwrap().snapshot()
 }
 
 pub fn start_heartbeat_watchdog(app: AppHandle) {
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_secs(5));
-            let expired = {
-                let mut active = ACTIVE.lock().unwrap();
-                let expired = collect_expired_with_now(&active, now_ms());
-                for id in &expired {
-                    active.remove(id);
-                }
-                expired
-            };
-            for id in expired {
-                if let Err(e) = app.emit("pty:agent", AgentUpdate { pane_id: id, agent: None }) {
-                    eprintln!("[hooks] emit pty:agent failed: {e}");
-                }
-            }
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(5));
+        let mut registry = REGISTRY.lock().unwrap();
+        for update in registry.expire(now_ms(), wall_ms(), |actor| {
+            hook_identity::process_key(actor.pid) == Some(actor)
+        }) {
+            let _ = app.emit("pty:agent", update);
         }
     });
 }
 
-
-
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-enum AgentStatus {
+pub(crate) enum AgentStatus {
+    Unknown,
     Idle,
     Working,
     WaitingApproval,
@@ -133,24 +86,26 @@ enum AgentStatus {
     Error,
 }
 
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AgentState {
-    ai_type: &'static str,
-    status: AgentStatus,
+fn wall_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AgentUpdate {
-    pane_id: String,
-    agent: Option<AgentState>,
+pub(crate) struct AgentState {
+    pub ai_type: &'static str,
+    pub status: AgentStatus,
 }
 
-fn map_event_to_status(event: &str) -> Option<AgentStatus> {
+pub(crate) fn map_event_to_status(event: &str) -> Option<AgentStatus> {
     match event {
         "session_start" | "session_created" => Some(AgentStatus::Idle),
-        "user_prompt_submit" | "pre_tool_use" | "post_tool_use" | "working" => Some(AgentStatus::Working),
+        "user_prompt_submit" | "pre_tool_use" | "post_tool_use" | "working" => {
+            Some(AgentStatus::Working)
+        }
         "elicitation_dialog" | "idle_prompt" => Some(AgentStatus::WaitingInput),
         "idle" | "stop" => Some(AgentStatus::Complete),
         _ if event.contains("permission") => Some(AgentStatus::WaitingApproval),
@@ -160,7 +115,7 @@ fn map_event_to_status(event: &str) -> Option<AgentStatus> {
     }
 }
 
-fn map_source_to_ai_type(source: &str) -> Option<&'static str> {
+pub(crate) fn map_source_to_ai_type(source: &str) -> Option<&'static str> {
     match source {
         "claude-code" => Some("claude"),
         "opencode" => Some("opencode"),
@@ -172,54 +127,47 @@ fn map_source_to_ai_type(source: &str) -> Option<&'static str> {
     }
 }
 
-pub fn on_hook_request(app: &AppHandle, pane_id: &str, event: &str, source: &str, role: &str) {
-    note_event(pane_id, event, source, role);
+#[derive(Debug, PartialEq, Eq)]
+struct HookRequest {
+    pane_id: String,
+    event: String,
+    source: String,
+    role: String,
+    origin: HookOrigin,
+}
 
-    let settings = crate::store::load_settings();
-    let enabled = match source {
-        "claude-code" => settings["notifications"]["claudeCode"].as_bool().unwrap_or(true),
-        "opencode" => settings["notifications"]["openCode"].as_bool().unwrap_or(true),
-        "codex" => settings["notifications"]["codex"].as_bool().unwrap_or(true),
-        "omp" => settings["notifications"]["ohMyPi"].as_bool().unwrap_or(true),
-        "qwen-code" => settings["notifications"]["qwenCode"].as_bool().unwrap_or(true),
-        "copilot-cli" => settings["notifications"]["copilotCli"].as_bool().unwrap_or(true),
-        _ => true,
-    };
-    let events = compute_hook_events(pane_id, event, source, role, enabled);
-    for (evt, payload) in events {
-        if let Err(e) = app.emit(evt, payload) {
-            eprintln!("[hooks] emit {evt} failed: {e}");
+fn on_hook_request(app: &AppHandle, request: &HookRequest) {
+    crate::pty::with_hook_session(&request.pane_id, |root| {
+        let mut registry = REGISTRY.lock().unwrap();
+        let enabled = source_enabled(&crate::store::load_settings(), &request.source);
+        let actor =
+            if let Some(cached) = registry.cached_actor(&request.pane_id, root, &request.origin) {
+                hook_identity::process_key(cached.pid).filter(|key| *key == cached)
+            } else {
+                hook_identity::resolve(root, request.origin.process_id, &request.source)
+            };
+        let nested = registry
+            .actor_for_root(&request.pane_id, root)
+            .is_some_and(|current| {
+                actor.is_some_and(|next| next != current)
+                    && hook_identity::process_key(current.pid) == Some(current)
+            });
+        if let Some(update) = registry.apply(HookEvent {
+            pane_id: &request.pane_id,
+            root,
+            actor,
+            source: &request.source,
+            event: &request.event,
+            role: &request.role,
+            origin: &request.origin,
+            enabled,
+            now: now_ms(),
+            nested,
+        }) {
+            let _ = app.emit("pty:agent", update);
         }
-    }
+    });
 }
-
-
-fn compute_hook_events<'a>(
-    pane_id: &'a str,
-    event: &'a str,
-    source: &'a str,
-    role: &'a str,
-    enabled: bool,
-) -> Vec<(&'a str, Value)> {
-    if role == "subagent" {
-        return vec![];
-    }
-    if event == "session_end" || event == "session_deleted" {
-        return vec![("pty:agent", json!(AgentUpdate { pane_id: pane_id.to_string(), agent: None }))];
-    }
-    if !enabled {
-        return vec![];
-    }
-
-    let Some(ai_type) = map_source_to_ai_type(source) else { return vec![] };
-    let Some(status) = map_event_to_status(event) else { return vec![] };
-    vec![("pty:agent", json!(AgentUpdate {
-        pane_id: pane_id.to_string(),
-        agent: Some(AgentState { ai_type, status }),
-    }))]
-}
-
-
 
 static HOOK_SECRET: OnceLock<String> = OnceLock::new();
 static HOOK_PORT: AtomicU16 = AtomicU16::new(0);
@@ -236,21 +184,21 @@ pub fn hook_port() -> u16 {
     HOOK_PORT.load(Ordering::Relaxed)
 }
 
-
 pub fn start_hook_server(app: AppHandle) -> Result<u16, String> {
     if hook_port() != 0 {
         return Ok(hook_port());
     }
     let secret = hook_secret().to_string();
-    let server = std::sync::Arc::new(tiny_http::Server::http("127.0.0.1:0").map_err(|e| e.to_string())?);
+    let server =
+        std::sync::Arc::new(tiny_http::Server::http("127.0.0.1:0").map_err(|e| e.to_string())?);
     let port = server
         .server_addr()
         .to_ip()
         .map(|a| a.port())
         .ok_or("failed to get hook server port")?;
     HOOK_PORT.store(port, Ordering::Relaxed);
+    let _ = HOOK_APP.set(app.clone());
     eprintln!("[hook-server] listening on 127.0.0.1:{port}");
-
 
     for _ in 0..4 {
         let server = server.clone();
@@ -274,11 +222,8 @@ fn handle_request(
     let json_response = |status: u16, body: Value| {
         tiny_http::Response::from_string(body.to_string())
             .with_status_code(status)
-            .with_header(
-                tiny_http::Header::from_bytes("Content-Type", "application/json").unwrap(),
-            )
+            .with_header(tiny_http::Header::from_bytes("Content-Type", "application/json").unwrap())
     };
-
 
     if request.method() == &tiny_http::Method::Get {
         if let Some((status, body)) =
@@ -292,9 +237,11 @@ fn handle_request(
         return tiny_http::Response::from_string(String::new()).with_status_code(404);
     }
 
-
     const MAX_HOOK_BODY: u64 = 16 * 1024;
-    if request.body_length().is_some_and(|len| len as u64 > MAX_HOOK_BODY) {
+    if request
+        .body_length()
+        .is_some_and(|len| len as u64 > MAX_HOOK_BODY)
+    {
         return tiny_http::Response::from_string(String::new()).with_status_code(413);
     }
     let mut body = String::new();
@@ -310,8 +257,8 @@ fn handle_request(
     if status == 400 {
         return tiny_http::Response::from_string(String::new()).with_status_code(400);
     }
-    if let Some((pane_id, event, source, role)) = forward {
-        on_hook_request(app, &pane_id, &event, &source, &role);
+    if let Some(request) = forward {
+        on_hook_request(app, &request);
     } else if payload.get("ignored").and_then(Value::as_bool) == Some(true) {
         let pane = serde_json::from_str::<Value>(&body)
             .ok()
@@ -321,7 +268,6 @@ fn handle_request(
     }
     json_response(status, payload)
 }
-
 
 fn evaluate_image_rows_query(
     url: &str,
@@ -348,12 +294,11 @@ fn evaluate_image_rows_query(
     Some((200, json!({ "rows": rows, "pending": pending })))
 }
 
-
 fn evaluate_hook_body(
     secret: &str,
     body: &str,
     session_exists: impl Fn(&str) -> bool,
-) -> (u16, Value, Option<(String, String, String, String)>) {
+) -> (u16, Value, Option<HookRequest>) {
     let Ok(data) = serde_json::from_str::<Value>(body) else {
         return (400, Value::Null, None);
     };
@@ -369,7 +314,36 @@ fn evaluate_hook_body(
     };
     let pane_id = data.get("paneId").and_then(Value::as_str).unwrap_or("");
     let event = data.get("event").and_then(Value::as_str).unwrap_or("");
-    let source = data.get("source").and_then(Value::as_str).unwrap_or("unknown");
+    let source = data
+        .get("source")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
+
+    let Some(origin) = data
+        .get("origin")
+        .cloned()
+        .and_then(|value| serde_json::from_value::<HookOrigin>(value).ok())
+    else {
+        return (400, Value::Null, None);
+    };
+    if origin.process_id == 0
+        || origin.sequence == 0
+        || origin.emitted_at == 0
+        || origin
+            .instance_id
+            .as_ref()
+            .is_some_and(|id| id.is_empty() || id.len() > 128)
+        || origin
+            .conversation_id
+            .as_ref()
+            .is_some_and(|id| id.is_empty() || id.len() > 512)
+        || origin
+            .parent_conversation_id
+            .as_ref()
+            .is_some_and(|id| id.is_empty() || id.len() > 512)
+    {
+        return (400, Value::Null, None);
+    }
 
     if !session_exists(pane_id) {
         return (200, json!({ "ok": true, "ignored": true }), None);
@@ -377,219 +351,108 @@ fn evaluate_hook_body(
     (
         200,
         json!({ "ok": true }),
-        Some((pane_id.to_string(), event.to_string(), source.to_string(), role.to_string())),
+        Some(HookRequest {
+            pane_id: pane_id.to_string(),
+            event: event.to_string(),
+            source: source.to_string(),
+            role: role.to_string(),
+            origin,
+        }),
     )
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpStream;
 
-    #[test]
-    fn activity_events_publish_working_state_without_attention() {
-        for event in ["user_prompt_submit", "pre_tool_use", "post_tool_use", "working"] {
-            let events = super::compute_hook_events("p1", event, "claude-code", "main", true);
-            assert_eq!(events, vec![("pty:agent", serde_json::json!({
-                "paneId": "p1", "agent": { "aiType": "claude", "status": "working" }
-            }))]);
-        }
-    }
-
-    #[test]
-    fn approval_and_question_events_have_distinct_runtime_states() {
-        for (event, status) in [("permission_prompt", "waiting_approval"), ("elicitation_dialog", "waiting_input"), ("idle_prompt", "waiting_input"), ("question_asked", "waiting_input")] {
-            assert_eq!(super::compute_hook_events("p1", event, "codex", "main", true), vec![("pty:agent", serde_json::json!({
-                "paneId": "p1", "agent": { "aiType": "codex", "status": status }
-            }))]);
-        }
-    }
-
-    #[test]
-    fn heartbeat_and_unknown_events_do_not_replace_agent_state() {
-        assert_eq!(super::compute_hook_events("p1", "idle", "codex", "main", true), vec![("pty:agent", serde_json::json!({
-            "paneId": "p1", "agent": { "aiType": "codex", "status": "complete" }
-        }))]);
-        for event in ["alive", "notification", "unrecognized"] {
-            assert!(super::compute_hook_events("p1", event, "codex", "main", true).is_empty());
-        }
-    }
-
-    #[test]
-    fn heartbeat_lease_lifecycle() {
-        let pane = format!("hb-{}", std::process::id());
-        note_event_with_now(&pane, "session_start", "opencode", "main", 1000);
-        assert!(ACTIVE.lock().unwrap().contains_key(&pane));
-        note_event_with_now(&pane, "post_tool_use", "opencode", "main", 2000);
-        note_event_with_now(&pane, "session_end", "opencode", "main", 3000);
-        assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
-    }
-
-    #[test]
-    fn heartbeat_lease_reopens_on_late_event() {
-
-        let pane = format!("hb-reopen-{}", std::process::id());
-        note_event_with_now(&pane, "session_created", "opencode", "main", 1000);
-        note_event_with_now(&pane, "session_deleted", "opencode", "main", 2000);
-        assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
-
-        note_event_with_now(&pane, "idle", "opencode", "main", 3000);
-        assert!(
-            ACTIVE.lock().unwrap().contains_key(&pane),
-            "late event after session_deleted must reopen the lease"
-        );
-
-
-        let expired = {
-            let active = ACTIVE.lock().unwrap();
-            collect_expired_with_now(&active, 3000 + 8_001)
+    pub(crate) fn seed_agent(pane_id: &str, root: ProcessKey) {
+        let origin = HookOrigin {
+            process_id: root.pid,
+            sequence: 1,
+            emitted_at: 100,
+            instance_id: Some("pty-fixture".into()),
+            conversation_id: None,
+            parent_conversation_id: None,
         };
-        assert!(expired.contains(&pane));
-        ACTIVE.lock().unwrap().remove(&pane);
+        REGISTRY
+            .lock()
+            .unwrap()
+            .apply(HookEvent {
+                pane_id,
+                root,
+                actor: Some(root),
+                source: "opencode",
+                event: "session_created",
+                role: "main",
+                origin: &origin,
+                enabled: true,
+                now: now_ms(),
+                nested: false,
+            })
+            .unwrap();
     }
 
     #[test]
-    fn heartbeat_alive_does_not_reopen_lease() {
+    fn invalid_origins_are_rejected_before_session_lookup() {
+        for origin in [
+            Value::Null,
+            json!({}),
+            json!({"processId": 0, "sequence": 1, "emittedAt": 100}),
+            json!({"processId": 20, "sequence": 0, "emittedAt": 100}),
+            json!({"processId": 20, "sequence": 1, "emittedAt": 0}),
+            json!({"processId": 20, "sequence": 1, "emittedAt": 100, "instanceId": ""}),
+            json!({"processId": 20, "sequence": 1, "emittedAt": 100, "conversationId": "x".repeat(513)}),
+            json!({"processId": 20, "sequence": 1, "emittedAt": 100, "parentConversationId": "x".repeat(513)}),
+        ] {
+            let body = json!({"secret":"test", "paneId":"p1", "source":"codex", "event":"session_start", "origin": origin}).to_string();
+            let result = evaluate_hook_body("test", &body, |_| {
+                panic!("invalid origin must not enter session lookup")
+            });
+            assert_eq!(result.0, 400);
+            assert!(result.2.is_none());
+        }
+    }
 
-        let pane = format!("hb-alive-{}", std::process::id());
-        note_event_with_now(&pane, "session_created", "opencode", "main", 1000);
-        note_event_with_now(&pane, "session_deleted", "opencode", "main", 2000);
-        note_event_with_now(&pane, "alive", "opencode", "main", 3000);
-        assert!(
-            !ACTIVE.lock().unwrap().contains_key(&pane),
-            "alive must not reopen a cleared lease"
+    fn http_post(port: u16, body: &str) -> (u16, String) {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let req = format!(
+            "POST /hook HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
         );
-
-
-        note_event_with_now(&pane, "session_created", "opencode", "main", 4000);
-        note_event_with_now(&pane, "alive", "opencode", "main", 5000);
-        let expired = {
-            let active = ACTIVE.lock().unwrap();
-            collect_expired_with_now(&active, 13_000)
-        };
-        assert!(!expired.contains(&pane), "alive must refresh an existing lease");
-        ACTIVE.lock().unwrap().remove(&pane);
-    }
-
-    #[test]
-    fn heartbeat_unknown_source_ignored() {
-        let pane = format!("hb-unknown-{}", std::process::id());
-        note_event_with_now(&pane, "session_start", "not-a-tool", "main", 1000);
-        assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
-    }
-
-    #[test]
-    fn heartbeat_expiry_collection() {
-        let mut active = HashMap::new();
-        active.insert("a".to_string(), ActiveEntry { source: "opencode".into(), last_seen: 1000 });
-        active.insert("b".to_string(), ActiveEntry { source: "codex".into(), last_seen: 1000 });
-
-        let expired = collect_expired_with_now(&active, 20_000);
-        assert_eq!(expired, vec!["a".to_string()]);
-
-        let later = collect_expired_with_now(&active, 599_999);
-        assert!(!later.contains(&"b".to_string()));
-    }
-
-    #[test]
-    fn compute_events_session_end_clears_ai_type() {
-        let events = compute_hook_events("p1", "session_end", "opencode", "main", true);
-        assert_eq!(events, vec![("pty:agent", json!({ "paneId": "p1", "agent": null }))]);
-    }
-
-    #[test]
-    fn compute_events_session_end_ignores_enabled_flag() {
-        let events = compute_hook_events("p1", "session_end", "opencode", "main", false);
-        assert_eq!(events.len(), 1, "session_end clears ai even when disabled");
-    }
-
-    #[test]
-    fn compute_events_disabled_source_returns_nothing() {
-        let events = compute_hook_events("p1", "idle", "opencode", "main", false);
-        assert!(events.is_empty());
-    }
-
-    #[test]
-    fn compute_events_session_start_sets_ai_type() {
-        let events = compute_hook_events("p1", "session_start", "opencode", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1["agent"]["aiType"], "opencode");
-    }
-
-    #[test]
-    fn compute_events_session_start_with_codex() {
-        let events = compute_hook_events("p1", "session_start", "codex", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1["agent"]["aiType"], "codex");
-    }
-
-    #[test]
-    fn compute_events_session_start_with_omp() {
-        let events = compute_hook_events("p1", "session_start", "omp", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1["agent"]["aiType"], "omp");
-    }
-
-    #[test]
-    fn compute_events_session_start_with_qwen() {
-        let events = compute_hook_events("p1", "session_start", "qwen-code", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1["agent"]["aiType"], "qwen");
-    }
-
-    #[test]
-    fn compute_events_session_start_with_copilot() {
-        let events = compute_hook_events("p1", "session_start", "copilot-cli", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1["agent"]["aiType"], "copilot");
-    }
-
-    #[test]
-    fn compute_events_permission_maps_to_attention() {
-        let events = compute_hook_events("p1", "permission_prompt", "claude-code", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1["agent"]["status"], "waiting_approval");
-        assert_eq!(events[0].1["agent"]["aiType"], "claude");
-    }
-
-    #[test]
-    fn compute_events_idle_prompt_maps_to_waiting_input() {
-        let events = compute_hook_events("p1", "idle_prompt", "claude-code", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1["agent"]["status"], "waiting_input");
-        assert_eq!(events[0].1["agent"]["aiType"], "claude");
-    }
-
-    #[test]
-    fn compute_events_unknown_source_does_not_replace_agent_state() {
-        assert!(compute_hook_events("p1", "idle", "unknown-tool", "main", true).is_empty());
-    }
-
-    #[test]
-    fn compute_events_unknown_event_returns_nothing() {
-        let events = compute_hook_events("p1", "notification", "opencode", "main", true);
-        assert!(events.is_empty());
-    }
-
-    #[test]
-    fn compute_events_error_event_maps_to_error_attention() {
-        let events = compute_hook_events("p1", "error_rate_limit", "opencode", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1["agent"]["status"], "error");
+        stream.write_all(req.as_bytes()).unwrap();
+        let mut buf = String::new();
+        stream.read_to_string(&mut buf).unwrap();
+        let status = buf
+            .split_whitespace()
+            .nth(1)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        (status, buf)
     }
 
     #[test]
     fn runtime_status_mapping() {
-        for (event, expected) in [("permission_prompt", "waiting_approval"), ("elicitation_dialog", "waiting_input"), ("idle_prompt", "waiting_input"), ("idle", "complete"), ("error_rate_limit", "error"), ("post_tool_use", "working")] {
+        for (event, expected) in [
+            ("permission_prompt", "waiting_approval"),
+            ("elicitation_dialog", "waiting_input"),
+            ("idle_prompt", "waiting_input"),
+            ("idle", "complete"),
+            ("error_rate_limit", "error"),
+            ("post_tool_use", "working"),
+        ] {
             assert_eq!(json!(map_event_to_status(event)), json!(expected));
         }
     }
 
     #[test]
     fn event_vocabulary_matches_shared_protocol() {
-
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../resources/hook-protocol.json");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../resources/hook-protocol.json"
+        );
         let raw = std::fs::read_to_string(path).expect("hook-protocol.json must be readable");
         let protocol: Value = serde_json::from_str(&raw).expect("hook-protocol.json must parse");
 
@@ -607,19 +470,27 @@ mod tests {
             let expected = &pattern["status"];
             if let Some(prefix) = pattern["prefix"].as_str() {
                 let sample = format!("{prefix}sample");
-                assert_eq!(json!(map_event_to_status(&sample)), *expected, "prefix \"{prefix}\"");
+                assert_eq!(
+                    json!(map_event_to_status(&sample)),
+                    *expected,
+                    "prefix \"{prefix}\""
+                );
             }
             if let Some(contains) = pattern["contains"].as_str() {
                 let sample = format!("x{contains}x");
-                assert_eq!(json!(map_event_to_status(&sample)), *expected, "contains \"{contains}\"");
+                assert_eq!(
+                    json!(map_event_to_status(&sample)),
+                    *expected,
+                    "contains \"{contains}\""
+                );
             }
         }
 
         for source in protocol["sources"].as_array().expect("sources array") {
             let source = source.as_str().unwrap();
             assert!(
-                map_source_to_ai_type(source).is_some() && heartbeat_timeout_ms(source).is_some(),
-                "source \"{source}\" must map to an aiType and carry a heartbeat lease"
+                map_source_to_ai_type(source).is_some(),
+                "source \"{source}\" must map to an aiType"
             );
         }
 
@@ -644,39 +515,14 @@ mod tests {
     }
 
     #[test]
-    fn heartbeat_timeout_direct() {
-        assert_eq!(heartbeat_timeout_ms("opencode"), Some(8_000));
-        assert_eq!(heartbeat_timeout_ms("omp"), Some(8_000));
-        assert_eq!(heartbeat_timeout_ms("qwen-code"), Some(8_000));
-        assert_eq!(heartbeat_timeout_ms("copilot-cli"), Some(8_000));
-        assert_eq!(heartbeat_timeout_ms("claude-code"), Some(600_000));
-        assert_eq!(heartbeat_timeout_ms("codex"), Some(600_000));
-        assert_eq!(heartbeat_timeout_ms("unknown"), None);
-    }
-
-    fn http_post(port: u16, body: &str) -> (u16, String) {
-        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
-        let req = format!(
-            "POST /hook HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-            body.len(),
-            body
-        );
-        stream.write_all(req.as_bytes()).unwrap();
-        let mut buf = String::new();
-        stream.read_to_string(&mut buf).unwrap();
-        let status = buf
-            .split_whitespace()
-            .nth(1)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        (status, buf)
-    }
-
-    #[test]
     fn evaluate_rejects_missing_and_wrong_secret() {
         let (status, ..) = evaluate_hook_body("sec", r#"{"paneId":"x","event":"y"}"#, |_| true);
         assert_eq!(status, 401);
-        let (status, ..) = evaluate_hook_body("sec", r#"{"paneId":"x","event":"y","secret":"nope"}"#, |_| true);
+        let (status, ..) = evaluate_hook_body(
+            "sec",
+            r#"{"paneId":"x","event":"y","secret":"nope","origin":{"processId":20,"sequence":1,"emittedAt":100}}"#,
+            |_| true,
+        );
         assert_eq!(status, 401);
     }
 
@@ -690,7 +536,7 @@ mod tests {
     fn evaluate_ignores_unknown_pane() {
         let (status, body, forward) = evaluate_hook_body(
             "sec",
-            r#"{"paneId":"ghost","event":"idle","source":"opencode","secret":"sec"}"#,
+            r#"{"paneId":"ghost","event":"idle","source":"opencode","secret":"sec","origin":{"processId":20,"sequence":1,"emittedAt":100}}"#,
             |_| false,
         );
         assert_eq!(status, 200);
@@ -702,15 +548,20 @@ mod tests {
     fn evaluate_forwards_valid_request() {
         let (status, body, forward) = evaluate_hook_body(
             "sec",
-            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec"}"#,
+            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","origin":{"processId":20,"sequence":1,"emittedAt":100}}"#,
             |p| p == "p1",
         );
         assert_eq!(status, 200);
         assert_eq!(body["ok"], true);
 
         assert_eq!(
-            forward,
-            Some(("p1".to_string(), "idle".to_string(), "opencode".to_string(), "main".to_string()))
+            forward.map(|request| (request.pane_id, request.event, request.source, request.role)),
+            Some((
+                "p1".to_string(),
+                "idle".to_string(),
+                "opencode".to_string(),
+                "main".to_string()
+            ))
         );
     }
 
@@ -718,22 +569,26 @@ mod tests {
     fn evaluate_forwards_subagent_role() {
         let (status, _body, forward) = evaluate_hook_body(
             "sec",
-            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":"subagent"}"#,
+            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":"subagent","origin":{"processId":20,"sequence":1,"emittedAt":100}}"#,
             |p| p == "p1",
         );
         assert_eq!(status, 200);
         assert_eq!(
-            forward,
-            Some(("p1".to_string(), "idle".to_string(), "opencode".to_string(), "subagent".to_string()))
+            forward.map(|request| (request.pane_id, request.event, request.source, request.role)),
+            Some((
+                "p1".to_string(),
+                "idle".to_string(),
+                "opencode".to_string(),
+                "subagent".to_string()
+            ))
         );
     }
 
     #[test]
     fn evaluate_rejects_malformed_role() {
-
         for body in [
-            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":"worker"}"#,
-            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":1}"#,
+            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":"worker","origin":{"processId":20,"sequence":1,"emittedAt":100}}"#,
+            r#"{"paneId":"p1","event":"idle","source":"opencode","secret":"sec","role":1,"origin":{"processId":20,"sequence":1,"emittedAt":100}}"#,
         ] {
             let (status, ..) = evaluate_hook_body("sec", body, |_| true);
             assert_eq!(status, 400, "body: {body}");
@@ -741,55 +596,22 @@ mod tests {
     }
 
     #[test]
-    fn compute_events_subagent_role_emits_nothing() {
-
-        for event in ["idle", "stop", "session_created", "session_end", "permission_prompt"] {
-            assert!(
-                compute_hook_events("p1", event, "opencode", "subagent", true).is_empty(),
-                "subagent event \"{event}\" must not emit"
-            );
-        }
-    }
-
-    #[test]
-    fn heartbeat_subagent_refreshes_but_never_opens_or_closes_lease() {
-        let pane = format!("hb-subagent-{}", std::process::id());
-
-        note_event_with_now(&pane, "session_created", "opencode", "subagent", 1000);
-        note_event_with_now(&pane, "idle", "opencode", "subagent", 1500);
-        assert!(!ACTIVE.lock().unwrap().contains_key(&pane));
-
-
-        note_event_with_now(&pane, "session_created", "opencode", "main", 2000);
-        note_event_with_now(&pane, "session_deleted", "opencode", "subagent", 3000);
-        assert!(ACTIVE.lock().unwrap().contains_key(&pane));
-        note_event_with_now(&pane, "idle", "opencode", "subagent", 5000);
-        {
-            let active = ACTIVE.lock().unwrap();
-            assert!(
-                !collect_expired_with_now(&active, 13_000).contains(&pane),
-                "subagent event must refresh the lease"
-            );
-            assert!(collect_expired_with_now(&active, 13_001).contains(&pane));
-        }
-        ACTIVE.lock().unwrap().remove(&pane);
-    }
-
-    #[test]
     fn image_rows_query_auth_and_shape() {
-
         assert!(evaluate_image_rows_query("/hook", "s", |_| None).is_none());
 
-        let (status, _) = evaluate_image_rows_query("/image-rows?pane=p1&secret=no", "sec", |_| None)
-            .unwrap();
+        let (status, _) =
+            evaluate_image_rows_query("/image-rows?pane=p1&secret=no", "sec", |_| None).unwrap();
         assert_eq!(status, 401);
 
-        let (status, _) = evaluate_image_rows_query("/image-rows?pane=p1", "sec", |_| None).unwrap();
+        let (status, _) =
+            evaluate_image_rows_query("/image-rows?pane=p1", "sec", |_| None).unwrap();
         assert_eq!(status, 401);
 
         let (status, body) =
-            evaluate_image_rows_query("/image-rows?pane=p1&secret=sec", "sec", |_| Some((23, false)))
-                .unwrap();
+            evaluate_image_rows_query("/image-rows?pane=p1&secret=sec", "sec", |_| {
+                Some((23, false))
+            })
+            .unwrap();
         assert_eq!(status, 200);
         assert_eq!(body, json!({ "rows": 23, "pending": false }));
         let (status, body) =
@@ -805,19 +627,24 @@ mod tests {
         let secret = "test-secret";
         thread::spawn(move || {
             for mut request in server.incoming_requests() {
-
                 let mut body = String::new();
                 request.as_reader().read_to_string(&mut body).unwrap();
                 let (status, payload, _) = evaluate_hook_body(secret, &body, |_| true);
-                let response = tiny_http::Response::from_string(payload.to_string())
-                    .with_status_code(status);
+                let response =
+                    tiny_http::Response::from_string(payload.to_string()).with_status_code(status);
                 let _ = request.respond(response);
             }
         });
 
-        let (status, _) = http_post(port, r#"{"paneId":"x","event":"y","secret":"wrong"}"#);
+        let (status, _) = http_post(
+            port,
+            r#"{"paneId":"x","event":"y","secret":"wrong","origin":{"processId":20,"sequence":1,"emittedAt":100}}"#,
+        );
         assert_eq!(status, 401);
-        let (status, _) = http_post(port, r#"{"paneId":"x","event":"y","secret":"test-secret"}"#);
+        let (status, _) = http_post(
+            port,
+            r#"{"paneId":"x","event":"y","secret":"test-secret","origin":{"processId":20,"sequence":1,"emittedAt":100}}"#,
+        );
         assert_eq!(status, 200);
     }
 }

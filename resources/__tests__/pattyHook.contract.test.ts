@@ -10,7 +10,7 @@ const SCRIPT = resolve(__dirname, '..', 'patty-hook.ps1')
 
 let server: Server
 let port: number
-let inbox: Array<{ paneId?: string; event?: string; source?: string; secret?: string; origin?: { processId: number; sequence: number; conversationId: string | null } }>
+let inbox: Array<{ paneId?: string; event?: string; source?: string; secret?: string; origin?: { processId: number; sequence: number; emittedAt: number; conversationId: string | null } }>
 let waiter: ((value: unknown) => void) | null = null
 
 
@@ -58,7 +58,7 @@ async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<
   event?: string
   source?: string
   secret?: string
-  origin?: { processId: number; sequence: number; conversationId: string | null }
+  origin?: { processId: number; sequence: number; emittedAt: number; conversationId: string | null }
 }> {
   inbox = []
   const posted = nextPost()
@@ -88,7 +88,8 @@ async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<
   await Promise.race([posted, timeout])
 
   expect(isCanonicalEvent(inbox[0]?.event), inbox[0]?.event).toBe(true)
-  expect(inbox[0]?.origin).toMatchObject({ processId: child.pid, sequence: expect.any(Number) })
+  expect(inbox[0]?.origin).toMatchObject({ processId: child.pid, sequence: expect.any(Number), emittedAt: expect.any(Number) })
+  expect(inbox[0]?.origin?.emittedAt).toBeGreaterThan(0)
   return inbox[0]
 }
 

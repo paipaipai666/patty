@@ -37,6 +37,7 @@ struct ReplayBuffer {
 
 pub struct Session {
     pid: u32,
+    hook_root: Option<crate::hook_identity::ProcessKey>,
     cwd: Option<String>,
     shell: Option<String>,
     writer: mpsc::Sender<Vec<u8>>,
@@ -557,16 +558,16 @@ fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
     };
 
 
-    let app = {
+    let (app, hook_root) = {
         let mut map = SESSIONS.write().unwrap();
         let Some(session) = map.get(&id) else { return };
         if !Arc::ptr_eq(&session.child, &child) {
             return;
         }
         let session = map.remove(&id).unwrap();
-        session.shared.app.clone()
+        (session.shared.app.clone(), session.hook_root)
     };
-    crate::hooks::remove_pane(&id);
+    if let Some(root) = hook_root { crate::hooks::remove_pane(app.as_ref(), &id, root); }
     emit(&app, &format!("pty:exit:{id}"), code);
 }
 
@@ -685,6 +686,7 @@ fn spawn_inner(
 
     let session = Arc::new(Session {
         pid,
+        hook_root: crate::hook_identity::process_key(pid),
         cwd: cwd.map(String::from),
         shell: shell.map(String::from),
         writer: writer_tx,
@@ -764,6 +766,7 @@ pub fn create(
         }
     };
     if let Some(victim) = victim {
+        if let Some(root) = victim.hook_root { crate::hooks::remove_pane(victim.shared.app.as_ref(), id, root); }
         terminate(&victim);
     }
 
@@ -876,9 +879,9 @@ pub fn resize(id: &str, cols: u16, rows: u16) -> Result<(), String> {
 pub fn kill(id: &str) -> Value {
     let victim = SESSIONS.write().unwrap().remove(id);
     if let Some(session) = victim {
+        if let Some(root) = session.hook_root { crate::hooks::remove_pane(session.shared.app.as_ref(), id, root); }
         terminate(&session);
     }
-    crate::hooks::remove_pane(id);
     json!({ "success": true })
 }
 
@@ -905,6 +908,12 @@ fn kill_process_tree(pid: u32) {
 
 pub fn session_exists(id: &str) -> bool {
     SESSIONS.read().unwrap().contains_key(id)
+}
+
+pub(crate) fn with_hook_session<R>(id: &str, apply: impl FnOnce(crate::hook_identity::ProcessKey) -> R) -> Option<R> {
+    let sessions = SESSIONS.read().unwrap();
+    let root = sessions.get(id)?.hook_root?;
+    Some(apply(root))
 }
 
 #[cfg(test)]
@@ -1364,11 +1373,29 @@ mod tests {
         let session = EnsureTestSession::new("warm-mismatch");
         let pid = spawn_inner(None, &session.id, session.cwd.to_str(), Some("cmd"), None, None, false)
             .expect("warm cmd");
+        let root = with_hook_session(&session.id, |root| root).unwrap();
+        crate::hooks::tests::seed_agent(&session.id, root);
         let cwd = session.cwd.parent().expect("temporary directory has a parent");
         let created = create(None, &session.id, cwd.to_str(), Some("cmd"), Some(80), Some(24));
         assert_eq!(created["success"], true);
         assert_ne!(created["pid"], pid);
         assert!(created["replay"].is_null());
+        let snapshot = crate::hooks::agent_snapshot();
+        assert!(!snapshot["agents"].as_array().unwrap().iter().any(|agent| agent["paneId"] == session.id));
+        assert_ne!(with_hook_session(&session.id, |root| root), Some(root));
+    }
+
+    #[test]
+    fn kill_retires_the_agent_and_rejects_hooks_for_the_closed_pty() {
+        let session = EnsureTestSession::new("kill-hook");
+        let first = create(None, &session.id, session.cwd.to_str(), Some("cmd"), None, None);
+        assert_eq!(first["success"], true);
+        let root = with_hook_session(&session.id, |root| root).unwrap();
+        crate::hooks::tests::seed_agent(&session.id, root);
+        kill(&session.id);
+        assert_eq!(with_hook_session(&session.id, |root| root), None);
+        let snapshot = crate::hooks::agent_snapshot();
+        assert!(!snapshot["agents"].as_array().unwrap().iter().any(|agent| agent["paneId"] == session.id));
     }
 
     #[test]

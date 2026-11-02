@@ -19,6 +19,7 @@ interface SessionItemProps {
 }
 
 const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
+  unknown: 'Status unavailable',
   idle: 'Idle',
   working: 'Working',
   waiting_approval: 'Waiting for approval',

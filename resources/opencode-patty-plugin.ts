@@ -62,12 +62,13 @@ const payloadOf = (event: OpaqueEvent): SessionPayload => {
 }
 
 const mainSessions = new Set<string>()
+const childSessions = new Set<string>()
 const instanceId = randomUUID()
 let sequence = 0
 let conversationId: string | undefined
 let aliveInterval: IntervalHandle | null = null
 
-const hookBody = (event: string, role: SessionRole, sessionId = conversationId) =>
+const hookBody = (event: string, role: SessionRole, sessionId = conversationId, parentId?: string) =>
   JSON.stringify({
     paneId: process.env.PATTY_PANE_ID,
     event,
@@ -75,10 +76,10 @@ const hookBody = (event: string, role: SessionRole, sessionId = conversationId) 
     role,
 
     secret: process.env.PATTY_HOOK_SECRET,
-    origin: { processId: process.pid, sequence: ++sequence, instanceId, conversationId: sessionId }
+    origin: { processId: process.pid, sequence: ++sequence, emittedAt: Date.now(), instanceId, conversationId: sessionId, parentConversationId: parentId }
   })
 
-const notifyPatty = async (event: string, role: SessionRole = 'main', sessionId = conversationId) => {
+const notifyPatty = async (event: string, role: SessionRole = 'main', sessionId = conversationId, parentId?: string) => {
   log(`→ patty: ${event} role=${role}`)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 1500)
@@ -86,7 +87,7 @@ const notifyPatty = async (event: string, role: SessionRole = 'main', sessionId 
     await fetch(`http://127.0.0.1:${process.env.PATTY_PORT}/hook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: hookBody(event, role, sessionId),
+      body: hookBody(event, role, sessionId, parentId),
       signal: controller.signal
     })
   } catch {
@@ -102,7 +103,7 @@ const notifyPattyDetached = (event: string, role: SessionRole = 'main', sessionI
     const child = spawn(
       'curl',
       ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${process.env.PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '--data-binary', '@-'],
-      { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'pipe'] }
+      { detached: true, stdio: ['pipe', 'ignore', 'ignore'] }
     )
     child.stdin?.write(hookBody(event, role, sessionId))
     child.stdin?.end()
@@ -157,21 +158,24 @@ const handleEvent = async (event: OpaqueEvent) => {
         mainSessions.add(sessionID)
         conversationId = sessionID
       }
+      if (sessionID && parentID) childSessions.add(sessionID)
 
-      await notifyPatty('session_created', role, sessionID)
-      hookExit()
-      startAlive()
+      await notifyPatty('session_created', role, sessionID, parentID)
+      if (!parentID) {
+        hookExit()
+        startAlive()
+      }
       break
     }
 
     case 'session.deleted': {
-      if (sessionID) mainSessions.delete(sessionID)
-
-      if (parentID) {
+      if (parentID || (sessionID && childSessions.has(sessionID))) {
+        if (sessionID) childSessions.delete(sessionID)
         log('ignored: subagent session.deleted')
         break
       }
-      stopAlive()
+      if (sessionID) mainSessions.delete(sessionID)
+      if (!sessionID || sessionID === conversationId) stopAlive()
       notifyPattyDetached('session_deleted', 'main', sessionID)
       break
     }

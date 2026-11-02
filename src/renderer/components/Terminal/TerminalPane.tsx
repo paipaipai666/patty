@@ -621,11 +621,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     const osc7Disposable = registerOsc7Handler(term, session.id, (id, cwd) => {
       updateCwd(id, cwd)
 
-      const store = useSessionStore.getState()
-      if (store.sessions.find((s) => s.id === id)?.aiType) {
-        store.clearAgentState(id)
-        void window.terminalAPI.hooksClearPane(id)
-      }
     })
 
 
@@ -686,8 +681,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         ptyResizeRef.current?.reset(null)
         term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
 
-        const store = useSessionStore.getState()
-        store.clearAgentState(sessionRef.current.id)
         ptyRetryCountRef.current++
         if (ptyRetryCountRef.current < PTY_MAX_RETRIES) {
           retryTimerRef.current = setTimeout(() => startPty(), 500)

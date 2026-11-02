@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { activityFromStatus, type AgentType, type AgentStates, type AgentUpdate } from '../../shared/agentTypes'
+import { activityFromStatus, type AgentActivity, type AgentType, type AgentStates, type AgentUpdate } from '../../shared/agentTypes'
 import type { PersistedState, SessionColor, Collection } from '../../shared/stateTypes'
 import type { ShellType, SshTarget } from '../../shared/settingsTypes'
 import { markDirty } from './dirtyScheduler'
@@ -46,6 +46,8 @@ interface SessionStore {
   sidebarTransitioning: boolean
   loaded: boolean
   agentStates: AgentStates
+  agentRevisions: Readonly<Record<string, number | undefined>>
+  agentRevisionFloor: number
 
                                                                         
   draggingSessionId: string | null
@@ -76,7 +78,6 @@ interface SessionStore {
 
   applyAgentUpdate: (update: AgentUpdate) => void
   markAgentRead: (id: string) => void
-  clearAgentState: (id: string) => void
   setDraggingSession: (id: string | null) => void
 
   loadState: () => Promise<PersistedState | null>
@@ -105,45 +106,63 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sidebarTransitioning: false,
   loaded: false,
   agentStates: {},
+  agentRevisions: {},
+  agentRevisionFloor: 0,
   draggingSessionId: null,
 
   loadState: async () => {
+    if (ipcCleanup) ipcCleanup()
+    let cancelled = false
+    let unsubscribe: (() => void) | null = null
+    const cleanup = () => {
+      cancelled = true
+      unsubscribe?.()
+      if (ipcCleanup === cleanup) ipcCleanup = null
+    }
+    ipcCleanup = cleanup
     try {
-
-      if (ipcCleanup) ipcCleanup()
       const pendingUpdates = new Map<string, AgentUpdate>()
       let stateReady = false
-      const offAgent = window.terminalAPI.onAgentUpdate((update) => {
+      const listener = window.terminalAPI.onAgentUpdate((update) => {
+        if (cancelled) return
         if (stateReady) get().applyAgentUpdate(update)
-        else pendingUpdates.set(update.paneId, update)
+        else if (update.revision > (pendingUpdates.get(update.paneId)?.revision ?? 0)) pendingUpdates.set(update.paneId, update)
       })
-
-
-
-      ipcCleanup = () => {
-        offAgent()
-        ipcCleanup = null
-      }
-
+      unsubscribe = listener.unsubscribe
+      await listener.ready
+      if (cancelled) return null
       const state = await window.terminalAPI.stateLoad()
+      if (cancelled) return null
+      const snapshot = await window.terminalAPI.agentStateSnapshot()
+      if (cancelled) return null
+      const updates = new Map(snapshot.agents.map((update) => [update.paneId, update]))
+      for (const update of pendingUpdates.values()) {
+        if (update.revision > snapshot.revision && update.revision > (updates.get(update.paneId)?.revision ?? 0)) updates.set(update.paneId, update)
+      }
+      const activities = new Map<string, AgentActivity>()
+      const revisions = new Map<string, number>()
+      const sessions = state.sessions.map((session) => {
+        const update = updates.get(session.id)
+        if (update) {
+          revisions.set(session.id, update.revision)
+          if (update.agent) activities.set(session.id, activityFromStatus(update.agent.status))
+        }
+        return { ...session, createdAt: session.createdAt ?? Date.now(), pid: 0, aiType: update?.agent?.aiType ?? null }
+      })
       set({
-        sessions: state.sessions.map((s) => ({ ...s, createdAt: s.createdAt ?? Date.now(), pid: 0, aiType: null })),
-        collections: state.collections,
-        activeSessionId: state.activeSessionId,
-        sidebarVisible: state.sidebarVisible,
-        sidebarWidth: state.sidebarWidth,
-        loaded: true,
-        agentStates: {}
+        sessions, collections: state.collections, activeSessionId: state.activeSessionId,
+        sidebarVisible: state.sidebarVisible, sidebarWidth: state.sidebarWidth, loaded: true,
+        agentStates: Object.fromEntries(activities), agentRevisions: Object.fromEntries(revisions), agentRevisionFloor: snapshot.revision
       })
       stateReady = true
-      for (const update of pendingUpdates.values()) get().applyAgentUpdate(update)
       pendingUpdates.clear()
-
-
       return state
     } catch (err) {
-      console.error('Failed to load state:', err)
-      set({ loaded: true })
+      if (!cancelled) {
+        cleanup()
+        console.error('Failed to load state:', err)
+        set({ loaded: true })
+      }
       return null
     }
   },
@@ -194,11 +213,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
       const agentStates = { ...state.agentStates }
       delete agentStates[id]
+      const agentRevisions = { ...state.agentRevisions }
+      delete agentRevisions[id]
 
       return {
         sessions: filtered,
         activeSessionId: newActiveId,
-        agentStates
+        agentStates,
+        agentRevisions
       }
     })
     markDirty()
@@ -392,19 +414,21 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  applyAgentUpdate: ({ paneId, agent }) => {
+  applyAgentUpdate: ({ paneId, revision, agent }) => {
     set((state) => {
       const session = state.sessions.find((item) => item.id === paneId)
-      if (!session) return state
+      if (!session || revision <= state.agentRevisionFloor || revision <= (state.agentRevisions[paneId] ?? 0)) return state
+      const agentRevisions = { ...state.agentRevisions, [paneId]: revision }
       const previous = state.agentStates[paneId]
       const aiType = agent?.aiType ?? null
-      if (previous?.status === agent?.status && session.aiType === aiType) return state
+      if (previous?.status === agent?.status && session.aiType === aiType) return { agentRevisions }
       const agentStates = agent
         ? { ...state.agentStates, [paneId]: activityFromStatus(agent.status) }
         : { ...state.agentStates }
       if (!agent) delete agentStates[paneId]
       return {
         agentStates,
+        agentRevisions,
         sessions: session.aiType === aiType ? state.sessions
           : state.sessions.map((item) => item.id === paneId ? { ...item, aiType } : item)
       }
@@ -417,10 +441,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (!activity?.unread) return state
       return { agentStates: { ...state.agentStates, [id]: { ...activity, unread: false } } }
     })
-  },
-
-  clearAgentState: (id: string) => {
-    get().applyAgentUpdate({ paneId: id, agent: null })
   }
 }))
 

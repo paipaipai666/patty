@@ -1,3 +1,4 @@
+import { agentUpdate } from '../../../../shared/__tests__/agentFixtures'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -21,7 +22,7 @@ beforeEach(() => {
     collectionId: id === 'server' || id === 'sibling' ? 'api' : null
   }))
   useSessionStore.setState({
-    sessions, agentStates: {}, activeSessionId: 'scratch', loaded: true,
+    sessions, agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, activeSessionId: 'scratch', loaded: true,
     collections: [{ id: 'api', name: 'API', parentId: null, collapsed: true, createdAt: 1 }]
   })
   useWorkspaceStore.setState({
@@ -66,12 +67,12 @@ describe('next attention control', () => {
     act(() => button.click())
     expect(useSessionStore.getState().activeSessionId).toBe('scratch')
     expect(getFocusedSessionId()).toBe('scratch')
-    act(() => useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_input' } }))
+    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_input' } })))
     expect(button.disabled).toBe(false)
     act(() => button.click())
     expect(getFocusedSessionId()).toBe('server')
     expect(useSessionStore.getState().agentStates.server).toEqual({ status: 'waiting_input', unread: false })
-    act(() => useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'working' } }))
+    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'working' } })))
     expect(button.disabled).toBe(true)
     act(() => button.click())
     expect(useSessionStore.getState().activeSessionId).toBe('server')
@@ -79,8 +80,8 @@ describe('next attention control', () => {
   })
 
   it('cycles across hidden and filtered sessions, focusing the target split and preserving runtime state', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'codex', status: 'waiting_approval' } })
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'codex', status: 'waiting_approval' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } }))
     const button = render()
     const select = container.querySelector<HTMLSelectElement>('[aria-label="Session view"]')!
     const input = container.querySelector<HTMLInputElement>('[aria-label="Search sessions"]')!

@@ -1,13 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct HookOrigin {
     pub process_id: u32,
     pub sequence: u64,
+    pub emitted_at: u64,
     pub instance_id: Option<String>,
     pub conversation_id: Option<String>,
+    pub parent_conversation_id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,9 +47,13 @@ fn resolve_with(
     let mut visited = HashSet::new();
     let mut actor = None;
     for _ in 0..64 {
-        if !visited.insert(caller) { return None }
+        if !visited.insert(caller) {
+            return None;
+        }
         let process = lookup(caller)?;
-        if caller == root { return actor }
+        if caller == root {
+            return actor;
+        }
         if actor.is_none() && executable_matches(&process.name, source) {
             actor = Some(process.key);
         }
@@ -58,27 +64,44 @@ fn resolve_with(
 
 #[repr(C)]
 #[derive(Default)]
-struct FileTime { low: u32, high: u32 }
+struct FileTime {
+    low: u32,
+    high: u32,
+}
 
 #[link(name = "kernel32")]
 extern "system" {
     fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
-    fn GetProcessTimes(handle: *mut std::ffi::c_void, created: *mut FileTime, exited: *mut FileTime, kernel: *mut FileTime, user: *mut FileTime) -> i32;
+    fn GetProcessTimes(
+        handle: *mut std::ffi::c_void,
+        created: *mut FileTime,
+        exited: *mut FileTime,
+        kernel: *mut FileTime,
+        user: *mut FileTime,
+    ) -> i32;
     fn WaitForSingleObject(handle: *mut std::ffi::c_void, milliseconds: u32) -> u32;
     fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
 }
 
 pub(crate) fn process_key(pid: u32) -> Option<ProcessKey> {
     let handle = unsafe { OpenProcess(0x0010_1000, 0, pid) };
-    if handle.is_null() { return None }
+    if handle.is_null() {
+        return None;
+    }
     let mut created = FileTime::default();
     let mut exited = FileTime::default();
     let mut kernel = FileTime::default();
     let mut user = FileTime::default();
-    let success = unsafe { GetProcessTimes(handle, &mut created, &mut exited, &mut kernel, &mut user) };
+    let success =
+        unsafe { GetProcessTimes(handle, &mut created, &mut exited, &mut kernel, &mut user) };
     let running = unsafe { WaitForSingleObject(handle, 0) } == 0x102;
-    unsafe { CloseHandle(handle); }
-    (success != 0 && running).then_some(ProcessKey { pid, created: (u64::from(created.high) << 32) | u64::from(created.low) })
+    unsafe {
+        CloseHandle(handle);
+    }
+    (success != 0 && running).then_some(ProcessKey {
+        pid,
+        created: (u64::from(created.high) << 32) | u64::from(created.low),
+    })
 }
 
 pub(crate) fn resolve(root: ProcessKey, caller: u32, source: &str) -> Option<ProcessKey> {
@@ -86,10 +109,20 @@ pub(crate) fn resolve(root: ProcessKey, caller: u32, source: &str) -> Option<Pro
     let mut system = System::new();
     resolve_with(root.pid, caller, source, |pid| {
         let key = process_key(pid)?;
-        if pid == root.pid && key != root { return None }
-        system.refresh_processes_specifics(ProcessesToUpdate::Some(&[Pid::from_u32(pid)]), true, ProcessRefreshKind::nothing());
+        if pid == root.pid && key != root {
+            return None;
+        }
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[Pid::from_u32(pid)]),
+            true,
+            ProcessRefreshKind::nothing(),
+        );
         let process = system.process(Pid::from_u32(pid))?;
-        Some(ProcessInfo { key, parent: process.parent().map(|pid| pid.as_u32()), name: process.name().to_string_lossy().into_owned() })
+        Some(ProcessInfo {
+            key,
+            parent: process.parent().map(|pid| pid.as_u32()),
+            name: process.name().to_string_lossy().into_owned(),
+        })
     })
 }
 
@@ -98,7 +131,14 @@ mod tests {
     use super::*;
 
     fn process(pid: u32, parent: Option<u32>, name: &str) -> ProcessInfo {
-        ProcessInfo { key: ProcessKey { pid, created: u64::from(pid) * 100 }, parent, name: name.into() }
+        ProcessInfo {
+            key: ProcessKey {
+                pid,
+                created: u64::from(pid) * 100,
+            },
+            parent,
+            name: name.into(),
+        }
     }
 
     #[test]
@@ -110,20 +150,55 @@ mod tests {
             10 => Some(process(10, None, "powershell.exe")),
             _ => None,
         });
-        assert_eq!(actor, Some(ProcessKey { pid: 20, created: 2000 }));
+        assert_eq!(
+            actor,
+            Some(ProcessKey {
+                pid: 20,
+                created: 2000
+            })
+        );
     }
 
     #[test]
     fn rejects_unrelated_processes_cycles_and_missing_ancestors() {
-        assert_eq!(resolve_with(10, 20, "opencode", |pid| Some(process(pid, None, "node.exe"))), None);
-        assert_eq!(resolve_with(10, 20, "opencode", |pid| Some(process(pid, Some(pid), "node.exe"))), None);
+        assert_eq!(
+            resolve_with(10, 20, "opencode", |pid| Some(process(
+                pid, None, "node.exe"
+            ))),
+            None
+        );
+        assert_eq!(
+            resolve_with(10, 20, "opencode", |pid| Some(process(
+                pid,
+                Some(pid),
+                "node.exe"
+            ))),
+            None
+        );
         assert_eq!(resolve_with(10, 20, "opencode", |_| None), None);
-        assert_eq!(resolve_with(10, 20, "opencode", |pid| Some(process(pid, Some(10), "unrelated.exe"))), None);
+        assert_eq!(
+            resolve_with(10, 20, "opencode", |pid| Some(process(
+                pid,
+                Some(10),
+                "unrelated.exe"
+            ))),
+            None
+        );
     }
 
     #[test]
     fn resolves_a_node_adapter_in_its_own_process() {
-        assert_eq!(resolve_with(10, 20, "omp", |pid| Some(process(pid, Some(10), "node.exe"))), Some(ProcessKey { pid: 20, created: 2000 }));
+        assert_eq!(
+            resolve_with(10, 20, "omp", |pid| Some(process(
+                pid,
+                Some(10),
+                "node.exe"
+            ))),
+            Some(ProcessKey {
+                pid: 20,
+                created: 2000
+            })
+        );
         assert!(!executable_matches("node.exe", "unknown"));
     }
 
@@ -140,13 +215,24 @@ mod tests {
     fn resolves_a_real_node_child_without_reading_command_lines() {
         struct ChildGuard(std::process::Child);
         impl Drop for ChildGuard {
-            fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); }
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
         }
-        let child = ChildGuard(std::process::Command::new("node").args(["-e", "setTimeout(() => {}, 10000)"]).spawn().unwrap());
+        let child = ChildGuard(
+            std::process::Command::new("node")
+                .args(["-e", "setTimeout(() => {}, 10000)"])
+                .spawn()
+                .unwrap(),
+        );
         let root = process_key(std::process::id()).unwrap();
         let actor = resolve(root, child.0.id(), "opencode").unwrap();
         assert_eq!(actor.pid, child.0.id());
         assert_eq!(Some(actor), process_key(child.0.id()));
-        assert_eq!(resolve(ProcessKey { created: 1, ..root }, child.0.id(), "opencode"), None);
+        assert_eq!(
+            resolve(ProcessKey { created: 1, ..root }, child.0.id(), "opencode"),
+            None
+        );
     }
 }

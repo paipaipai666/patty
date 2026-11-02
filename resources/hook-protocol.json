@@ -1,6 +1,6 @@
 {
-  "version": 4,
-  "description": "Patty hook 线协议：各 AI CLI 适配器（patty-hook.ps1 / opencode-patty-plugin.ts / omp-patty-hook.ts）把原生事件翻译为本文件定义的规范事件，POST 到 127.0.0.1:$PATTY_PORT/hook，载荷 {paneId, event, source, secret, role?}。本文件是事件词汇的单一事实源：src-tauri/src/hooks.rs 的一致性测试与 resources/__tests__/ 的适配器契约测试都消费它——任何一侧漂移（新增、改名、映射变化）都会让测试失败，而不是让指示灯静默熄灭。它只喂测试，不驱动运行时。",
+  "version": 5,
+  "description": "Patty hook 线协议：各 AI CLI 适配器把原生事件翻译为规范事件，POST 到 127.0.0.1:$PATTY_PORT/hook，载荷 {paneId, event, source, secret, origin, role?}。本文件定义事件词汇，Rust 状态映射测试和适配器契约测试共同校验它。",
   "sources": ["claude-code", "codex", "opencode", "omp", "qwen-code", "copilot-cli"],
   "roles": ["main", "subagent"],
   "events": {
@@ -28,7 +28,10 @@
     { "contains": "question", "status": "waiting_input" }
   ],
   "notes": [
-    "origin 携带 processId、sequence，以及可用的 instanceId 和 conversationId。processId 是调用者进程，后端需沿父链校验终端归属并解析 CLI 运行实例；conversationId 不能代替运行实例身份。",
+    "origin 必须携带正整数 processId、sequence、emittedAt（Unix 毫秒），可携带 instanceId、conversationId、parentConversationId。后端沿父链校验本地 PTY 归属，以 CLI PID 和内核创建时间识别运行实例；conversationId 不能替代运行实例身份。Node 适配器提供实例 UUID 和递增序号，PowerShell 使用跨进程 Stopwatch 时间戳排序。更新适配器后须重启已运行的 CLI。",
+    "仅显式 main session_start/session_created 可建立或重开租约。已结束实例的 idle、alive 和其他状态不能重建租约。旧实例、旧会话和倒序状态被丢弃；心跳不推进状态序号，避免吞掉仍有效的延迟审批事件。",
+    "OpenCode/omp 提供周期心跳，超时且进程仍活着时保留身份并发布 unknown，只有新鲜状态事件可恢复。其他工具无周期心跳，不按静默时长猜测退出。所有工具的实际进程退出、PTY 关闭或通知停用均清除状态。",
+    "后端输出 {paneId, revision, agent}，revision 全局单调递增；快照输出 {revision, agents}，缺席状态在快照水位之前视为已清除。前端先订阅再取快照，按版本丢弃旧事件。",
     "events 是闭集：值为该事件映射到的 Agent 运行状态。null 不更新状态；session_end/session_deleted 单独清除 Agent。未读信息由前端独立管理。",
     "patterns 是开放家族：Claude StopFailure 的错误类型是动态的（error_rate_limit、error_overloaded……），适配器可以发出任何 error_* 变体。",
     "闭集事件若同时命中某条 pattern，两处 status 必须一致（如 error_retry）。",

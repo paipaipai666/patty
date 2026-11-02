@@ -86,6 +86,7 @@ Run supported AI tools inside a local Patty terminal so their hooks can identify
 
 | Sidebar status | Meaning |
 | --- | --- |
+| Status unavailable | The tool process is alive, but its periodic heartbeat stopped |
 | Idle | The tool started; no work has been reported |
 | Working | The tool reported prompt processing or tool execution |
 | Waiting for approval | A permission request needs a decision |
@@ -98,6 +99,10 @@ Selecting a session or typing in its terminal marks its latest notice as read an
 Use **Next attention** in the sidebar to cycle through waiting and failed sessions in session order. It searches all sessions, including collapsed collections and results hidden by the current search or view. It selects the target workspace and pane, preserves the current search and view, and marks the notice as read. When no session needs attention, the button is disabled. You can reach the button with Tab and activate it with Enter or Space.
 
 Use **Settings → Notifications** to enable or disable each adapter. Enabling an adapter installs Patty's integration in that tool's configuration; disabling it removes Patty's integration. Restart an already-running AI tool after changing its hook configuration. Available events depend on the tool's hooks.
+
+Patty checks that hook events belong to the current local terminal and CLI process. Events from an earlier run or conversation cannot replace the current state. Closing a layout pane keeps its session and status in the sidebar. Closing the session, exiting the tool, or disabling its adapter clears the status. Process exit detection can take up to one watchdog interval of five seconds.
+
+OpenCode and Oh My Pi send periodic heartbeats. If a heartbeat expires while the process remains alive, **Status unavailable** replaces its last reported state until a fresh state event arrives. Claude Code, Codex, Qwen Code, and Copilot CLI use event callbacks; silence alone does not count as exit. Reloading the window reads the backend's current states. Runtime states are not restored after an application restart.
 
 ## Settings
 

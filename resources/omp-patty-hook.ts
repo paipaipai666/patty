@@ -26,7 +26,7 @@ export default function PattyNotifier(pi: OmpExtensionApi): void {
 
   const hookBody = (event: string) =>
     JSON.stringify({ paneId: PANE_ID, event, source: 'omp', secret: SECRET,
-      origin: { processId: process.pid, sequence: ++sequence, instanceId } })
+      origin: { processId: process.pid, sequence: ++sequence, emittedAt: Date.now(), instanceId } })
 
   const notifyPatty = async (event: string) => {
     const controller = new AbortController()
@@ -51,7 +51,7 @@ export default function PattyNotifier(pi: OmpExtensionApi): void {
       const child = spawn(
         'curl',
         ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '--data-binary', '@-'],
-        { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'pipe'] }
+        { detached: true, stdio: ['pipe', 'ignore', 'ignore'] }
       )
       child.stdin?.write(hookBody(event))
       child.stdin?.end()

@@ -407,7 +407,6 @@ pub fn kill(id: &str) {
         abort.abort();
     }
     let victim = SESSIONS.write().unwrap().remove(id);
-    crate::hooks::remove_pane(id);
     PENDING_AUTH.lock().unwrap().remove(id);
     PENDING_HOSTKEY.lock().unwrap().remove(id);
     PENDING_INPUT.lock().unwrap().remove(id);
@@ -632,7 +631,6 @@ async fn create_inner(
             task.abort();
         }
         if still_registered {
-            crate::hooks::remove_pane(&loop_id);
             emit(&loop_app, &format!("pty:exit:{loop_id}"), exit_status);
         }
         let mut epochs = KILL_EPOCH.lock().unwrap();

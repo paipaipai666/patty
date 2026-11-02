@@ -8,6 +8,7 @@ pub mod sshconn;
 pub mod store;
 mod conpty;
 mod hook_identity;
+mod hook_state;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -39,6 +40,7 @@ fn settings_set(key: &str, value: Value) -> Result<Value, String> {
     let settings = store::update_settings(key, value)?;
 
     if key == "notifications" {
+        hooks::clear_disabled_tools(&settings);
         installer::sync_notification_tools(&settings);
     }
     Ok(settings)
@@ -140,10 +142,7 @@ fn hook_server_status() -> Value {
 }
 
 #[tauri::command]
-fn hooks_clear_pane(pane_id: &str) {
-
-    hooks::remove_pane(pane_id);
-}
+fn agent_state_snapshot() -> Value { hooks::agent_snapshot() }
 
 #[tauri::command]
 async fn select_directory() -> Value {
@@ -323,7 +322,7 @@ pub fn run() {
             ssh_config_import,
             get_fonts,
             hook_server_status,
-            hooks_clear_pane,
+            agent_state_snapshot,
             select_directory,
             theme_export,
             theme_import,

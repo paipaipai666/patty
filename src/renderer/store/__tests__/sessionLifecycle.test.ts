@@ -10,7 +10,8 @@ vi.stubGlobal('window', {
     kill: mockKill,
     selectDirectory: mockSelectDirectory,
     stateLoad: vi.fn(),
-    onAgentUpdate: vi.fn(() => vi.fn())
+    agentStateSnapshot: vi.fn(async () => ({ revision: 0, agents: [] })),
+    onAgentUpdate: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: vi.fn() }))
   },
   addEventListener: vi.fn()
 })
@@ -38,7 +39,7 @@ beforeEach(() => {
     sidebarVisible: true,
     sidebarWidth: 220,
     loaded: true,
-    agentStates: {}
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0
   })
   useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null })
 })

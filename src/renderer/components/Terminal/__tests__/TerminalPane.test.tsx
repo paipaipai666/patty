@@ -51,7 +51,7 @@ vi.mock('../../../store/sessionStore', () => {
     markAgentRead: vi.fn(),
     updatePid: vi.fn(),
     updateCwd: vi.fn(),
-    clearAgentState: vi.fn()
+
   }
   const useSessionStore = (sel: (s: typeof state) => unknown) => sel(state)
   useSessionStore.getState = () => state
@@ -131,12 +131,10 @@ function render() {
 describe('TerminalPane PTY lifecycle (C5)', () => {
   it('typing forwards the bytes and marks the notice read without clearing agent state', () => {
     const { root } = render()
-    vi.mocked(useSessionStore.getState().clearAgentState).mockClear()
     vi.mocked(useSessionStore.getState().markAgentRead).mockClear()
     act(() => terminalInput.deliver('answer'))
     expect(terminalAPI.write).toHaveBeenCalledWith('sess-c5', 'answer')
     expect(useSessionStore.getState().markAgentRead).toHaveBeenCalledWith('sess-c5')
-    expect(useSessionStore.getState().clearAgentState).not.toHaveBeenCalled()
     act(() => root.unmount())
   })
 
@@ -229,17 +227,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
     expect(useToastStore.getState().toasts.length).toBeGreaterThan(0)
   })
 
-  it('clears attention and aiType when the PTY exits', async () => {
 
-    render()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0)
-    })
-    act(() => {
-      lastOnExit!()
-    })
-    expect(useSessionStore.getState().clearAgentState).toHaveBeenCalledWith('sess-c5')
-  })
 })
 
 describe('TerminalPane WebGL context loss (M1)', () => {

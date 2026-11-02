@@ -10,6 +10,7 @@ const repository = resolve('.').replaceAll("'", "''")
 mkdirSync(output, { recursive: true })
 const app = await launchApp()
 const { cdp } = app
+let agentRevision = await cdp.evaluate('window.terminalAPI.agentStateSnapshot().then(snapshot => snapshot.revision)')
 const nativeDensity = await cdp.evaluate('devicePixelRatio')
 const errors = []
 let attentionSessionId = null
@@ -59,7 +60,7 @@ async function screenshot(name, width = 1486, height = 1059) {
   await sleep(300)
   if (attentionSessionId) {
     await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {
-      event: 'pty:agent', payload: { paneId: ${JSON.stringify(attentionSessionId)}, agent: { aiType: 'claude', status: 'waiting_approval' } }
+      event: 'pty:agent', payload: { paneId: ${JSON.stringify(attentionSessionId)}, revision: ${++agentRevision}, agent: { aiType: 'claude', status: 'waiting_approval' } }
     })`)
     await cdp.waitFor(
       `document.querySelector('[data-tree-id="session:${attentionSessionId}"]').innerText.includes('Waiting for approval')`
@@ -135,7 +136,7 @@ async function verifyAgentAnimations(sessionId, theme) {
   })()`)
   const emit = (status, aiType) =>
     cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {
-    event: 'pty:agent', payload: ${JSON.stringify({ paneId: sessionId, agent: aiType ? { aiType, status } : null })}
+    event: 'pty:agent', payload: ${JSON.stringify({ paneId: sessionId, revision: ++agentRevision, agent: aiType ? { aiType, status } : null })}
   })`)
   const animation = () =>
     cdp.evaluate(`(() => {
@@ -400,7 +401,7 @@ try {
   }
   await sleep(1000)
   await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {
-    event: 'pty:agent', payload: { paneId: ${JSON.stringify(agentId)}, agent: { aiType: 'claude', status: 'waiting_approval' } }
+    event: 'pty:agent', payload: { paneId: ${JSON.stringify(agentId)}, revision: ${++agentRevision}, agent: { aiType: 'claude', status: 'waiting_approval' } }
   })`)
   await cdp.waitFor(
     `document.querySelector('[data-tree-id="session:${agentId}"]').innerText.includes('Waiting for approval')`

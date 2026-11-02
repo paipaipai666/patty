@@ -1,30 +1,4 @@
 #[test]
-fn note_event_adds_to_active_map() {
-    patty::hooks::note_event("pane-1", "session_start", "opencode", "main");
-
-}
-
-#[test]
-fn note_event_unknown_source_prints_warning_only() {
-    patty::hooks::note_event("pane-2", "session_start", "unknown-tool", "main");
-
-}
-
-#[test]
-fn note_event_session_end_removes_from_active() {
-    patty::hooks::note_event("pane-3", "session_start", "claude-code", "main");
-    patty::hooks::note_event("pane-3", "session_end", "claude-code", "main");
-
-}
-
-#[test]
-fn remove_pane_works() {
-    patty::hooks::note_event("pane-4", "session_start", "codex", "main");
-    patty::hooks::remove_pane("pane-4");
-
-}
-
-#[test]
 fn hook_secret_is_not_empty() {
     let secret = patty::hooks::hook_secret();
     assert!(!secret.is_empty(), "hook secret should be a non-empty string");

@@ -165,7 +165,7 @@ describe('PattyNotifier (opencode plugin, v2 setup path)', () => {
       source: 'opencode',
       secret: 'secret-1',
       role: 'main',
-      origin: { processId: process.pid, sequence: 1, instanceId: expect.any(String), conversationId: 's1' }
+      origin: { processId: process.pid, sequence: 1, emittedAt: expect.any(Number), instanceId: expect.any(String), conversationId: 's1' }
     })
   })
 
@@ -250,6 +250,30 @@ describe('PattyNotifier (opencode plugin, v2 setup path)', () => {
     expect(spawnCalls[0].cmd).toBe('curl')
     const body = JSON.parse(spawnCalls[0].body)
     expect(body).toMatchObject({ paneId: 'pane-1', event: 'session_deleted', source: 'opencode', secret: 'secret-1', role: 'main' })
+  })
+
+  it('deleting an older main session keeps the current conversation heartbeat', async () => {
+    await driveV2({ type: 'session.created', data: { sessionID: 'old-main' } })
+    await driveV2({ type: 'session.created', data: { sessionID: 'current-main' } })
+    await driveV2({ type: 'session.deleted', data: { sessionID: 'old-main' } })
+    captured.length = 0
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(captured.map((p) => p.body)).toContainEqual(expect.objectContaining({
+      event: 'alive', origin: expect.objectContaining({ conversationId: 'current-main' })
+    }))
+    await driveV2({ type: 'session.deleted', data: { sessionID: 'current-main' } })
+  })
+
+  it('recognizes a child deletion even when its parent ID is omitted', async () => {
+    await driveV2(v2MainCreated)
+    await driveV2(v2SubCreated)
+    spawnCalls.length = 0
+    captured.length = 0
+    await driveV2({ type: 'session.deleted', data: { sessionID: 's2' } })
+    expect(spawnCalls).toEqual([])
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(captured.map((p) => p.body.event)).toContain('alive')
+    await driveV2({ type: 'session.deleted', data: { sessionID: 's1' } })
   })
 
   it('subagent session.deleted does not notify Patty', async () => {

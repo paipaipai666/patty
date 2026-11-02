@@ -1,3 +1,4 @@
+import { agentUpdate } from '../../../shared/__tests__/agentFixtures'
 import type { AgentStatus, AgentUpdate } from '../../../shared/agentTypes'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
@@ -6,15 +7,17 @@ vi.mock('../dirtyScheduler', () => ({
 }))
 
 const mockStateLoad = vi.fn()
+const mockAgentSnapshot = vi.fn(async () => ({ revision: 0, agents: [] as AgentUpdate[] }))
 let capturedAgentCallback: ((update: AgentUpdate) => void) | null = null
 const mockOnAgentUpdate = vi.fn((cb) => {
   capturedAgentCallback = cb
-  return vi.fn()
+  return { ready: Promise.resolve(), unsubscribe: vi.fn() }
 })
 
 vi.stubGlobal('window', {
   terminalAPI: {
     stateLoad: mockStateLoad,
+    agentStateSnapshot: mockAgentSnapshot,
     onAgentUpdate: mockOnAgentUpdate
   },
   addEventListener: vi.fn()
@@ -24,6 +27,7 @@ import { useSessionStore, buildSessionPersistedState, teardownSessionIPC, SESSIO
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockAgentSnapshot.mockReset().mockResolvedValue({ revision: 0, agents: [] })
   capturedAgentCallback = null
   teardownSessionIPC()
   useSessionStore.setState({
@@ -33,7 +37,7 @@ beforeEach(() => {
     sidebarVisible: true,
     sidebarWidth: 220,
     loaded: false,
-    agentStates: {}
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0
   })
 })
 
@@ -129,7 +133,7 @@ describe('removeSession', () => {
       sessions: [{ id: 's1', title: 'T1', color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: null }],
       activeSessionId: 's1'
     })
-    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } }))
     useSessionStore.getState().removeSession('s1')
     expect(useSessionStore.getState().sessions).toHaveLength(0)
   })
@@ -347,13 +351,13 @@ describe('agent activity', () => {
   })
 
   it('applies runtime state and agent identity together', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'waiting_approval' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'waiting_approval' } }))
     expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'waiting_approval', unread: true })
     expect(useSessionStore.getState().sessions[0].aiType).toBe('codex')
   })
 
   it('reading an approval keeps the runtime state and attention classification', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'waiting_approval' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'waiting_approval' } }))
     useSessionStore.getState().markAgentRead('s1')
     expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'waiting_approval', unread: false })
     expect(useSessionStore.getState().sessions[0].aiType).toBe('claude')
@@ -361,46 +365,140 @@ describe('agent activity', () => {
 
   it('new work clears an old completed or failed notice', () => {
     for (const status of ['complete', 'error'] satisfies AgentStatus[]) {
-      useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status } })
+      useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status } }))
       expect(useSessionStore.getState().agentStates.s1).toEqual({ status, unread: true })
-      useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
+      useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } }))
       expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'working', unread: false })
     }
   })
 
   it('duplicate events do not rearm a notice after it was read', () => {
-    const update: AgentUpdate = { paneId: 's1', agent: { aiType: 'claude', status: 'complete' } }
+    const update: AgentUpdate = agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'complete' } })
     useSessionStore.getState().applyAgentUpdate(update)
     useSessionStore.getState().setActive('s1')
     useSessionStore.getState().applyAgentUpdate(update)
     expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'complete', unread: false })
-    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
-    useSessionStore.getState().applyAgentUpdate(update)
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'complete' } }))
     expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'complete', unread: true })
   })
 
   it('clearing a session clears its identity and runtime state together', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'error' } })
-    useSessionStore.getState().clearAgentState('s1')
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'error' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: null }))
     expect(useSessionStore.getState().agentStates).toEqual({})
     expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
   })
 
   it('ignores updates for removed sessions', () => {
-    const update: AgentUpdate = { paneId: 's1', agent: { aiType: 'codex', status: 'waiting_input' } }
+    const update: AgentUpdate = agentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'waiting_input' } })
     useSessionStore.getState().applyAgentUpdate(update)
     useSessionStore.getState().removeSession('s1')
     useSessionStore.getState().applyAgentUpdate(update)
     expect(useSessionStore.getState().agentStates).toEqual({})
     expect(useSessionStore.getState().sessions).toEqual([])
   })
+
+  it('rejects stale states and clears without rearming a read notice', () => {
+    const store = useSessionStore.getState()
+    store.applyAgentUpdate({ paneId: 's1', revision: 10, agent: { aiType: 'codex', status: 'waiting_approval' } })
+    store.markAgentRead('s1')
+    store.applyAgentUpdate({ paneId: 's1', revision: 9, agent: { aiType: 'claude', status: 'complete' } })
+    store.applyAgentUpdate({ paneId: 's1', revision: 8, agent: null })
+    expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'waiting_approval', unread: false })
+    expect(useSessionStore.getState().sessions[0].aiType).toBe('codex')
+    store.applyAgentUpdate({ paneId: 's1', revision: 11, agent: { aiType: 'codex', status: 'working' } })
+    store.applyAgentUpdate({ paneId: 's1', revision: 12, agent: { aiType: 'codex', status: 'complete' } })
+    store.applyAgentUpdate({ paneId: 's1', revision: 11, agent: null })
+    expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'complete', unread: true })
+    store.applyAgentUpdate({ paneId: 's1', revision: 13, agent: null })
+    expect(useSessionStore.getState().agentStates).toEqual({})
+    expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
+  })
+})
+
+describe('agent snapshot reconciliation', () => {
+  function persisted(id = 's1') {
+    return {
+      sessions: [{ id, title: id, color: 'blue', cwd: '', shell: 'cmd', collectionId: null }],
+      collections: [], activeSessionId: id, sidebarVisible: true, sidebarWidth: 220
+    }
+  }
+
+  it('merges a snapshot with newer buffered events and ignores orphan panes', async () => {
+    mockStateLoad.mockImplementationOnce(async () => {
+      capturedAgentCallback?.({ paneId: 's1', revision: 21, agent: { aiType: 'codex', status: 'working' } })
+      capturedAgentCallback?.({ paneId: 's1', revision: 18, agent: { aiType: 'codex', status: 'complete' } })
+      return persisted()
+    })
+    mockAgentSnapshot.mockResolvedValueOnce({ revision: 20, agents: [
+      { paneId: 's1', revision: 17, agent: { aiType: 'codex', status: 'idle' } },
+      { paneId: 'removed', revision: 20, agent: { aiType: 'claude', status: 'error' } }
+    ] })
+    await useSessionStore.getState().loadState()
+    expect(useSessionStore.getState().agentStates).toEqual({ s1: { status: 'working', unread: false } })
+    expect(useSessionStore.getState().sessions.map((s) => [s.id, s.aiType])).toEqual([['s1', 'codex']])
+    expect(useSessionStore.getState().agentRevisions).toEqual({ s1: 21 })
+  })
+
+  it('uses an empty snapshot watermark to reject old clears and old attention', async () => {
+    mockStateLoad.mockImplementationOnce(async () => {
+      capturedAgentCallback?.({ paneId: 's1', revision: 90, agent: { aiType: 'codex', status: 'waiting_approval' } })
+      return persisted()
+    })
+    mockAgentSnapshot.mockResolvedValueOnce({ revision: 100, agents: [] })
+    await useSessionStore.getState().loadState()
+    capturedAgentCallback?.({ paneId: 's1', revision: 99, agent: { aiType: 'codex', status: 'complete' } })
+    expect(useSessionStore.getState().agentStates).toEqual({})
+    expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
+    capturedAgentCallback?.({ paneId: 's1', revision: 101, agent: { aiType: 'codex', status: 'working' } })
+    expect(useSessionStore.getState().agentStates).toEqual({ s1: { status: 'working', unread: false } })
+  })
+
+  it('waits until subscription is active before reading the snapshot', async () => {
+    let activate: () => void = () => undefined
+    const ready = new Promise<void>((resolve) => { activate = resolve })
+    mockOnAgentUpdate.mockReturnValueOnce({ ready, unsubscribe: vi.fn() })
+    mockStateLoad.mockResolvedValueOnce(persisted())
+    const loading = useSessionStore.getState().loadState()
+    expect(mockStateLoad).not.toHaveBeenCalled()
+    expect(mockAgentSnapshot).not.toHaveBeenCalled()
+    activate()
+    await loading
+    expect(useSessionStore.getState().sessions.map((s) => s.id)).toEqual(['s1'])
+    expect(mockAgentSnapshot).toHaveBeenCalledOnce()
+  })
+
+  it('cancels overlapping loads and prevents old listeners from changing the new store', async () => {
+    let release: (value: ReturnType<typeof persisted>) => void = () => undefined
+    let entered: () => void = () => undefined
+    const started = new Promise<void>((resolve) => { entered = resolve })
+    mockStateLoad.mockImplementationOnce(() => {
+      entered()
+      return new Promise<ReturnType<typeof persisted>>((resolve) => { release = resolve })
+    }).mockResolvedValueOnce(persisted('s2'))
+    const oldLoad = useSessionStore.getState().loadState()
+    const oldCallback = capturedAgentCallback
+    await started
+    await useSessionStore.getState().loadState()
+    capturedAgentCallback?.({ paneId: 's2', revision: 10, agent: { aiType: 'codex', status: 'working' } })
+    oldCallback?.({ paneId: 's2', revision: 999, agent: { aiType: 'claude', status: 'error' } })
+    release(persisted('s1'))
+    expect(await oldLoad).toBeNull()
+    expect(useSessionStore.getState().sessions.map((s) => [s.id, s.aiType])).toEqual([['s2', 'codex']])
+    expect(useSessionStore.getState().agentStates).toEqual({ s2: { status: 'working', unread: false } })
+    const callback = capturedAgentCallback
+    teardownSessionIPC()
+    callback?.({ paneId: 's2', revision: 1000, agent: null })
+    expect(useSessionStore.getState().agentStates).toEqual({ s2: { status: 'working', unread: false } })
+  })
 })
 
 describe('loadState / saveState', () => {
   it('retains the latest agent update received while persisted sessions are loading', async () => {
     mockStateLoad.mockImplementationOnce(async () => {
-      capturedAgentCallback?.({ paneId: 's1', agent: { aiType: 'codex', status: 'complete' } })
-      capturedAgentCallback?.({ paneId: 's1', agent: { aiType: 'codex', status: 'working' } })
+      capturedAgentCallback?.(agentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'complete' } }))
+      capturedAgentCallback?.(agentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'working' } }))
       return {
         sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'cmd', collectionId: null }],
         collections: [], activeSessionId: 's1', sidebarVisible: true, sidebarWidth: 220
@@ -485,7 +583,7 @@ describe('loadState / saveState', () => {
     await useSessionStore.getState().loadState()
 
     expect(capturedAgentCallback).not.toBeNull()
-    capturedAgentCallback?.({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
+    capturedAgentCallback?.(agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } }))
 
     expect(useSessionStore.getState().agentStates['s1']).toEqual({ status: 'working', unread: false })
     expect(useSessionStore.getState().sessions[0].aiType).toBe('claude')
@@ -504,8 +602,8 @@ describe('loadState / saveState', () => {
     expect(capturedAgentCallback).not.toBeNull()
 
 
-    capturedAgentCallback?.({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
-    capturedAgentCallback?.({ paneId: 's1', agent: null })
+    capturedAgentCallback?.(agentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } }))
+    capturedAgentCallback?.(agentUpdate({ paneId: 's1', agent: null }))
 
     expect(useSessionStore.getState().agentStates).toEqual({})
 

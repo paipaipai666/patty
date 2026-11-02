@@ -40,6 +40,15 @@ beforeEach(() => {
 })
 
 describe('agent state IPC', () => {
+  it('loads and validates the authoritative agent snapshot', async () => {
+    const snapshot = { revision: 4, agents: [{ paneId: 'p1', revision: 3, agent: { aiType: 'codex', status: 'working' } }] }
+    invokeMock.mockResolvedValueOnce(snapshot)
+    await expect(terminalAPI.agentStateSnapshot()).resolves.toEqual(snapshot)
+    expect(invokeMock).toHaveBeenCalledWith('agent_state_snapshot')
+    invokeMock.mockResolvedValueOnce({ revision: 4, agents: [{ paneId: 'p1', revision: 8, agent: null }] })
+    await expect(terminalAPI.agentStateSnapshot()).rejects.toThrow()
+  })
+
   it('delivers validated state objects and ignores malformed payloads', () => {
     let deliver: (event: { payload: unknown }) => void = () => undefined
     listenMock.mockImplementation((_name: string, callback: typeof deliver) => {
@@ -48,13 +57,13 @@ describe('agent state IPC', () => {
     })
     const updates: AgentUpdate[] = []
     terminalAPI.onAgentUpdate((update) => updates.push(update))
-    deliver({ payload: { paneId: 'p1', agent: { aiType: 'codex', status: 'working' } } })
+    deliver({ payload: { paneId: 'p1', revision: 1, agent: { aiType: 'codex', status: 'working' } } })
     deliver({ payload: ['p1', 'permission', 'claude'] })
-    deliver({ payload: { paneId: 'p1', agent: { aiType: 'codex', status: 'unknown' } } })
-    deliver({ payload: { paneId: 'p1', agent: null } })
+    deliver({ payload: { paneId: 'p1', revision: 1, agent: { aiType: 'codex', status: 'invented' } } })
+    deliver({ payload: { paneId: 'p1', revision: 1, agent: null } })
     expect(updates).toEqual([
-      { paneId: 'p1', agent: { aiType: 'codex', status: 'working' } },
-      { paneId: 'p1', agent: null }
+      { paneId: 'p1', revision: 1, agent: { aiType: 'codex', status: 'working' } },
+      { paneId: 'p1', revision: 1, agent: null }
     ])
   })
 })

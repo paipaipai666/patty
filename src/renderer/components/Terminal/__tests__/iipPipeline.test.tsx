@@ -184,7 +184,7 @@ vi.mock('../../../store/sessionStore', () => {
     markAgentRead: vi.fn(),
     updatePid: vi.fn(),
     updateCwd: vi.fn(),
-    clearAgentState: vi.fn()
+
   }
   const useSessionStore = (sel: (s: typeof state) => unknown) => sel(state)
   useSessionStore.getState = () => state

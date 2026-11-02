@@ -1,3 +1,4 @@
+import { agentUpdate } from '../../../../shared/__tests__/agentFixtures'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -32,7 +33,7 @@ beforeEach(() => {
       { id: 'api', name: 'Payments API', parentId: 'work', collapsed: true, createdAt: 2 }
     ],
     activeSessionId: 'scratch',
-    agentStates: {}
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0
   })
   useWorkspaceStore.setState({ workspaces: [] })
 })
@@ -54,7 +55,7 @@ function resultIds(): Array<string | undefined> {
 
 describe('session search results', () => {
   it('reading a question stops its glow while preserving its label and attention view', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_input' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_input' } }))
     render('', 'attention')
     expect(resultIds()).toEqual(['session:server'])
     expect(container.textContent).toContain('Waiting for answer')
@@ -64,7 +65,7 @@ describe('session search results', () => {
     expect(container.textContent).toContain('Waiting for answer')
     expect(container.querySelector('[data-testid="agent-attention-glow"]')).toBeNull()
     expect(container.querySelector('[data-tree-id="session:server"]')?.getAttribute('aria-description')).toBe('Waiting for answer')
-    act(() => useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'working' } }))
+    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'working' } })))
     expect(resultIds()).toEqual([])
     render('server')
     expect(container.textContent).toContain('Working')
@@ -93,12 +94,12 @@ describe('session search results', () => {
   })
 
   it('shows attention inside collapsed collections and updates when an event clears', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } })
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'complete' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'complete' } }))
     render('', 'attention')
     expect(resultIds()).toEqual(['session:server'])
     expect(container.querySelector('[data-tree-id="session:server"]')?.closest('[hidden]')).toBeNull()
-    act(() => useSessionStore.getState().clearAgentState('server'))
+    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: null })))
     expect(resultIds()).toEqual([])
     expect(container.textContent).toContain('No sessions need attention')
     render('', 'complete')
@@ -106,8 +107,8 @@ describe('session search results', () => {
   })
 
   it('keeps filtering and text search active together', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } })
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } }))
     render('payments', 'attention')
     expect(resultIds()).toEqual(['session:server'])
     render('scratch', 'attention')
@@ -128,20 +129,20 @@ describe('sidebar attention controls', () => {
   }
 
   it('counts attention and completed sessions independently and updates from live store events', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } })
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } })
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'scratch', agent: { aiType: 'claude', status: 'complete' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'scratch', agent: { aiType: 'claude', status: 'complete' } }))
     renderSidebar()
     expect(Array.from(container.querySelectorAll('option')).map((option) => option.textContent)).toEqual([
       'All sessions (3)', 'Needs attention (2)', 'Completed (1)'
     ])
-    act(() => useSessionStore.getState().clearAgentState('server'))
+    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: null })))
     expect(container.querySelector('option[value="attention"]')?.textContent).toBe('Needs attention (1)')
   })
 
   it('combines the view picker with the search field without changing the active workspace', () => {
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } })
-    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } })
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } }))
     renderSidebar()
     const select = container.querySelector<HTMLSelectElement>('[aria-label="Session view"]')!
     act(() => {
@@ -155,7 +156,7 @@ describe('sidebar attention controls', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(resultIds()).toEqual(['session:server'])
-    act(() => useSessionStore.getState().clearAgentState('server'))
+    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: null })))
     expect(resultIds()).toEqual([])
     expect(input.value).toBe('payments')
     expect(select.value).toBe('attention')
