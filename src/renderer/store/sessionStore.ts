@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { activityFromStatus, type AgentType, type AgentStates, type AgentUpdate } from '../../shared/agentTypes'
 import type { PersistedState, SessionColor, Collection } from '../../shared/stateTypes'
 import type { ShellType, SshTarget } from '../../shared/settingsTypes'
 import { markDirty } from './dirtyScheduler'
@@ -14,7 +15,7 @@ export interface TerminalSession {
   pid: number
   createdAt: number
   collectionId: string | null
-  aiType?: 'claude' | 'opencode' | 'codex' | 'omp' | 'qwen' | 'copilot' | null
+  aiType?: AgentType | null
                                                                  
   ssh?: SshTarget | null
 }
@@ -44,7 +45,7 @@ interface SessionStore {
                                                                  
   sidebarTransitioning: boolean
   loaded: boolean
-  attentionMap: Record<string, string | null>
+  agentStates: AgentStates
 
                                                                         
   draggingSessionId: string | null
@@ -73,9 +74,9 @@ interface SessionStore {
   navigatePrev: () => void
   navigateToIndex: (index: number) => void
 
-  setAttention: (id: string, eventType: string | null) => void
-  resetAttention: (id: string) => void
-  setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | 'omp' | 'qwen' | 'copilot' | null) => void
+  applyAgentUpdate: (update: AgentUpdate) => void
+  markAgentRead: (id: string) => void
+  clearAgentState: (id: string) => void
   setDraggingSession: (id: string | null) => void
 
   loadState: () => Promise<PersistedState | null>
@@ -103,24 +104,24 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   sidebarWidth: 264,
   sidebarTransitioning: false,
   loaded: false,
-  attentionMap: {},
+  agentStates: {},
   draggingSessionId: null,
 
   loadState: async () => {
     try {
 
       if (ipcCleanup) ipcCleanup()
-      const offAttention = window.terminalAPI.onAttentionChange((sessionId, eventType, aiType) => {
-        get().setAttention(sessionId, eventType)
-        if (aiType !== undefined) {
-          get().setAiType(sessionId, (aiType ?? null) as 'claude' | 'opencode' | 'codex' | 'omp' | 'qwen' | 'copilot' | null)
-        }
+      const pendingUpdates = new Map<string, AgentUpdate>()
+      let stateReady = false
+      const offAgent = window.terminalAPI.onAgentUpdate((update) => {
+        if (stateReady) get().applyAgentUpdate(update)
+        else pendingUpdates.set(update.paneId, update)
       })
 
 
 
       ipcCleanup = () => {
-        offAttention()
+        offAgent()
         ipcCleanup = null
       }
 
@@ -131,8 +132,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         activeSessionId: state.activeSessionId,
         sidebarVisible: state.sidebarVisible,
         sidebarWidth: state.sidebarWidth,
-        loaded: true
+        loaded: true,
+        agentStates: {}
       })
+      stateReady = true
+      for (const update of pendingUpdates.values()) get().applyAgentUpdate(update)
+      pendingUpdates.clear()
 
 
       return state
@@ -187,13 +192,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         }
       }
 
-      const attentionMap = { ...state.attentionMap }
-      delete attentionMap[id]
+      const agentStates = { ...state.agentStates }
+      delete agentStates[id]
 
       return {
         sessions: filtered,
         activeSessionId: newActiveId,
-        attentionMap
+        agentStates
       }
     })
     markDirty()
@@ -201,6 +206,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setActive: (id: string) => {
     set({ activeSessionId: id })
+    get().markAgentRead(id)
   },
 
   setDraggingSession: (id: string | null) => {
@@ -365,7 +371,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     if (sessions.length <= 1) return
     const idx = sessions.findIndex((s) => s.id === activeSessionId)
     const nextIdx = (idx + 1) % sessions.length
-    set({ activeSessionId: sessions[nextIdx].id })
+    get().setActive(sessions[nextIdx].id)
     markDirty()
   },
 
@@ -374,43 +380,47 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     if (sessions.length <= 1) return
     const idx = sessions.findIndex((s) => s.id === activeSessionId)
     const prevIdx = (idx - 1 + sessions.length) % sessions.length
-    set({ activeSessionId: sessions[prevIdx].id })
+    get().setActive(sessions[prevIdx].id)
     markDirty()
   },
 
   navigateToIndex: (index: number) => {
     const { sessions } = get()
     if (index >= 0 && index < sessions.length) {
-      set({ activeSessionId: sessions[index].id })
+      get().setActive(sessions[index].id)
       markDirty()
     }
   },
 
-  setAttention: (id: string, eventType: string | null) => {
-
+  applyAgentUpdate: ({ paneId, agent }) => {
     set((state) => {
-      if (eventType === null) {
-
-        if (!(id in state.attentionMap)) return state
-        const next = { ...state.attentionMap }
-        delete next[id]
-        return { attentionMap: next }
+      const session = state.sessions.find((item) => item.id === paneId)
+      if (!session) return state
+      const previous = state.agentStates[paneId]
+      const aiType = agent?.aiType ?? null
+      if (previous?.status === agent?.status && session.aiType === aiType) return state
+      const agentStates = agent
+        ? { ...state.agentStates, [paneId]: activityFromStatus(agent.status) }
+        : { ...state.agentStates }
+      if (!agent) delete agentStates[paneId]
+      return {
+        agentStates,
+        sessions: session.aiType === aiType ? state.sessions
+          : state.sessions.map((item) => item.id === paneId ? { ...item, aiType } : item)
       }
-      if (state.attentionMap[id] === eventType) return state
-      return { attentionMap: { ...state.attentionMap, [id]: eventType } }
     })
   },
 
-  resetAttention: (id: string) => {
-    get().setAttention(id, null)
+  markAgentRead: (id: string) => {
+    set((state) => {
+      const activity = state.agentStates[id]
+      if (!activity?.unread) return state
+      return { agentStates: { ...state.agentStates, [id]: { ...activity, unread: false } } }
+    })
   },
 
-  setAiType: (id: string, aiType: 'claude' | 'opencode' | 'codex' | 'omp' | 'qwen' | 'copilot' | null) => {
-    set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.id === id ? { ...s, aiType } : s
-      )
-    }))
+  clearAgentState: (id: string) => {
+    get().applyAgentUpdate({ paneId: id, agent: null })
   }
 }))
 

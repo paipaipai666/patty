@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
+const terminalInput = vi.hoisted(() => ({ deliver: (_data: string) => {} }))
+
 
 vi.mock('@xterm/xterm', () => {
   class MockTerminal {
@@ -17,7 +19,10 @@ vi.mock('@xterm/xterm', () => {
     }
     open() {}
     loadAddon() {}
-    onData() { return { dispose() {} } }
+    onData(callback: (data: string) => void) {
+      terminalInput.deliver = callback
+      return { dispose() {} }
+    }
     onKey() { return { dispose() {} } }
     attachCustomKeyEventHandler() { return { dispose() {} } }
     registerOscHandler() { return { dispose() {} } }
@@ -43,11 +48,10 @@ vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class { dispose() {} 
 vi.mock('../../../store/sessionStore', () => {
   const state = {
     sidebarTransitioning: false,
-    resetAttention: vi.fn(),
+    markAgentRead: vi.fn(),
     updatePid: vi.fn(),
     updateCwd: vi.fn(),
-    setAttention: vi.fn(),
-    setAiType: vi.fn()
+    clearAgentState: vi.fn()
   }
   const useSessionStore = (sel: (s: typeof state) => unknown) => sel(state)
   useSessionStore.getState = () => state
@@ -125,6 +129,17 @@ function render() {
 }
 
 describe('TerminalPane PTY lifecycle (C5)', () => {
+  it('typing forwards the bytes and marks the notice read without clearing agent state', () => {
+    const { root } = render()
+    vi.mocked(useSessionStore.getState().clearAgentState).mockClear()
+    vi.mocked(useSessionStore.getState().markAgentRead).mockClear()
+    act(() => terminalInput.deliver('answer'))
+    expect(terminalAPI.write).toHaveBeenCalledWith('sess-c5', 'answer')
+    expect(useSessionStore.getState().markAgentRead).toHaveBeenCalledWith('sess-c5')
+    expect(useSessionStore.getState().clearAgentState).not.toHaveBeenCalled()
+    act(() => root.unmount())
+  })
+
   it('does not spawn an orphaned PTY or reattach to a disposed terminal after unmount-during-retry', async () => {
     const { root } = render()
 
@@ -223,8 +238,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
     act(() => {
       lastOnExit!()
     })
-    expect(useSessionStore.getState().setAttention).toHaveBeenCalledWith('sess-c5', null)
-    expect(useSessionStore.getState().setAiType).toHaveBeenCalledWith('sess-c5', null)
+    expect(useSessionStore.getState().clearAgentState).toHaveBeenCalledWith('sess-c5')
   })
 })
 

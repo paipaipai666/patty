@@ -40,7 +40,7 @@ export function Sidebar({
 }: SidebarProps) {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
   const sessions = useSessionStore((s) => s.sessions)
-  const attentionMap = useSessionStore((s) => s.attentionMap)
+  const agentStates = useSessionStore((s) => s.agentStates)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const addCollection = useSessionStore((s) => s.addCollection)
   const sidebarPosition = useSettingsStore((s) => s.settings.sidebarPosition)
@@ -48,7 +48,7 @@ export function Sidebar({
   const openSettings = useSettingsStore((s) => s.openSettings)
   const [searchQuery, setSearchQuery] = useState('')
   const [sessionView, setSessionView] = useState<SessionView>('all')
-  const viewCounts = countSessionViews(sessions, attentionMap)
+  const viewCounts = countSessionViews(sessions, agentStates)
   const [menu, setMenu] = useState<'create' | 'ssh' | null>(null)
   const [isCreatingCollection, setIsCreatingCollection] = useState(false)
   const [newCollectionName, setNewCollectionName] = useState('')

@@ -37,7 +37,7 @@ const hoisted = vi.hoisted(() => {
     addCollection: vi.fn(),
     removeCollection: vi.fn(),
     renameCollection: vi.fn(),
-    setAiType: vi.fn()
+    clearAgentState: vi.fn()
   }
 
   const wsState = {

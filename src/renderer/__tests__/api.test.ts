@@ -1,15 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { PersistedState } from '../../shared/stateTypes'
+import type { AgentUpdate } from '../../shared/agentTypes'
 
-const { closeMock, flushNowMock, invokeMock } = vi.hoisted(() => ({
+const { closeMock, flushNowMock, invokeMock, listenMock } = vi.hoisted(() => ({
   closeMock: vi.fn(),
   flushNowMock: vi.fn(),
-  invokeMock: vi.fn()
+  invokeMock: vi.fn(),
+  listenMock: vi.fn()
 }))
 
 vi.stubGlobal('window', {})
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }))
+vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }))
 
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({ close: closeMock })
@@ -33,6 +36,27 @@ beforeEach(() => {
   closeMock.mockReset()
   flushNowMock.mockReset()
   invokeMock.mockReset()
+  listenMock.mockReset()
+})
+
+describe('agent state IPC', () => {
+  it('delivers validated state objects and ignores malformed payloads', () => {
+    let deliver: (event: { payload: unknown }) => void = () => undefined
+    listenMock.mockImplementation((_name: string, callback: typeof deliver) => {
+      deliver = callback
+      return Promise.resolve(() => undefined)
+    })
+    const updates: AgentUpdate[] = []
+    terminalAPI.onAgentUpdate((update) => updates.push(update))
+    deliver({ payload: { paneId: 'p1', agent: { aiType: 'codex', status: 'working' } } })
+    deliver({ payload: ['p1', 'permission', 'claude'] })
+    deliver({ payload: { paneId: 'p1', agent: { aiType: 'codex', status: 'unknown' } } })
+    deliver({ payload: { paneId: 'p1', agent: null } })
+    expect(updates).toEqual([
+      { paneId: 'p1', agent: { aiType: 'codex', status: 'working' } },
+      { paneId: 'p1', agent: null }
+    ])
+  })
 })
 
 describe('windowClose', () => {

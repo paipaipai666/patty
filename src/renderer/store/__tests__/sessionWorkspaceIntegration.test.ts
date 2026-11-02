@@ -3,14 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 const mockStateSave = vi.fn()
 const mockStateLoad = vi.fn()
 const mockKill = vi.fn()
-const mockOnAttentionChange = vi.fn(() => vi.fn())
+const mockOnAgentUpdate = vi.fn(() => vi.fn())
 
 vi.stubGlobal('window', {
   terminalAPI: {
     stateLoad: mockStateLoad,
     stateSave: mockStateSave,
     kill: mockKill,
-    onAttentionChange: mockOnAttentionChange,
+    onAgentUpdate: mockOnAgentUpdate,
   },
   addEventListener: vi.fn(),
 })
@@ -33,7 +33,7 @@ function initStores() {
     sidebarWidth: 220,
     sidebarTransitioning: false,
     loaded: false,
-    attentionMap: {},
+    agentStates: {},
     draggingSessionId: null,
   })
   useWorkspaceStore.setState({

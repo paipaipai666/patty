@@ -59,10 +59,10 @@ async function screenshot(name, width = 1486, height = 1059) {
   await sleep(300)
   if (attentionSessionId) {
     await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {
-      event: 'pty:attn', payload: [${JSON.stringify(attentionSessionId)}, 'permission', 'claude']
+      event: 'pty:agent', payload: { paneId: ${JSON.stringify(attentionSessionId)}, agent: { aiType: 'claude', status: 'waiting_approval' } }
     })`)
     await cdp.waitFor(
-      `document.querySelector('[data-tree-id="session:${attentionSessionId}"]').innerText.includes('Needs input')`
+      `document.querySelector('[data-tree-id="session:${attentionSessionId}"]').innerText.includes('Waiting for approval')`
     )
     await sleep(50)
   }
@@ -133,9 +133,9 @@ async function verifyAgentAnimations(sessionId, theme) {
     const content = icon.parentElement
     return { type: grid.dataset.type, painted, checksum, shadow: getComputedStyle(icon).boxShadow, contentLayer: getComputedStyle(content).zIndex, pointerEvents: getComputedStyle(grid).pointerEvents }
   })()`)
-  const emit = (attention, aiType) =>
+  const emit = (status, aiType) =>
     cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {
-    event: 'pty:attn', payload: [${JSON.stringify(sessionId)}, ${JSON.stringify(attention)}, ${JSON.stringify(aiType)}]
+    event: 'pty:agent', payload: ${JSON.stringify({ paneId: sessionId, agent: aiType ? { aiType, status } : null })}
   })`)
   const animation = () =>
     cdp.evaluate(`(() => {
@@ -155,7 +155,7 @@ async function verifyAgentAnimations(sessionId, theme) {
     'qwen',
     'copilot'
   ]) {
-    await emit('permission', aiType)
+    await emit('waiting_approval', aiType)
     await cdp.waitFor(
       `document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type="${aiType}"] canvas') !== null`
     )
@@ -196,7 +196,7 @@ async function verifyAgentAnimations(sessionId, theme) {
   for (const [attention, label] of [
     ['complete', 'Completed'],
     ['error', 'Error'],
-    ['permission', 'Needs input']
+    ['waiting_approval', 'Waiting for approval']
   ]) {
     await emit(attention, 'claude')
     await cdp.waitFor(
@@ -204,7 +204,7 @@ async function verifyAgentAnimations(sessionId, theme) {
     )
     await sleep(60)
     const effect = await animation()
-    assert.equal(effect.state, attention)
+    assert.equal(effect.state, attention === 'waiting_approval' ? 'permission' : attention)
     assert.equal(effect.duration, 1050)
     assert.equal(effect.iterations, 1)
     assert.equal(effect.pointerEvents, 'none')
@@ -212,7 +212,7 @@ async function verifyAgentAnimations(sessionId, theme) {
     notifications.push(effect)
   }
   const beforeRepeat = await animation()
-  await emit('permission', 'claude')
+  await emit('waiting_approval', 'claude')
   await sleep(80)
   assert.equal(
     (await animation()).start,
@@ -223,7 +223,7 @@ async function verifyAgentAnimations(sessionId, theme) {
   await cdp.waitFor(
     `!document.querySelector(${JSON.stringify(rowSelector)}).querySelector('canvas, [data-testid="agent-attention-glow"]')`
   )
-  await emit('permission', 'claude')
+  await emit('waiting_approval', 'claude')
   await cdp.waitFor(
     `!!document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type="claude"] canvas')`
   )
@@ -232,7 +232,7 @@ async function verifyAgentAnimations(sessionId, theme) {
   })
   await cdp.waitFor(`(() => {
     const row = document.querySelector(${JSON.stringify(rowSelector)})
-    return getComputedStyle(row.querySelector('[data-type]')).display === 'none' && getComputedStyle(row.querySelector('[data-testid="agent-attention-glow"]')).display === 'none' && row.innerText.includes('Needs input')
+    return getComputedStyle(row.querySelector('[data-type]')).display === 'none' && getComputedStyle(row.querySelector('[data-testid="agent-attention-glow"]')).display === 'none' && row.innerText.includes('Waiting for approval')
   })()`)
   await cdp.send('Emulation.setEmulatedMedia', { features: [] })
   await cdp.waitFor(
@@ -400,10 +400,10 @@ try {
   }
   await sleep(1000)
   await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', {
-    event: 'pty:attn', payload: [${JSON.stringify(agentId)}, 'permission', 'claude']
+    event: 'pty:agent', payload: { paneId: ${JSON.stringify(agentId)}, agent: { aiType: 'claude', status: 'waiting_approval' } }
   })`)
   await cdp.waitFor(
-    `document.querySelector('[data-tree-id="session:${agentId}"]').innerText.includes('Needs input')`
+    `document.querySelector('[data-tree-id="session:${agentId}"]').innerText.includes('Waiting for approval')`
   )
   await cdp.evaluate(
     `document.querySelector('[aria-label="Resize terminal panes"]').focus()`

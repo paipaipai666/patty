@@ -80,7 +80,7 @@ export function SessionList({
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const loaded = useSessionStore((s) => s.loaded)
-  const attentionMap = useSessionStore((s) => s.attentionMap)
+  const agentStates = useSessionStore((s) => s.agentStates)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const treeRef = useRef<HTMLDivElement>(null)
   const focusedTreeId = useRef<string | null>(null)
@@ -92,8 +92,8 @@ export function SessionList({
   )
 
   const filteredSessions = useMemo(
-    () => filterSessionsByAttention({ sessions: searchedSessions, attentionMap, view: sessionView }),
-    [searchedSessions, attentionMap, sessionView]
+    () => filterSessionsByAttention({ sessions: searchedSessions, agentStates, view: sessionView }),
+    [searchedSessions, agentStates, sessionView]
   )
   const hasSearch = Boolean(searchQuery?.trim())
   const isFiltering = hasSearch || sessionView !== 'all'

@@ -1,3 +1,4 @@
+use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::Read;
@@ -111,8 +112,8 @@ pub fn start_heartbeat_watchdog(app: AppHandle) {
                 expired
             };
             for id in expired {
-                if let Err(e) = app.emit("pty:attn", (id, Value::Null, Value::Null)) {
-                    eprintln!("[hooks] emit pty:attn failed: {e}");
+                if let Err(e) = app.emit("pty:agent", AgentUpdate { pane_id: id, agent: None }) {
+                    eprintln!("[hooks] emit pty:agent failed: {e}");
                 }
             }
         }
@@ -121,25 +122,42 @@ pub fn start_heartbeat_watchdog(app: AppHandle) {
 
 
 
-fn map_event_to_attention_type(event: &str) -> Option<&'static str> {
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum AgentStatus {
+    Idle,
+    Working,
+    WaitingApproval,
+    WaitingInput,
+    Complete,
+    Error,
+}
 
-    if event == "permission_prompt"
-        || event == "elicitation_dialog"
-        || event == "idle_prompt"
-        || event.contains("permission")
-        || event.contains("question")
-    {
-        return Some("permission");
-    }
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentState {
+    ai_type: &'static str,
+    status: AgentStatus,
+}
 
-    if event == "idle" || event == "stop" {
-        return Some("complete");
-    }
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentUpdate {
+    pane_id: String,
+    agent: Option<AgentState>,
+}
 
-    if event == "error" || event.starts_with("error_") {
-        return Some("error");
+fn map_event_to_status(event: &str) -> Option<AgentStatus> {
+    match event {
+        "session_start" | "session_created" => Some(AgentStatus::Idle),
+        "user_prompt_submit" | "pre_tool_use" | "post_tool_use" | "working" => Some(AgentStatus::Working),
+        "elicitation_dialog" | "idle_prompt" => Some(AgentStatus::WaitingInput),
+        "idle" | "stop" => Some(AgentStatus::Complete),
+        _ if event.contains("permission") => Some(AgentStatus::WaitingApproval),
+        _ if event.contains("question") => Some(AgentStatus::WaitingInput),
+        _ if event == "error" || event.starts_with("error_") => Some(AgentStatus::Error),
+        _ => None,
     }
-    None
 }
 
 fn map_source_to_ai_type(source: &str) -> Option<&'static str> {
@@ -186,24 +204,19 @@ fn compute_hook_events<'a>(
     if role == "subagent" {
         return vec![];
     }
-    let pane = pane_id.to_string();
-
     if event == "session_end" || event == "session_deleted" {
-        return vec![("pty:attn", json!((pane, Value::Null, Value::Null)))];
+        return vec![("pty:agent", json!(AgentUpdate { pane_id: pane_id.to_string(), agent: None }))];
     }
     if !enabled {
         return vec![];
     }
 
-    let ai_type = map_source_to_ai_type(source);
-    match event {
-        "session_start" | "session_created" => {
-            vec![("pty:attn", json!((pane, Value::Null, ai_type)))]
-        }
-        _ => map_event_to_attention_type(event)
-            .map(|kind| vec![("pty:attn", json!((pane, kind, ai_type)))])
-            .unwrap_or_default(),
-    }
+    let Some(ai_type) = map_source_to_ai_type(source) else { return vec![] };
+    let Some(status) = map_event_to_status(event) else { return vec![] };
+    vec![("pty:agent", json!(AgentUpdate {
+        pane_id: pane_id.to_string(),
+        agent: Some(AgentState { ai_type, status }),
+    }))]
 }
 
 
@@ -375,6 +388,35 @@ mod tests {
     use std::net::TcpStream;
 
     #[test]
+    fn activity_events_publish_working_state_without_attention() {
+        for event in ["user_prompt_submit", "pre_tool_use", "post_tool_use", "working"] {
+            let events = super::compute_hook_events("p1", event, "claude-code", "main", true);
+            assert_eq!(events, vec![("pty:agent", serde_json::json!({
+                "paneId": "p1", "agent": { "aiType": "claude", "status": "working" }
+            }))]);
+        }
+    }
+
+    #[test]
+    fn approval_and_question_events_have_distinct_runtime_states() {
+        for (event, status) in [("permission_prompt", "waiting_approval"), ("elicitation_dialog", "waiting_input"), ("idle_prompt", "waiting_input"), ("question_asked", "waiting_input")] {
+            assert_eq!(super::compute_hook_events("p1", event, "codex", "main", true), vec![("pty:agent", serde_json::json!({
+                "paneId": "p1", "agent": { "aiType": "codex", "status": status }
+            }))]);
+        }
+    }
+
+    #[test]
+    fn heartbeat_and_unknown_events_do_not_replace_agent_state() {
+        assert_eq!(super::compute_hook_events("p1", "idle", "codex", "main", true), vec![("pty:agent", serde_json::json!({
+            "paneId": "p1", "agent": { "aiType": "codex", "status": "complete" }
+        }))]);
+        for event in ["alive", "notification", "unrecognized"] {
+            assert!(super::compute_hook_events("p1", event, "codex", "main", true).is_empty());
+        }
+    }
+
+    #[test]
     fn heartbeat_lease_lifecycle() {
         let pane = format!("hb-{}", std::process::id());
         note_event_with_now(&pane, "session_start", "opencode", "main", 1000);
@@ -453,11 +495,7 @@ mod tests {
     #[test]
     fn compute_events_session_end_clears_ai_type() {
         let events = compute_hook_events("p1", "session_end", "opencode", "main", true);
-        assert_eq!(events.len(), 1);
-        assert_eq!(events[0].0, "pty:attn");
-        assert_eq!(events[0].1[0], "p1");
-        assert!(events[0].1[1].is_null());
-        assert!(events[0].1[2].is_null());
+        assert_eq!(events, vec![("pty:agent", json!({ "paneId": "p1", "agent": null }))]);
     }
 
     #[test]
@@ -476,63 +514,61 @@ mod tests {
     fn compute_events_session_start_sets_ai_type() {
         let events = compute_hook_events("p1", "session_start", "opencode", "main", true);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1[2], "opencode");
+        assert_eq!(events[0].1["agent"]["aiType"], "opencode");
     }
 
     #[test]
     fn compute_events_session_start_with_codex() {
         let events = compute_hook_events("p1", "session_start", "codex", "main", true);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1[2], "codex");
+        assert_eq!(events[0].1["agent"]["aiType"], "codex");
     }
 
     #[test]
     fn compute_events_session_start_with_omp() {
         let events = compute_hook_events("p1", "session_start", "omp", "main", true);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1[2], "omp");
+        assert_eq!(events[0].1["agent"]["aiType"], "omp");
     }
 
     #[test]
     fn compute_events_session_start_with_qwen() {
         let events = compute_hook_events("p1", "session_start", "qwen-code", "main", true);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1[2], "qwen");
+        assert_eq!(events[0].1["agent"]["aiType"], "qwen");
     }
 
     #[test]
     fn compute_events_session_start_with_copilot() {
         let events = compute_hook_events("p1", "session_start", "copilot-cli", "main", true);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1[2], "copilot");
+        assert_eq!(events[0].1["agent"]["aiType"], "copilot");
     }
 
     #[test]
     fn compute_events_permission_maps_to_attention() {
         let events = compute_hook_events("p1", "permission_prompt", "claude-code", "main", true);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1[1], "permission");
-        assert_eq!(events[0].1[2], "claude");
+        assert_eq!(events[0].1["agent"]["status"], "waiting_approval");
+        assert_eq!(events[0].1["agent"]["aiType"], "claude");
     }
 
     #[test]
-    fn compute_events_idle_prompt_maps_to_permission() {
+    fn compute_events_idle_prompt_maps_to_waiting_input() {
         let events = compute_hook_events("p1", "idle_prompt", "claude-code", "main", true);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1[1], "permission");
-        assert_eq!(events[0].1[2], "claude");
+        assert_eq!(events[0].1["agent"]["status"], "waiting_input");
+        assert_eq!(events[0].1["agent"]["aiType"], "claude");
     }
 
     #[test]
-    fn compute_events_unknown_source_sets_null_ai_type() {
-        let events = compute_hook_events("p1", "idle", "unknown-tool", "main", true);
-        assert_eq!(events.len(), 1);
-        assert!(events[0].1[2].is_null());
+    fn compute_events_unknown_source_does_not_replace_agent_state() {
+        assert!(compute_hook_events("p1", "idle", "unknown-tool", "main", true).is_empty());
     }
 
     #[test]
     fn compute_events_unknown_event_returns_nothing() {
-        let events = compute_hook_events("p1", "post_tool_use", "opencode", "main", true);
+        let events = compute_hook_events("p1", "notification", "opencode", "main", true);
         assert!(events.is_empty());
     }
 
@@ -540,18 +576,14 @@ mod tests {
     fn compute_events_error_event_maps_to_error_attention() {
         let events = compute_hook_events("p1", "error_rate_limit", "opencode", "main", true);
         assert_eq!(events.len(), 1);
-        assert_eq!(events[0].1[1], "error");
+        assert_eq!(events[0].1["agent"]["status"], "error");
     }
 
     #[test]
-    fn attention_type_mapping() {
-        assert_eq!(map_event_to_attention_type("permission_prompt"), Some("permission"));
-        assert_eq!(map_event_to_attention_type("elicitation_dialog"), Some("permission"));
-
-        assert_eq!(map_event_to_attention_type("idle_prompt"), Some("permission"));
-        assert_eq!(map_event_to_attention_type("idle"), Some("complete"));
-        assert_eq!(map_event_to_attention_type("error_rate_limit"), Some("error"));
-        assert_eq!(map_event_to_attention_type("post_tool_use"), None);
+    fn runtime_status_mapping() {
+        for (event, expected) in [("permission_prompt", "waiting_approval"), ("elicitation_dialog", "waiting_input"), ("idle_prompt", "waiting_input"), ("idle", "complete"), ("error_rate_limit", "error"), ("post_tool_use", "working")] {
+            assert_eq!(json!(map_event_to_status(event)), json!(expected));
+        }
     }
 
     #[test]
@@ -565,21 +597,21 @@ mod tests {
         assert!(events.len() >= 10, "sanity: vocabulary is non-trivial");
         for (name, expected) in events {
             assert_eq!(
-                map_event_to_attention_type(name),
-                expected.as_str(),
+                json!(map_event_to_status(name)),
+                *expected,
                 "event \"{name}\" mapping drifted from hook-protocol.json"
             );
         }
 
         for pattern in protocol["patterns"].as_array().expect("patterns array") {
-            let expected = pattern["attention"].as_str();
+            let expected = &pattern["status"];
             if let Some(prefix) = pattern["prefix"].as_str() {
                 let sample = format!("{prefix}sample");
-                assert_eq!(map_event_to_attention_type(&sample), expected, "prefix \"{prefix}\"");
+                assert_eq!(json!(map_event_to_status(&sample)), *expected, "prefix \"{prefix}\"");
             }
             if let Some(contains) = pattern["contains"].as_str() {
                 let sample = format!("x{contains}x");
-                assert_eq!(map_event_to_attention_type(&sample), expected, "contains \"{contains}\"");
+                assert_eq!(json!(map_event_to_status(&sample)), *expected, "contains \"{contains}\"");
             }
         }
 

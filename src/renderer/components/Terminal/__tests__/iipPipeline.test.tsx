@@ -181,11 +181,10 @@ vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class { dispose() {} 
 vi.mock('../../../store/sessionStore', () => {
   const state = {
     sidebarTransitioning: false,
-    resetAttention: vi.fn(),
+    markAgentRead: vi.fn(),
     updatePid: vi.fn(),
     updateCwd: vi.fn(),
-    setAttention: vi.fn(),
-    setAiType: vi.fn()
+    clearAgentState: vi.fn()
   }
   const useSessionStore = (sel: (s: typeof state) => unknown) => sel(state)
   useSessionStore.getState = () => state

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
-const { sessionState, workspaceState, mockWrite, mockResetAttention } = vi.hoisted(() => ({
+const { sessionState, workspaceState, mockWrite, mockMarkAgentRead } = vi.hoisted(() => ({
   sessionState: {
     sessions: [] as Array<Record<string, unknown>>,
     activeSessionId: null as string | null
@@ -13,12 +13,12 @@ const { sessionState, workspaceState, mockWrite, mockResetAttention } = vi.hoist
     focusedSessionId: 's1' as string | null
   },
   mockWrite: vi.fn(),
-  mockResetAttention: vi.fn()
+  mockMarkAgentRead: vi.fn()
 }))
 
 vi.mock('../../../store/sessionStore', () => {
   const useSessionStore = (sel: (s: typeof sessionState) => unknown) => sel(sessionState)
-  useSessionStore.getState = () => ({ ...sessionState, resetAttention: mockResetAttention })
+  useSessionStore.getState = () => ({ ...sessionState, markAgentRead: mockMarkAgentRead })
   return { useSessionStore }
 })
 
@@ -128,7 +128,7 @@ describe('CommandBar', () => {
     typeValue(input, 'ls -la')
     keydown(input, 'Enter')
     expect(mockWrite).toHaveBeenCalledWith('s1', 'ls -la\r')
-    expect(mockResetAttention).toHaveBeenCalledWith('s1')
+    expect(mockMarkAgentRead).toHaveBeenCalledWith('s1')
     expect(input.value).toBe('')
     expect(JSON.parse(localStorage.getItem('patty-cmd-history')!)).toEqual(['ls -la'])
   })

@@ -623,8 +623,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
       const store = useSessionStore.getState()
       if (store.sessions.find((s) => s.id === id)?.aiType) {
-        store.setAiType(id, null)
-        store.resetAttention(id)
+        store.clearAgentState(id)
         void window.terminalAPI.hooksClearPane(id)
       }
     })
@@ -632,7 +631,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
-      useSessionStore.getState().resetAttention(session.id)
+      useSessionStore.getState().markAgentRead(session.id)
       onUsedRef.current?.(session.id)
     })
 
@@ -688,8 +687,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
 
         const store = useSessionStore.getState()
-        store.setAttention(sessionRef.current.id, null)
-        store.setAiType(sessionRef.current.id, null)
+        store.clearAgentState(sessionRef.current.id)
         ptyRetryCountRef.current++
         if (ptyRetryCountRef.current < PTY_MAX_RETRIES) {
           retryTimerRef.current = setTimeout(() => startPty(), 500)

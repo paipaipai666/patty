@@ -215,7 +215,7 @@ export default function App() {
     useWorkspaceStore.getState().closeFocused()
 
     if (focusedId) {
-      useSessionStore.getState().setAiType(focusedId, null)
+      useSessionStore.getState().clearAgentState(focusedId)
     }
 
     const nextFocused = getFocusedSessionId()

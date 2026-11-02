@@ -62,7 +62,7 @@ export function CommandBar() {
     if (!cmd) return
 
     window.terminalAPI.write(session.id, cmd + '\r')
-    useSessionStore.getState().resetAttention(session.id)
+    useSessionStore.getState().markAgentRead(session.id)
     pushHistory(cmd)
     setValue('')
     setHistIdx(null)

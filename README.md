@@ -86,9 +86,14 @@ Run supported AI tools inside a local Patty terminal so their hooks can identify
 
 | Sidebar status | Meaning |
 | --- | --- |
-| Needs input | A permission request or question needs attention |
+| Idle | The tool started; no work has been reported |
+| Working | The tool reported prompt processing or tool execution |
+| Waiting for approval | A permission request needs a decision |
+| Waiting for answer | The tool asked a question or requested input |
 | Completed | The tool finished responding |
 | Error | The tool reported an error |
+
+Selecting a session or typing in its terminal marks its latest notice as read and stops the attention glow. Its runtime status remains visible. The **Needs attention** view continues to include waiting and failed sessions after they are read. The **Completed** view includes completed responses until the tool reports new work or exits. A new prompt or tool execution replaces the previous completion or error with **Working**. Available state transitions depend on the events each CLI adapter reports.
 
 Use **Settings → Notifications** to enable or disable each adapter. Enabling an adapter installs Patty's integration in that tool's configuration; disabling it removes Patty's integration. Restart an already-running AI tool after changing its hook configuration. Available events depend on the tool's hooks.
 

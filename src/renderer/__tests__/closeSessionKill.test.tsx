@@ -84,7 +84,7 @@ beforeEach(() => {
       workspaces: [],
       activeWorkspaceId: null
     }),
-    onAttentionChange: vi.fn(() => () => {}),
+    onAgentUpdate: vi.fn(() => () => {}),
     metricsSetSampling: vi.fn(),
     onSshAuth: vi.fn(() => () => {}),
     onSshHostkey: vi.fn(() => () => {}),
@@ -99,7 +99,7 @@ beforeEach(() => {
     collections: [],
     activeSessionId: null,
     loaded: false,
-    attentionMap: {}
+    agentStates: {}
   })
 })
 

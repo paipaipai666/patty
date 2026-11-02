@@ -171,8 +171,10 @@ const handleEvent = async (event: OpaqueEvent) => {
     }
 
     case 'permission.asked':
-    case 'question.asked':
       await notifyPatty('permission_prompt')
+      break
+    case 'question.asked':
+      await notifyPatty('elicitation_dialog')
       break
 
     case 'session.idle': {
@@ -185,8 +187,9 @@ const handleEvent = async (event: OpaqueEvent) => {
     }
 
     case 'session.status': {
-      if (status?.type === 'idle' && sessionID && mainSessions.has(sessionID)) {
-        await notifyPatty('idle')
+      if (sessionID && mainSessions.has(sessionID)) {
+        if (status?.type === 'idle') await notifyPatty('idle')
+        else if (status?.type === 'busy') await notifyPatty('working')
       }
       break
     }

@@ -6,6 +6,7 @@ import {
   type TerminalSession
 } from '../../store/sessionStore'
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
+import type { AgentStatus } from '../../../shared/agentTypes'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
@@ -17,6 +18,15 @@ interface SessionItemProps {
   depth?: number
 }
 
+const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
+  idle: 'Idle',
+  working: 'Working',
+  waiting_approval: 'Waiting for approval',
+  waiting_input: 'Waiting for answer',
+  complete: 'Completed',
+  error: 'Error'
+}
+
 export const SessionItem = memo(function SessionItem({
   session,
   isActive,
@@ -25,23 +35,26 @@ export const SessionItem = memo(function SessionItem({
   depth = 0
 }: SessionItemProps) {
   const renameSession = useSessionStore((s) => s.renameSession)
-  const attentionType = useSessionStore(
-    (s) => s.attentionMap[session.id] ?? null
+  const activity = useSessionStore(
+    (s) => s.agentStates[session.id]
   )
+  const attentionType = activity?.status === 'waiting_approval' || activity?.status === 'waiting_input'
+    ? 'permission' : activity?.status === 'complete' || activity?.status === 'error' ? activity.status : null
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(session.title)
   const inputRef = useRef<HTMLInputElement>(null)
   const itemRef = useRef<HTMLDivElement>(null)
   const restoreFocus = useRef(false)
-  const previousAttention = useRef<string | null>(null)
+  const previousAttention = useRef<AgentStatus | null>(null)
   const [glowNonce, setGlowNonce] = useState(0)
 
   useEffect(() => {
-    if (attentionType && attentionType !== previousAttention.current) {
+    const unreadAttention = activity?.unread ? activity.status : null
+    if (unreadAttention && unreadAttention !== previousAttention.current) {
       setGlowNonce((value) => value + 1)
     }
-    previousAttention.current = attentionType
-  }, [attentionType])
+    previousAttention.current = unreadAttention
+  }, [activity?.status, activity?.unread])
 
   useLayoutEffect(() => {
     if (!isEditing && restoreFocus.current) {
@@ -49,14 +62,7 @@ export const SessionItem = memo(function SessionItem({
       itemRef.current?.focus()
     }
   }, [isEditing])
-  const statusText =
-    attentionType === 'permission'
-      ? 'Needs input'
-      : attentionType === 'complete'
-        ? 'Completed'
-        : attentionType === 'error'
-          ? 'Error'
-          : SHELL_LABELS[session.shell]
+  const statusText = activity ? AGENT_STATUS_LABELS[activity.status] : SHELL_LABELS[session.shell]
   const statusClass =
     attentionType === 'permission'
       ? styles.permission
@@ -65,7 +71,7 @@ export const SessionItem = memo(function SessionItem({
         : attentionType === 'error'
           ? styles.error
           : ''
-  const attentionGlowClass =
+  const attentionGlowClass = !activity?.unread ? null :
     attentionType === 'permission'
       ? styles.glow_permission
       : attentionType === 'complete'
@@ -205,10 +211,12 @@ export const SessionItem = memo(function SessionItem({
       tabIndex={isEditing ? -1 : 0}
       aria-selected={isActive}
       aria-label={session.title}
-      aria-description={isAi ? statusText : undefined}
+      aria-description={isAi ? `${statusText}${activity?.unread ? ', unread' : ''}` : undefined}
       aria-level={depth + 1}
       aria-keyshortcuts="F2 Delete"
       data-tree-id={`session:${session.id}`}
+      data-agent-status={activity?.status}
+      data-agent-unread={activity?.unread}
       onClick={() => onSelect(session.id)}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}

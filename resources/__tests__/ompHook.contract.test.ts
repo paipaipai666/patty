@@ -103,10 +103,10 @@ describe('PattyNotifier (omp extension)', () => {
     await vi.waitFor(() => expect(posted.map((p) => p.event)).toEqual(['idle']))
   })
 
-  it('tool_call → alive', async () => {
+  it('tool_call reports work instead of only renewing its heartbeat', async () => {
     PattyNotifier(pi)
     await handlers.get('tool_call')?.({}, ctx)
-    await vi.waitFor(() => expect(posted.map((p) => p.event)).toEqual(['alive']))
+    await vi.waitFor(() => expect(posted.map((p) => p.event)).toEqual(['pre_tool_use']))
   })
 
   it('tool_approval_requested → permission_prompt', async () => {

@@ -7,6 +7,8 @@ import { SessionList } from '../SessionList'
 import { Sidebar } from '../Sidebar'
 import type { SessionView } from '../sessionQuery'
 
+vi.mock('../../ContributionGrid/ContributionGrid', () => ({ ContributionGrid: () => null }))
+
 let container: HTMLDivElement
 let root: Root
 
@@ -30,7 +32,7 @@ beforeEach(() => {
       { id: 'api', name: 'Payments API', parentId: 'work', collapsed: true, createdAt: 2 }
     ],
     activeSessionId: 'scratch',
-    attentionMap: {}
+    agentStates: {}
   })
   useWorkspaceStore.setState({ workspaces: [] })
 })
@@ -51,6 +53,23 @@ function resultIds(): Array<string | undefined> {
 }
 
 describe('session search results', () => {
+  it('reading a question stops its glow while preserving its label and attention view', () => {
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_input' } })
+    render('', 'attention')
+    expect(resultIds()).toEqual(['session:server'])
+    expect(container.textContent).toContain('Waiting for answer')
+    expect(container.querySelector('[data-testid="agent-attention-glow"]')).not.toBeNull()
+    act(() => useSessionStore.getState().setActive('server'))
+    expect(resultIds()).toEqual(['session:server'])
+    expect(container.textContent).toContain('Waiting for answer')
+    expect(container.querySelector('[data-testid="agent-attention-glow"]')).toBeNull()
+    expect(container.querySelector('[data-tree-id="session:server"]')?.getAttribute('aria-description')).toBe('Waiting for answer')
+    act(() => useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'working' } }))
+    expect(resultIds()).toEqual([])
+    render('server')
+    expect(container.textContent).toContain('Working')
+  })
+
   it('reveals a result inside a collapsed parent and selects it from the keyboard', () => {
     const onSelect = render('Work Payments Server')
     expect(resultIds()).toEqual(['session:server'])
@@ -74,12 +93,12 @@ describe('session search results', () => {
   })
 
   it('shows attention inside collapsed collections and updates when an event clears', () => {
-    useSessionStore.getState().setAttention('server', 'permission')
-    useSessionStore.getState().setAttention('review', 'complete')
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } })
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'complete' } })
     render('', 'attention')
     expect(resultIds()).toEqual(['session:server'])
     expect(container.querySelector('[data-tree-id="session:server"]')?.closest('[hidden]')).toBeNull()
-    act(() => useSessionStore.getState().resetAttention('server'))
+    act(() => useSessionStore.getState().clearAgentState('server'))
     expect(resultIds()).toEqual([])
     expect(container.textContent).toContain('No sessions need attention')
     render('', 'complete')
@@ -87,8 +106,8 @@ describe('session search results', () => {
   })
 
   it('keeps filtering and text search active together', () => {
-    useSessionStore.getState().setAttention('server', 'permission')
-    useSessionStore.getState().setAttention('review', 'error')
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } })
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } })
     render('payments', 'attention')
     expect(resultIds()).toEqual(['session:server'])
     render('scratch', 'attention')
@@ -109,20 +128,20 @@ describe('sidebar attention controls', () => {
   }
 
   it('counts attention and completed sessions independently and updates from live store events', () => {
-    useSessionStore.getState().setAttention('server', 'permission')
-    useSessionStore.getState().setAttention('review', 'error')
-    useSessionStore.getState().setAttention('scratch', 'complete')
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } })
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } })
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'scratch', agent: { aiType: 'claude', status: 'complete' } })
     renderSidebar()
     expect(Array.from(container.querySelectorAll('option')).map((option) => option.textContent)).toEqual([
       'All sessions (3)', 'Needs attention (2)', 'Completed (1)'
     ])
-    act(() => useSessionStore.getState().resetAttention('server'))
+    act(() => useSessionStore.getState().clearAgentState('server'))
     expect(container.querySelector('option[value="attention"]')?.textContent).toBe('Needs attention (1)')
   })
 
   it('combines the view picker with the search field without changing the active workspace', () => {
-    useSessionStore.getState().setAttention('server', 'permission')
-    useSessionStore.getState().setAttention('review', 'error')
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } })
+    useSessionStore.getState().applyAgentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } })
     renderSidebar()
     const select = container.querySelector<HTMLSelectElement>('[aria-label="Session view"]')!
     act(() => {
@@ -136,7 +155,7 @@ describe('sidebar attention controls', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
     expect(resultIds()).toEqual(['session:server'])
-    act(() => useSessionStore.getState().resetAttention('server'))
+    act(() => useSessionStore.getState().clearAgentState('server'))
     expect(resultIds()).toEqual([])
     expect(input.value).toBe('payments')
     expect(select.value).toBe('attention')

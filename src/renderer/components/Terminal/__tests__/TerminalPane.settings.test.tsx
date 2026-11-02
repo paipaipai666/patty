@@ -38,7 +38,7 @@ vi.mock('@xterm/addon-unicode11', () => ({ Unicode11Addon: class { dispose() {} 
 vi.mock('../../../store/sessionStore', () => {
   const state = {
     sidebarTransitioning: false,
-    resetAttention: vi.fn(),
+    markAgentRead: vi.fn(),
     updatePid: vi.fn(),
     updateCwd: vi.fn()
   }

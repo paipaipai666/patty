@@ -10,7 +10,7 @@ vi.stubGlobal('window', {
     kill: mockKill,
     selectDirectory: mockSelectDirectory,
     stateLoad: vi.fn(),
-    onAttentionChange: vi.fn(() => vi.fn())
+    onAgentUpdate: vi.fn(() => vi.fn())
   },
   addEventListener: vi.fn()
 })
@@ -38,7 +38,7 @@ beforeEach(() => {
     sidebarVisible: true,
     sidebarWidth: 220,
     loaded: true,
-    attentionMap: {}
+    agentStates: {}
   })
   useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null })
 })

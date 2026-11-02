@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 interface Protocol {
   sources: string[]
   events: Record<string, string | null>
-  patterns: Array<{ prefix?: string; contains?: string; attention: string }>
+  patterns: Array<{ prefix?: string; contains?: string; status: string }>
 }
 
 export const protocol: Protocol = JSON.parse(

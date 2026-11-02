@@ -92,17 +92,17 @@ try {
   await cdp.waitFor('document.querySelector(\'.xterm-helper-textarea\')')
   await search('', ['review', 'scratch'])
   await cdp.evaluate(`Promise.all([
-    ['server', 'permission', 'codex'],
-    ['review', 'error', 'claude'],
-    ['scratch', 'complete', 'omp']
-  ].map(payload => window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:attn', payload })))`)
+    { paneId: 'server', agent: { aiType: 'codex', status: 'waiting_approval' } },
+    { paneId: 'review', agent: { aiType: 'claude', status: 'error' } },
+    { paneId: 'scratch', agent: { aiType: 'omp', status: 'complete' } }
+  ].map(payload => window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:agent', payload })))`)
   await cdp.waitFor(`document.querySelector('option[value="attention"]').textContent === 'Needs attention (2)'`)
   await selectView('attention', ['server', 'review'])
   await search('payments', ['server'])
   await selectView('complete', [])
   await search('', ['scratch'])
   await selectView('attention', ['server', 'review'])
-  await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:attn', payload: ['server', null, null] })`)
+  await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:agent', payload: { paneId: 'server', agent: null } })`)
   await cdp.waitFor(`JSON.stringify(${visibleSessions}) === '["review"]'`)
   const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
   writeFileSync(join(output, 'search.png'), Buffer.from(screenshot.data, 'base64'))

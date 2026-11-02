@@ -1,3 +1,4 @@
+import type { AgentStatus, AgentUpdate } from '../../../shared/agentTypes'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../dirtyScheduler', () => ({
@@ -5,16 +6,16 @@ vi.mock('../dirtyScheduler', () => ({
 }))
 
 const mockStateLoad = vi.fn()
-let capturedAttentionCallback: ((...args: any[]) => void) | null = null
-const mockOnAttentionChange = vi.fn((cb) => {
-  capturedAttentionCallback = cb
+let capturedAgentCallback: ((update: AgentUpdate) => void) | null = null
+const mockOnAgentUpdate = vi.fn((cb) => {
+  capturedAgentCallback = cb
   return vi.fn()
 })
 
 vi.stubGlobal('window', {
   terminalAPI: {
     stateLoad: mockStateLoad,
-    onAttentionChange: mockOnAttentionChange
+    onAgentUpdate: mockOnAgentUpdate
   },
   addEventListener: vi.fn()
 })
@@ -23,7 +24,7 @@ import { useSessionStore, buildSessionPersistedState, teardownSessionIPC, SESSIO
 
 beforeEach(() => {
   vi.clearAllMocks()
-  capturedAttentionCallback = null
+  capturedAgentCallback = null
   teardownSessionIPC()
   useSessionStore.setState({
     sessions: [],
@@ -32,7 +33,7 @@ beforeEach(() => {
     sidebarVisible: true,
     sidebarWidth: 220,
     loaded: false,
-    attentionMap: {}
+    agentStates: {}
   })
 })
 
@@ -128,7 +129,7 @@ describe('removeSession', () => {
       sessions: [{ id: 's1', title: 'T1', color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: null }],
       activeSessionId: 's1'
     })
-    useSessionStore.getState().setAttention('s1', 'start')
+    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
     useSessionStore.getState().removeSession('s1')
     expect(useSessionStore.getState().sessions).toHaveLength(0)
   })
@@ -340,44 +341,76 @@ describe('navigation', () => {
   })
 })
 
-describe('attention', () => {
-  it('setAttention sets an event type', () => {
-    useSessionStore.getState().setAttention('s1', 'start')
-    expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
+describe('agent activity', () => {
+  beforeEach(() => {
+    useSessionStore.setState({ sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'cmd', pid: 0, createdAt: 1, collectionId: null }] })
   })
 
-  it('setAttention with null removes the entry', () => {
-    useSessionStore.setState({ attentionMap: { s1: 'start' } })
-    useSessionStore.getState().setAttention('s1', null)
-    expect(useSessionStore.getState().attentionMap['s1']).toBeUndefined()
-    expect('s1' in useSessionStore.getState().attentionMap).toBe(false)
-  })
-
-  it('setAttention latest call wins within the coalesce window', () => {
-    useSessionStore.getState().setAttention('s1', 'start')
-    useSessionStore.getState().setAttention('s1', 'permission')
-
-    expect(useSessionStore.getState().attentionMap['s1']).toBe('permission')
-  })
-
-  it('resetAttention clears the attention entry', () => {
-    useSessionStore.setState({ attentionMap: { s1: 'start' } })
-    useSessionStore.getState().resetAttention('s1')
-    expect('s1' in useSessionStore.getState().attentionMap).toBe(false)
-  })
-
-  it('setAiType sets the ai type on a session', () => {
-    useSessionStore.setState({
-      sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null, aiType: null }]
-    })
-    useSessionStore.getState().setAiType('s1', 'codex')
+  it('applies runtime state and agent identity together', () => {
+    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'waiting_approval' } })
+    expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'waiting_approval', unread: true })
     expect(useSessionStore.getState().sessions[0].aiType).toBe('codex')
   })
 
+  it('reading an approval keeps the runtime state and attention classification', () => {
+    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'waiting_approval' } })
+    useSessionStore.getState().markAgentRead('s1')
+    expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'waiting_approval', unread: false })
+    expect(useSessionStore.getState().sessions[0].aiType).toBe('claude')
+  })
 
+  it('new work clears an old completed or failed notice', () => {
+    for (const status of ['complete', 'error'] satisfies AgentStatus[]) {
+      useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status } })
+      expect(useSessionStore.getState().agentStates.s1).toEqual({ status, unread: true })
+      useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
+      expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'working', unread: false })
+    }
+  })
+
+  it('duplicate events do not rearm a notice after it was read', () => {
+    const update: AgentUpdate = { paneId: 's1', agent: { aiType: 'claude', status: 'complete' } }
+    useSessionStore.getState().applyAgentUpdate(update)
+    useSessionStore.getState().setActive('s1')
+    useSessionStore.getState().applyAgentUpdate(update)
+    expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'complete', unread: false })
+    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
+    useSessionStore.getState().applyAgentUpdate(update)
+    expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'complete', unread: true })
+  })
+
+  it('clearing a session clears its identity and runtime state together', () => {
+    useSessionStore.getState().applyAgentUpdate({ paneId: 's1', agent: { aiType: 'codex', status: 'error' } })
+    useSessionStore.getState().clearAgentState('s1')
+    expect(useSessionStore.getState().agentStates).toEqual({})
+    expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
+  })
+
+  it('ignores updates for removed sessions', () => {
+    const update: AgentUpdate = { paneId: 's1', agent: { aiType: 'codex', status: 'waiting_input' } }
+    useSessionStore.getState().applyAgentUpdate(update)
+    useSessionStore.getState().removeSession('s1')
+    useSessionStore.getState().applyAgentUpdate(update)
+    expect(useSessionStore.getState().agentStates).toEqual({})
+    expect(useSessionStore.getState().sessions).toEqual([])
+  })
 })
 
 describe('loadState / saveState', () => {
+  it('retains the latest agent update received while persisted sessions are loading', async () => {
+    mockStateLoad.mockImplementationOnce(async () => {
+      capturedAgentCallback?.({ paneId: 's1', agent: { aiType: 'codex', status: 'complete' } })
+      capturedAgentCallback?.({ paneId: 's1', agent: { aiType: 'codex', status: 'working' } })
+      return {
+        sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'cmd', collectionId: null }],
+        collections: [], activeSessionId: 's1', sidebarVisible: true, sidebarWidth: 220
+      }
+    })
+    await useSessionStore.getState().loadState()
+    expect(useSessionStore.getState().sessions[0].aiType).toBe('codex')
+    expect(useSessionStore.getState().agentStates.s1).toEqual({ status: 'working', unread: false })
+  })
+
   it('loadState restores persisted state', async () => {
     mockStateLoad.mockResolvedValue({
       sessions: [
@@ -401,7 +434,7 @@ describe('loadState / saveState', () => {
     expect(state.sidebarWidth).toBe(180)
     expect(state.loaded).toBe(true)
     expect(result).not.toBeNull()
-    expect(mockOnAttentionChange).toHaveBeenCalled()
+    expect(mockOnAgentUpdate).toHaveBeenCalled()
   })
 
   it('loadState adds pid and null aiType to sessions', async () => {
@@ -437,10 +470,10 @@ describe('loadState / saveState', () => {
     await useSessionStore.getState().loadState()
     await useSessionStore.getState().loadState()
 
-    expect(mockOnAttentionChange).toHaveBeenCalledTimes(2)
+    expect(mockOnAgentUpdate).toHaveBeenCalledTimes(2)
   })
 
-  it('loadState IPC callback sets attention and aiType from attention change', async () => {
+  it('loadState IPC callback applies runtime state and identity together', async () => {
     mockStateLoad.mockResolvedValue({
       sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', collectionId: null }],
       collections: [],
@@ -451,14 +484,14 @@ describe('loadState / saveState', () => {
 
     await useSessionStore.getState().loadState()
 
-    expect(capturedAttentionCallback).not.toBeNull()
-    capturedAttentionCallback!('s1', 'start', 'claude')
+    expect(capturedAgentCallback).not.toBeNull()
+    capturedAgentCallback?.({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
 
-    expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
+    expect(useSessionStore.getState().agentStates['s1']).toEqual({ status: 'working', unread: false })
     expect(useSessionStore.getState().sessions[0].aiType).toBe('claude')
   })
 
-  it('loadState IPC attention change without aiType does not call setAiType', async () => {
+  it('loadState IPC clear removes runtime state and identity', async () => {
     mockStateLoad.mockResolvedValue({
       sessions: [{ id: 's1', title: 'T', color: 'blue', cwd: '', shell: 'powershell', collectionId: null }],
       collections: [],
@@ -468,12 +501,13 @@ describe('loadState / saveState', () => {
     })
     await useSessionStore.getState().loadState()
 
-    expect(capturedAttentionCallback).not.toBeNull()
+    expect(capturedAgentCallback).not.toBeNull()
 
 
-    capturedAttentionCallback!('s1', 'start')
+    capturedAgentCallback?.({ paneId: 's1', agent: { aiType: 'claude', status: 'working' } })
+    capturedAgentCallback?.({ paneId: 's1', agent: null })
 
-    expect(useSessionStore.getState().attentionMap['s1']).toBe('start')
+    expect(useSessionStore.getState().agentStates).toEqual({})
 
     expect(useSessionStore.getState().sessions[0].aiType).toBeNull()
   })

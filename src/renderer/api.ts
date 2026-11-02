@@ -6,6 +6,7 @@ import type { AppSettings, CustomTheme, SshTarget, SshProfileDraft, RawStats, Ss
 import type { MetricSample, FirstTerminalEntry, MetricsSnapshot } from '../shared/metricsTypes'
 import type { PersistedState } from '../shared/stateTypes'
 import type { IWindowsPty } from '@xterm/xterm'
+import { parseAgentUpdate, type AgentUpdate } from '../shared/agentTypes'
 
 const appWindow = getCurrentWindow()
 
@@ -53,13 +54,12 @@ export const terminalAPI = {
     listenHandle(listen<number>(`pty:exit:${id}`, (event) => callback(event.payload))),
 
 
-  onAttentionChange: (
-    callback: (sessionId: string, eventType: string | null, aiType?: string | null) => void
-  ): Unsubscribe =>
+  onAgentUpdate: (callback: (update: AgentUpdate) => void): Unsubscribe =>
     asyncUnsub(
-      listen<[string, string | null, string | null | undefined]>('pty:attn', (event) =>
-        callback(event.payload[0], event.payload[1], event.payload[2])
-      )
+      listen<unknown>('pty:agent', (event) => {
+        const update = parseAgentUpdate(event.payload)
+        if (update) callback(update)
+      })
     ),
 
 

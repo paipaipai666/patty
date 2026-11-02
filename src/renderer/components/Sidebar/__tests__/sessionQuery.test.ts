@@ -91,25 +91,30 @@ describe('session search', () => {
 })
 
 describe('session attention views', () => {
-  const attentionMap = { backend: 'permission', remote: 'error', assistant: 'complete', stale: 'permission' }
+  const agentStates = {
+    backend: { status: 'waiting_approval', unread: false },
+    remote: { status: 'error', unread: true },
+    assistant: { status: 'complete', unread: false },
+    stale: { status: 'waiting_input', unread: true }
+  } satisfies import('../../../../shared/agentTypes').AgentStates
 
   it('includes waiting and failed sessions in needs attention, preserving sidebar order', () => {
-    expect(filterSessionsByAttention({ sessions, attentionMap, view: 'attention' }).map((item) => item.id)).toEqual(['backend', 'remote'])
+    expect(filterSessionsByAttention({ sessions, agentStates, view: 'attention' }).map((item) => item.id)).toEqual(['backend', 'remote'])
   })
 
   it('keeps completed results separate from sessions that need input', () => {
-    expect(filterSessionsByAttention({ sessions, attentionMap, view: 'complete' }).map((item) => item.id)).toEqual(['assistant'])
-    expect(countSessionViews(sessions, attentionMap)).toEqual({ all: 4, attention: 2, complete: 1 })
+    expect(filterSessionsByAttention({ sessions, agentStates, view: 'complete' }).map((item) => item.id)).toEqual(['assistant'])
+    expect(countSessionViews(sessions, agentStates)).toEqual({ all: 4, attention: 2, complete: 1 })
   })
 
   it('combines a project search with an attention view', () => {
     const found = searchSessions({ sessions, collections, query: 'work codex' })
-    expect(filterSessionsByAttention({ sessions: found, attentionMap, view: 'attention' }).map((item) => item.id)).toEqual(['backend'])
-    expect(filterSessionsByAttention({ sessions: found, attentionMap, view: 'complete' })).toEqual([])
+    expect(filterSessionsByAttention({ sessions: found, agentStates, view: 'attention' }).map((item) => item.id)).toEqual(['backend'])
+    expect(filterSessionsByAttention({ sessions: found, agentStates, view: 'complete' })).toEqual([])
   })
 
-  it('ignores stale session ids and unknown events when counting or filtering', () => {
-    expect(countSessionViews(sessions, { backend: 'unexpected', stale: 'complete' })).toEqual({ all: 4, attention: 0, complete: 0 })
-    expect(filterSessionsByAttention({ sessions, attentionMap: {}, view: 'all' }).map((item) => item.id)).toEqual(['backend', 'remote', 'assistant', 'local'])
+  it('ignores stale session ids and working sessions when counting or filtering', () => {
+    expect(countSessionViews(sessions, { backend: { status: 'working', unread: false }, stale: { status: 'complete', unread: true } })).toEqual({ all: 4, attention: 0, complete: 0 })
+    expect(filterSessionsByAttention({ sessions, agentStates: {}, view: 'all' }).map((item) => item.id)).toEqual(['backend', 'remote', 'assistant', 'local'])
   })
 })

@@ -77,7 +77,7 @@ export default function PattyNotifier(pi: OmpExtensionApi): void {
   })
 
   pi.on('tool_call', () => {
-    void notifyPatty('alive')
+    void notifyPatty('pre_tool_use')
   })
 
   pi.on('tool_approval_requested', () => {

@@ -175,10 +175,10 @@ describe('PattyNotifier (opencode plugin, v2 setup path)', () => {
     expect(captured.map((p) => [p.body.event, p.body.role])).toEqual([['session_created', 'subagent']])
   })
 
-  it('permission.asked and question.asked → permission_prompt', async () => {
+  it('distinguishes approval requests from questions', async () => {
     await driveV2({ type: 'permission.asked', data: { sessionID: 's1' } })
     await driveV2({ type: 'question.asked', data: { sessionID: 's1' } })
-    expect(captured.map((p) => p.body.event)).toEqual(['permission_prompt', 'permission_prompt'])
+    expect(captured.map((p) => p.body.event)).toEqual(['permission_prompt', 'elicitation_dialog'])
   })
 
   it('session.idle from the main session → idle', async () => {
@@ -202,11 +202,19 @@ describe('PattyNotifier (opencode plugin, v2 setup path)', () => {
     expect(captured.map((p) => p.body.event)).toEqual(['idle'])
   })
 
-  it('session.status with a non-idle type stays silent', async () => {
+  it('session.status busy for a tracked main session reports new work', async () => {
     await driveV2(v2MainCreated)
     captured.length = 0
     await driveV2({ type: 'session.status', data: { sessionID: 's1', status: { type: 'busy' } } })
-    expect(captured).toHaveLength(0)
+    expect(captured.map((p) => p.body.event)).toEqual(['working'])
+  })
+
+  it('a subagent busy state cannot replace the main session state', async () => {
+    await driveV2(v2MainCreated)
+    captured.length = 0
+    await driveV2({ type: 'session.status', data: { sessionID: 's2', status: { type: 'busy' } } })
+    await driveV2({ type: 'session.status', data: { sessionID: 's1', status: { type: 'busy' } } })
+    expect(captured.map((p) => p.body.event)).toEqual(['working'])
   })
 
   it('session.error → error', async () => {

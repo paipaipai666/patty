@@ -1,41 +1,31 @@
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import type { Collection, TerminalSession } from '../../store/sessionStore'
+import { AGENT_LABELS, type AgentStates, type AgentStatus } from '../../../shared/agentTypes'
 
 export type SessionView = 'all' | 'attention' | 'complete'
 
-type AttentionMap = Readonly<Record<string, string | null>>
-
-function attentionView(event: string | null | undefined): Exclude<SessionView, 'all'> | null {
-  if (event === 'permission' || event === 'error') return 'attention'
-  if (event === 'complete') return 'complete'
+function attentionView(status: AgentStatus | undefined): Exclude<SessionView, 'all'> | null {
+  if (status === 'waiting_approval' || status === 'waiting_input' || status === 'error') return 'attention'
+  if (status === 'complete') return 'complete'
   return null
 }
 
-export function filterSessionsByAttention({ sessions, attentionMap, view }: {
+export function filterSessionsByAttention({ sessions, agentStates, view }: {
   sessions: TerminalSession[]
-  attentionMap: AttentionMap
+  agentStates: AgentStates
   view: SessionView
 }): TerminalSession[] {
   if (view === 'all') return sessions
-  return sessions.filter((session) => attentionView(attentionMap[session.id]) === view)
+  return sessions.filter((session) => attentionView(agentStates[session.id]?.status) === view)
 }
 
-export function countSessionViews(sessions: TerminalSession[], attentionMap: AttentionMap): Record<SessionView, number> {
+export function countSessionViews(sessions: TerminalSession[], agentStates: AgentStates): Record<SessionView, number> {
   const counts = { all: sessions.length, attention: 0, complete: 0 }
   for (const session of sessions) {
-    const view = attentionView(attentionMap[session.id])
+    const view = attentionView(agentStates[session.id]?.status)
     if (view) counts[view]++
   }
   return counts
-}
-
-const AGENT_LABELS: Record<NonNullable<TerminalSession['aiType']>, string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  opencode: 'OpenCode',
-  omp: 'Oh My Pi omp',
-  qwen: 'Qwen Code',
-  copilot: 'GitHub Copilot CLI'
 }
 
 function normalize(value: string): string {

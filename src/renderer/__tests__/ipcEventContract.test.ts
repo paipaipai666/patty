@@ -53,7 +53,7 @@ describe('IPC event contract (renderer listeners ↔ Rust emitters)', () => {
     expect(listened.length).toBeGreaterThanOrEqual(7)
     expect(emitted.has('pty:data:*')).toBe(true)
     expect(emitted.has('pty:exit:*')).toBe(true)
-    expect(emitted.has('pty:attn')).toBe(true)
+    expect(emitted.has('pty:agent')).toBe(true)
 
     const orphans = listened.filter((name) => !emitted.has(name))
 
