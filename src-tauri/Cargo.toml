@@ -5,6 +5,9 @@ description = "Patty"
 edition = "2021"
 rust-version = "1.85"
 
+[features]
+e2e = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

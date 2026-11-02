@@ -32,7 +32,7 @@ export function resolveExe() {  if (process.env.PATTY_EXE) return process.env.PA
 
   const exe = join(targetDir, 'release', 'patty.exe')
   if (!existsSync(exe)) {
-    throw new Error(`no release exe at ${exe} — run \`npx tauri build --no-bundle\` first`)
+    throw new Error(`no release exe at ${exe} — run \`npm run build:e2e\` first`)
   }
   return exe
 }
@@ -68,7 +68,7 @@ export async function launchApp({ state, settings, connectDebugger = true } = {}
     env: {
       ...process.env,
       APPDATA: appData,
-      USERPROFILE: appData,
+      PATTY_E2E_INTEGRATION_HOME: join(appData, 'integrations'),
       WEBVIEW2_USER_DATA_FOLDER: join(appData, 'webview'),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`
     },
@@ -99,7 +99,7 @@ export async function launchApp({ state, settings, connectDebugger = true } = {}
   const close = async () => {
     cdp?.close()
     await killApp()
-    rmSync(appData, { recursive: true, force: true })
+    rmSync(appData, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   }
   if (!connectDebugger) {
     return { appData, startedAt, close, get appExited() { return appExited } }
@@ -112,7 +112,7 @@ export async function launchApp({ state, settings, connectDebugger = true } = {}
   } catch (e) {
     const exitBeforeCleanup = appExited
     await killApp()
-    rmSync(appData, { recursive: true, force: true })
+    rmSync(appData, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
     throw new Error(`${e.message}\nApp exit before cleanup: ${exitBeforeCleanup}\n${processOutput}`, { cause: e })
   }
 

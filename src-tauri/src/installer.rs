@@ -5,7 +5,34 @@ use std::path::PathBuf;
 const HOOK_MATCHER: &str = "permission_prompt|idle_prompt|elicitation_dialog";
 const STOP_FAILURE_MATCHER: &str = "rate_limit|overloaded|authentication_failed|oauth_org_not_allowed|billing_error|invalid_request|model_not_found|server_error|max_output_tokens|unknown";
 
+fn integration_home_override(value: Option<std::ffi::OsString>) -> Result<Option<PathBuf>, &'static str> {
+    let Some(value) = value else { return Ok(None) };
+
+    #[cfg(not(feature = "e2e"))]
+    {
+        let _ = value;
+        Err("PATTY_E2E_INTEGRATION_HOME requires an E2E build; run npm run build:e2e")
+    }
+
+    #[cfg(feature = "e2e")]
+    {
+        let path = PathBuf::from(value);
+        if path.is_absolute() {
+            Ok(Some(path))
+        } else {
+            Err("PATTY_E2E_INTEGRATION_HOME must be an absolute path")
+        }
+    }
+}
+
+pub fn validate_integration_environment() -> Result<(), &'static str> {
+    integration_home_override(std::env::var_os("PATTY_E2E_INTEGRATION_HOME")).map(|_| ())
+}
+
 fn home_dir() -> Option<PathBuf> {
+    if let Some(path) = integration_home_override(std::env::var_os("PATTY_E2E_INTEGRATION_HOME")).ok()? {
+        return Some(path);
+    }
     std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
         .ok()
@@ -498,6 +525,54 @@ pub fn ensure_omp_hook() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct IntegrationHomeRestore(Option<std::ffi::OsString>);
+
+    impl Drop for IntegrationHomeRestore {
+        fn drop(&mut self) {
+            match &self.0 {
+                Some(value) => std::env::set_var("PATTY_E2E_INTEGRATION_HOME", value),
+                None => std::env::remove_var("PATTY_E2E_INTEGRATION_HOME"),
+            }
+        }
+    }
+
+    #[test]
+    fn absent_integration_override_preserves_normal_startup() {
+        assert_eq!(integration_home_override(None), Ok(None));
+    }
+
+    #[test]
+    fn integration_override_rejects_empty_and_relative_paths() {
+        for value in ["", "relative", "../outside"] {
+            assert!(integration_home_override(Some(value.into())).is_err());
+        }
+    }
+
+    #[test]
+    fn integration_home_override_never_uses_the_user_profile() {
+        let _env_guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
+        let _restore = IntegrationHomeRestore(std::env::var_os("PATTY_E2E_INTEGRATION_HOME"));
+        let isolated = std::env::temp_dir().join("patty-integration-path-test");
+        std::env::set_var("PATTY_E2E_INTEGRATION_HOME", &isolated);
+
+        #[cfg(feature = "e2e")]
+        {
+            assert_eq!(validate_integration_environment(), Ok(()));
+            assert_eq!(claude_settings_path(), Some(isolated.join(".claude/settings.json")));
+            assert_eq!(claude_legacy_local_settings_path(), Some(isolated.join(".claude/settings.local.json")));
+            assert_eq!(codex_settings_path(), Some(isolated.join(".codex/hooks.json")));
+            assert_eq!(qwen_settings_path(), Some(isolated.join(".qwen/settings.json")));
+            assert_eq!(copilot_hooks_dir(), Some(isolated.join(".copilot/hooks")));
+        }
+
+        #[cfg(not(feature = "e2e"))]
+        {
+            assert!(validate_integration_environment().is_err());
+            assert_eq!(home_dir(), None);
+            assert_eq!(claude_settings_path(), None);
+        }
+    }
 
     #[test]
     fn upsert_appends_then_replaces() {

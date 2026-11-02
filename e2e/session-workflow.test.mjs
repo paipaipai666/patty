@@ -41,8 +41,12 @@ const app = await launchApp({
 
 if (process.argv[2] === '--native') {
   console.log('Native verification fixture ready; close the Patty test window when finished')
-  while (app.appExited === null) await sleep(250)
-  await app.close()
+  try {
+    while (app.appExited === null) await sleep(250)
+    assert.equal(app.appExited, 0, 'native fixture exited abnormally; use npm run build:e2e before desktop verification')
+  } finally {
+    await app.close()
+  }
 } else {
 const { cdp } = app
 const errors = []

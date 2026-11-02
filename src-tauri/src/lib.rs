@@ -268,6 +268,10 @@ fn boot_bg_from_settings(settings: &Value) -> tauri::window::Color {
 }
 
 pub fn run() {
+    if let Err(error) = installer::validate_integration_environment() {
+        eprintln!("[main] {error}");
+        std::process::exit(1);
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {

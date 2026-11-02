@@ -177,9 +177,10 @@ If installation scripts were skipped, run `npm run prepare:conpty` before invoki
 
 ### Test the desktop app
 
-Build the release executable first with `npm run package:nsis`. Save your work and close other Patty instances before running UI tests, because the application runs as a single instance.
+Build the dedicated test executable first with `npm run build:e2e`. Save your work and close other Patty instances before running UI tests, because the application runs as a single instance.
 
 ```powershell
+npm run test:e2e:isolation
 npm run test:e2e
 npm run test:e2e:graphite
 npm run test:e2e:sessions
@@ -187,7 +188,11 @@ New-Item -ItemType Directory -Force output/resize | Out-Null
 node e2e/resize.test.mjs . output/resize
 ```
 
-The UI harness launches the release executable with isolated `APPDATA`, `USERPROFILE`, and WebView2 data and controls WebView2 through CDP. The tests cover terminal lifecycle, layout and themes, and continuous output during maximize, divider dragging, and sibling-pane closure. The resize test also checks Unicode, alternate buffers, resize failure recovery, and bounded scrollback. Set `PATTY_EXE` to test an executable at another path.
+The UI harness isolates `APPDATA`, WebView2 data, and Patty's CLI integration configuration. It preserves the operating system's `USERPROFILE` and `HOME`. Only builds with the `e2e` Cargo feature accept `PATTY_E2E_INTEGRATION_HOME`; ordinary builds reject that environment variable before opening a window or installing hooks. Set `PATTY_EXE` to use an E2E executable at another path. Rebuild with `npm run package:nsis` before distributing the application.
+
+`npm run test:e2e:isolation` checks all six CLI adapters and repeatable temporary-directory cleanup without CDP. The other tests control WebView2 through CDP and cover terminal lifecycle, layout and themes, and continuous output during maximize, divider dragging, and sibling-pane closure. The resize test also checks Unicode, alternate buffers, resize failure recovery, and bounded scrollback.
+
+After building an ordinary release executable, `node e2e/isolation.test.mjs --expect-unsupported-build` verifies that it rejects the test override before starting WebView2 or installing hooks.
 
 If the installed WebView2 runtime refuses the CDP connection, `node e2e/session-workflow.test.mjs --native` opens the same isolated session fixture for native-window verification. Close that test window to remove its temporary data. This mode does not report an automated pass.
 
