@@ -169,6 +169,7 @@ export function Sidebar({
             className={styles.searchInput}
             placeholder="Search sessions..."
             aria-label="Search sessions"
+            title="Search by name, folder, shell, agent, SSH target, or collection"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
           />

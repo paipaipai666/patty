@@ -50,6 +50,8 @@ Patty requires Windows and Microsoft Edge WebView2. PowerShell 7, Git Bash, WSL,
 3. Select a session in the sidebar to focus it and return to its saved workspace layout. Drag sidebar sessions into panes to rearrange the layout.
 4. Double-click a session name or press `F2` while its sidebar row is focused to rename it. Right-click a session or collection for more actions.
 
+Search sessions by name, working directory, shell, AI tool, SSH host or user, or collection name. Combine words to narrow the results across fields, such as `payments codex`. Search also finds sessions inside collapsed collections and accepts either slash style in Windows paths.
+
 The status bar shows the selected session, shell, directory or SSH target, and local process ID when available. **Metrics** opens the local dashboard; **Monitor** is available for SSH sessions.
 
 Patty saves session definitions, collections, workspace layouts, and settings automatically. Restarting Patty opens new shell processes; it does not resume running commands or restore terminal scrollback.
@@ -178,11 +180,14 @@ Build the release executable first with `npm run package:nsis`. Save your work a
 ```powershell
 npm run test:e2e
 npm run test:e2e:graphite
+npm run test:e2e:sessions
 New-Item -ItemType Directory -Force output/resize | Out-Null
 node e2e/resize.test.mjs . output/resize
 ```
 
-The UI harness launches the release executable with isolated `APPDATA` and controls WebView2 through CDP. The tests cover terminal lifecycle, layout and themes, and continuous output during maximize, divider dragging, and sibling-pane closure. The resize test also checks Unicode, alternate buffers, resize failure recovery, and bounded scrollback. Set `PATTY_EXE` to test a release executable at another path.
+The UI harness launches the release executable with isolated `APPDATA`, `USERPROFILE`, and WebView2 data and controls WebView2 through CDP. The tests cover terminal lifecycle, layout and themes, and continuous output during maximize, divider dragging, and sibling-pane closure. The resize test also checks Unicode, alternate buffers, resize failure recovery, and bounded scrollback. Set `PATTY_EXE` to test an executable at another path.
+
+If the installed WebView2 runtime refuses the CDP connection, `node e2e/session-workflow.test.mjs --native` opens the same isolated session fixture for native-window verification. Close that test window to remove its temporary data. This mode does not report an automated pass.
 
 `npm run test:e2e:graphite` writes UI screenshots under `output/graphite/`. `npm run benchmark:startup` measures startup using the same harness.
 

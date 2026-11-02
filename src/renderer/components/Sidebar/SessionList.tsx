@@ -9,6 +9,7 @@ import { useWorkspaceStore } from '../../store/workspaceStore'
 import { collectTreeSessionIds } from '../../../shared/paneTreeNormalize'
 import { SessionItem } from './SessionItem'
 import { CollectionItem } from './CollectionItem'
+import { searchSessions } from './sessionQuery'
 import styles from './Sidebar.module.css'
 
 interface SessionListProps {
@@ -82,11 +83,10 @@ export function SessionList({
   const focusedTreeId = useRef<string | null>(null)
   const focusedItem = useRef<HTMLElement | null>(null)
 
-  const filteredSessions = useMemo(() => {
-    if (!searchQuery?.trim()) return sessions
-    const query = searchQuery.toLowerCase()
-    return sessions.filter((s) => s.title.toLowerCase().includes(query))
-  }, [sessions, searchQuery])
+  const filteredSessions = useMemo(
+    () => searchSessions({ sessions, collections, query: searchQuery }),
+    [sessions, collections, searchQuery]
+  )
 
   const filteredCollections = useMemo(() => {
     if (!searchQuery?.trim()) return collections
