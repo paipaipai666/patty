@@ -51,6 +51,22 @@
   color: var(--btn-active-text);
   border-radius: var(--radius-sm);
 }
+.viewFilter {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+.viewFilter:focus-visible {
+  border-color: var(--focus-ring);
+  outline: 1px solid var(--focus-ring);
+}
 .newTerminal {
   display: flex;
   flex: 1;

@@ -52,6 +52,8 @@ Patty requires Windows and Microsoft Edge WebView2. PowerShell 7, Git Bash, WSL,
 
 Search sessions by name, working directory, shell, AI tool, SSH host or user, or collection name. Combine words to narrow the results across fields, such as `payments codex`. Search also finds sessions inside collapsed collections and accepts either slash style in Windows paths.
 
+Use **Session view** below the search field to show all sessions, sessions that need attention, or completed turns. Needs attention includes tools waiting for input and tools reporting an error. The counts cover all current sessions; search narrows the selected view. Filtering reveals matching sessions inside collapsed collections and keeps the active terminal running.
+
 The status bar shows the selected session, shell, directory or SSH target, and local process ID when available. **Metrics** opens the local dashboard; **Monitor** is available for SSH sessions.
 
 Patty saves session definitions, collections, workspace layouts, and settings automatically. Restarting Patty opens new shell processes; it does not resume running commands or restore terminal scrollback.

@@ -17,6 +17,7 @@ import {
 import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { SessionList } from './SessionList'
+import { countSessionViews, type SessionView } from './sessionQuery'
 import type { SshProfile } from '../../../shared/settingsTypes'
 import styles from './Sidebar.module.css'
 
@@ -38,12 +39,16 @@ export function Sidebar({
   onCollectionContextMenu
 }: SidebarProps) {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
+  const sessions = useSessionStore((s) => s.sessions)
+  const attentionMap = useSessionStore((s) => s.attentionMap)
   const setSidebarWidth = useSessionStore((s) => s.setSidebarWidth)
   const addCollection = useSessionStore((s) => s.addCollection)
   const sidebarPosition = useSettingsStore((s) => s.settings.sidebarPosition)
   const sshProfiles = useSettingsStore((s) => s.settings.sshProfiles)
   const openSettings = useSettingsStore((s) => s.openSettings)
   const [searchQuery, setSearchQuery] = useState('')
+  const [sessionView, setSessionView] = useState<SessionView>('all')
+  const viewCounts = countSessionViews(sessions, attentionMap)
   const [menu, setMenu] = useState<'create' | 'ssh' | null>(null)
   const [isCreatingCollection, setIsCreatingCollection] = useState(false)
   const [newCollectionName, setNewCollectionName] = useState('')
@@ -174,6 +179,19 @@ export function Sidebar({
             onChange={(event) => setSearchQuery(event.target.value)}
           />
         </div>
+        <select
+          className={styles.viewFilter}
+          aria-label="Session view"
+          value={sessionView}
+          onChange={(event) => {
+            const value = event.target.value
+            if (value === 'all' || value === 'attention' || value === 'complete') setSessionView(value)
+          }}
+        >
+          <option value="all">All sessions ({viewCounts.all})</option>
+          <option value="attention">Needs attention ({viewCounts.attention})</option>
+          <option value="complete">Completed ({viewCounts.complete})</option>
+        </select>
         <div className={styles.createRow}>
           <button
             type="button"
@@ -337,6 +355,7 @@ export function Sidebar({
         onSelect={onSelectSession}
         onCollectionContextMenu={onCollectionContextMenu}
         searchQuery={searchQuery}
+        sessionView={sessionView}
       />
       <div className={styles.footer}>
         <button

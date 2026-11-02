@@ -9,7 +9,7 @@ import { useWorkspaceStore } from '../../store/workspaceStore'
 import { collectTreeSessionIds } from '../../../shared/paneTreeNormalize'
 import { SessionItem } from './SessionItem'
 import { CollectionItem } from './CollectionItem'
-import { searchSessions } from './sessionQuery'
+import { filterSessionsByAttention, searchSessions, type SessionView } from './sessionQuery'
 import styles from './Sidebar.module.css'
 
 interface SessionListProps {
@@ -17,6 +17,7 @@ interface SessionListProps {
   onSelect: (id: string) => void
   onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
   searchQuery?: string
+  sessionView?: SessionView
 }
 
 function renderCollection(
@@ -72,42 +73,31 @@ export function SessionList({
   onClose,
   onSelect,
   onCollectionContextMenu,
-  searchQuery
+  searchQuery,
+  sessionView = 'all'
 }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
   const collections = useSessionStore((s) => s.collections)
   const activeSessionId = useSessionStore((s) => s.activeSessionId)
   const loaded = useSessionStore((s) => s.loaded)
+  const attentionMap = useSessionStore((s) => s.attentionMap)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const treeRef = useRef<HTMLDivElement>(null)
   const focusedTreeId = useRef<string | null>(null)
   const focusedItem = useRef<HTMLElement | null>(null)
 
-  const filteredSessions = useMemo(
+  const searchedSessions = useMemo(
     () => searchSessions({ sessions, collections, query: searchQuery }),
     [sessions, collections, searchQuery]
   )
 
-  const filteredCollections = useMemo(() => {
-    if (!searchQuery?.trim()) return collections
-
-    const matchingCollectionIds = new Set<string>()
-
-    filteredSessions.forEach((s) => {
-      if (s.collectionId) matchingCollectionIds.add(s.collectionId)
-    })
-
-    const addParents = (id: string) => {
-      const col = collections.find((c) => c.id === id)
-      if (col?.parentId) {
-        matchingCollectionIds.add(col.parentId)
-        addParents(col.parentId)
-      }
-    }
-    matchingCollectionIds.forEach(addParents)
-
-    return collections.filter((c) => matchingCollectionIds.has(c.id))
-  }, [collections, filteredSessions, searchQuery])
+  const filteredSessions = useMemo(
+    () => filterSessionsByAttention({ sessions: searchedSessions, attentionMap, view: sessionView }),
+    [searchedSessions, attentionMap, sessionView]
+  )
+  const hasSearch = Boolean(searchQuery?.trim())
+  const isFiltering = hasSearch || sessionView !== 'all'
+  const filteredCollections = isFiltering ? [] : collections
 
   const topLevelCollections = filteredCollections.filter(
     (c) => c.parentId === null
@@ -242,11 +232,17 @@ export function SessionList({
         <span className={styles.emptyIcon}>
           <Code20Regular aria-hidden />
         </span>
-        <span>{searchQuery?.trim() ? 'No matches' : 'No terminals'}</span>
+        <span>{
+          hasSearch ? 'No matches' : sessionView === 'attention' ? 'No sessions need attention' : sessionView === 'complete' ? 'No completed sessions' : 'No terminals'
+        }</span>
         <span className={styles.emptyHint}>
-          {searchQuery?.trim()
-            ? 'Try a different search'
-            : 'Use New terminal to start a session'}
+          {hasSearch
+            ? 'Try a different search or session view'
+            : sessionView === 'attention'
+              ? 'Sessions waiting for input or reporting an error appear here'
+              : sessionView === 'complete'
+                ? 'Completed turns appear here until their indicators are cleared'
+                : 'Use New terminal to start a session'}
         </span>
       </div>
     )
@@ -261,7 +257,7 @@ export function SessionList({
       onFocusCapture={handleTreeFocus}
       onKeyDown={handleTreeKeyDown}
     >
-      {searchQuery?.trim() ? (
+      {isFiltering ? (
         filteredSessions.map((session) => (
           <SessionItem
             key={session.id}

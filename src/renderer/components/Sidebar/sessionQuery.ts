@@ -1,6 +1,34 @@
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import type { Collection, TerminalSession } from '../../store/sessionStore'
 
+export type SessionView = 'all' | 'attention' | 'complete'
+
+type AttentionMap = Readonly<Record<string, string | null>>
+
+function attentionView(event: string | null | undefined): Exclude<SessionView, 'all'> | null {
+  if (event === 'permission' || event === 'error') return 'attention'
+  if (event === 'complete') return 'complete'
+  return null
+}
+
+export function filterSessionsByAttention({ sessions, attentionMap, view }: {
+  sessions: TerminalSession[]
+  attentionMap: AttentionMap
+  view: SessionView
+}): TerminalSession[] {
+  if (view === 'all') return sessions
+  return sessions.filter((session) => attentionView(attentionMap[session.id]) === view)
+}
+
+export function countSessionViews(sessions: TerminalSession[], attentionMap: AttentionMap): Record<SessionView, number> {
+  const counts = { all: sessions.length, attention: 0, complete: 0 }
+  for (const session of sessions) {
+    const view = attentionView(attentionMap[session.id])
+    if (view) counts[view]++
+  }
+  return counts
+}
+
 const AGENT_LABELS: Record<NonNullable<TerminalSession['aiType']>, string> = {
   claude: 'Claude Code',
   codex: 'Codex',

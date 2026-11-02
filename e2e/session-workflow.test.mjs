@@ -64,6 +64,16 @@ async function search(query, expected) {
   assert.deepEqual(await cdp.evaluate(visibleSessions), expected)
 }
 
+async function selectView(value, expected) {
+  await cdp.evaluate(`(() => {
+    const select = document.querySelector('[aria-label="Session view"]')
+    select.value = ${JSON.stringify(value)}
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+  })()`)
+  await cdp.waitFor(`JSON.stringify(${visibleSessions}) === ${JSON.stringify(JSON.stringify(expected))}`)
+  assert.deepEqual(await cdp.evaluate(visibleSessions), expected)
+}
+
 try {
   await cdp.waitFor('document.querySelector(\'[data-tree-id="session:scratch"]\')')
   await search('wOrK Payments Server', ['server'])
@@ -76,11 +86,25 @@ try {
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
   await cdp.waitFor('document.querySelector(\'[data-tree-id="session:server"][aria-selected="true"]\')')
   await cdp.waitFor('document.querySelector(\'.xterm-helper-textarea\')')
+  await search('', ['review', 'scratch'])
+  await cdp.evaluate(`Promise.all([
+    ['server', 'permission', 'codex'],
+    ['review', 'error', 'claude'],
+    ['scratch', 'complete', 'omp']
+  ].map(payload => window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:attn', payload })))`)
+  await cdp.waitFor(`document.querySelector('option[value="attention"]').textContent === 'Needs attention (2)'`)
+  await selectView('attention', ['server', 'review'])
+  await search('payments', ['server'])
+  await selectView('complete', [])
+  await search('', ['scratch'])
+  await selectView('attention', ['server', 'review'])
+  await cdp.evaluate(`window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:attn', payload: ['server', null, null] })`)
+  await cdp.waitFor(`JSON.stringify(${visibleSessions}) === '["review"]'`)
   const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
   writeFileSync(join(output, 'search.png'), Buffer.from(screenshot.data, 'base64'))
   assert.deepEqual(errors, [])
-  writeFileSync(join(output, 'result.json'), JSON.stringify({ search: 'passed', errors }, null, 2))
-  console.log('Session workflow: contextual search, collapsed collection, empty state, and keyboard selection passed')
+  writeFileSync(join(output, 'result.json'), JSON.stringify({ search: 'passed', attentionViews: 'passed', errors }, null, 2))
+  console.log('Session workflow: contextual search, attention views, live counts, empty state, and keyboard selection passed')
 } finally {
   await app.close()
 }

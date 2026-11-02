@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Collection, TerminalSession } from '../../../store/sessionStore'
-import { searchSessions } from '../sessionQuery'
+import { countSessionViews, filterSessionsByAttention, searchSessions } from '../sessionQuery'
 
 function session(id: string, values: Partial<TerminalSession> = {}): TerminalSession {
   return {
@@ -87,5 +87,29 @@ describe('session search', () => {
       query: 'loop b'
     })
     expect(result.map((item) => item.id)).toEqual(['cycle'])
+  })
+})
+
+describe('session attention views', () => {
+  const attentionMap = { backend: 'permission', remote: 'error', assistant: 'complete', stale: 'permission' }
+
+  it('includes waiting and failed sessions in needs attention, preserving sidebar order', () => {
+    expect(filterSessionsByAttention({ sessions, attentionMap, view: 'attention' }).map((item) => item.id)).toEqual(['backend', 'remote'])
+  })
+
+  it('keeps completed results separate from sessions that need input', () => {
+    expect(filterSessionsByAttention({ sessions, attentionMap, view: 'complete' }).map((item) => item.id)).toEqual(['assistant'])
+    expect(countSessionViews(sessions, attentionMap)).toEqual({ all: 4, attention: 2, complete: 1 })
+  })
+
+  it('combines a project search with an attention view', () => {
+    const found = searchSessions({ sessions, collections, query: 'work codex' })
+    expect(filterSessionsByAttention({ sessions: found, attentionMap, view: 'attention' }).map((item) => item.id)).toEqual(['backend'])
+    expect(filterSessionsByAttention({ sessions: found, attentionMap, view: 'complete' })).toEqual([])
+  })
+
+  it('ignores stale session ids and unknown events when counting or filtering', () => {
+    expect(countSessionViews(sessions, { backend: 'unexpected', stale: 'complete' })).toEqual({ all: 4, attention: 0, complete: 0 })
+    expect(filterSessionsByAttention({ sessions, attentionMap: {}, view: 'all' }).map((item) => item.id)).toEqual(['backend', 'remote', 'assistant', 'local'])
   })
 })
