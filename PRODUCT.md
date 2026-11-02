@@ -34,4 +34,4 @@ Preserve the existing tree semantics, roving keyboard focus, visible focus indic
 
 ## Implementation backlog
 
-See [Product and technical improvements](designs/product-technical-improvements.md) for priorities, dependencies, acceptance criteria, and delivery status.
+See [Product and technical improvements](docs/product-technical-improvements.md) for priorities, dependencies, acceptance criteria, and delivery status.
