@@ -67,6 +67,26 @@
   border-color: var(--focus-ring);
   outline: 1px solid var(--focus-ring);
 }
+.nextAttention {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.nextAttention:hover:not(:disabled) {
+  background: var(--bg-item-hover);
+}
+.nextAttention:focus-visible {
+  border-color: var(--focus-ring);
+  outline: 1px solid var(--focus-ring);
+}
+.nextAttention:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
 .newTerminal {
   display: flex;
   flex: 1;

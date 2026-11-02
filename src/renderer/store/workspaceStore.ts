@@ -6,7 +6,6 @@ import {
   singleLeafTree,
   toPersistedTree,
   firstLeafId,
-  treeHasSession,
   findLeaf
 } from '../../shared/paneTreeNormalize'
 import {
@@ -294,22 +293,20 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       ? workspaces.find((w) => w.id === activeWorkspaceId)
       : undefined
 
-    if (activeWs && treeHasSession(activeWs.paneTree, sessionId)) {
-      const leafId = findLeafIdBySession(activeWs.paneTree, sessionId)
-      if (leafId && leafId !== activeWs.focusedPaneId) {
+    const candidates = activeWs
+      ? [activeWs, ...workspaces.filter((workspace) => workspace.id !== activeWorkspaceId)]
+      : workspaces
+    for (const workspace of candidates) {
+      const leafId = findLeafIdBySession(workspace.paneTree, sessionId)
+      if (!leafId) continue
+      if (workspace.id !== activeWorkspaceId || leafId !== workspace.focusedPaneId) {
         set({
-          workspaces: patchWorkspace(workspaces, activeWorkspaceId!, { focusedPaneId: leafId })
+          activeWorkspaceId: workspace.id,
+          workspaces: patchWorkspace(workspaces, workspace.id, { focusedPaneId: leafId })
         })
         markDirty()
       }
       return true
-    }
-
-    for (const w of workspaces) {
-      if (treeHasSession(w.paneTree, sessionId)) {
-        get().switchWorkspace(w.id)
-        return true
-      }
     }
 
     get().createWorkspace(sessionId)

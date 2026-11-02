@@ -17,7 +17,7 @@ import {
 import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { SessionList } from './SessionList'
-import { countSessionViews, type SessionView } from './sessionQuery'
+import { countSessionViews, nextAttentionSessionId, type SessionView } from './sessionQuery'
 import type { SshProfile } from '../../../shared/settingsTypes'
 import styles from './Sidebar.module.css'
 
@@ -192,6 +192,19 @@ export function Sidebar({
           <option value="attention">Needs attention ({viewCounts.attention})</option>
           <option value="complete">Completed ({viewCounts.complete})</option>
         </select>
+        <button
+          type="button"
+          className={styles.nextAttention}
+          aria-label="Next session needing attention"
+          title={viewCounts.attention > 0 ? 'Go to the next waiting or failed session across all sessions' : 'No sessions need attention'}
+          disabled={viewCounts.attention === 0}
+          onClick={() => {
+            const id = nextAttentionSessionId(useSessionStore.getState())
+            if (id !== null) onSelectSession(id)
+          }}
+        >
+          Next attention
+        </button>
         <div className={styles.createRow}>
           <button
             type="button"

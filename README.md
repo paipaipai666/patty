@@ -95,6 +95,8 @@ Run supported AI tools inside a local Patty terminal so their hooks can identify
 
 Selecting a session or typing in its terminal marks its latest notice as read and stops the attention glow. Its runtime status remains visible. The **Needs attention** view continues to include waiting and failed sessions after they are read. The **Completed** view includes completed responses until the tool reports new work or exits. A new prompt or tool execution replaces the previous completion or error with **Working**. Available state transitions depend on the events each CLI adapter reports.
 
+Use **Next attention** in the sidebar to cycle through waiting and failed sessions in session order. It searches all sessions, including collapsed collections and results hidden by the current search or view. It selects the target workspace and pane, preserves the current search and view, and marks the notice as read. When no session needs attention, the button is disabled. You can reach the button with Tab and activate it with Enter or Space.
+
 Use **Settings → Notifications** to enable or disable each adapter. Enabling an adapter installs Patty's integration in that tool's configuration; disabling it removes Patty's integration. Restart an already-running AI tool after changing its hook configuration. Available events depend on the tool's hooks.
 
 ## Settings

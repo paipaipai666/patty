@@ -28,6 +28,16 @@ export function countSessionViews(sessions: TerminalSession[], agentStates: Agen
   return counts
 }
 
+export function nextAttentionSessionId({ sessions, agentStates, activeSessionId }: {
+  sessions: TerminalSession[]
+  agentStates: AgentStates
+  activeSessionId: string | null
+}): string | null {
+  const index = sessions.findIndex((session) => session.id === activeSessionId)
+  const ordered = [...sessions.slice(index + 1), ...sessions.slice(0, index + 1)]
+  return filterSessionsByAttention({ sessions: ordered, agentStates, view: 'attention' })[0]?.id ?? null
+}
+
 function normalize(value: string): string {
   return value.normalize('NFKC').toLowerCase().replaceAll('\\', '/')
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Collection, TerminalSession } from '../../../store/sessionStore'
-import { countSessionViews, filterSessionsByAttention, searchSessions } from '../sessionQuery'
+import { countSessionViews, filterSessionsByAttention, nextAttentionSessionId, searchSessions } from '../sessionQuery'
 
 function session(id: string, values: Partial<TerminalSession> = {}): TerminalSession {
   return {
@@ -116,5 +116,45 @@ describe('session attention views', () => {
   it('ignores stale session ids and working sessions when counting or filtering', () => {
     expect(countSessionViews(sessions, { backend: { status: 'working', unread: false }, stale: { status: 'complete', unread: true } })).toEqual({ all: 4, attention: 0, complete: 0 })
     expect(filterSessionsByAttention({ sessions, agentStates: {}, view: 'all' }).map((item) => item.id)).toEqual(['backend', 'remote', 'assistant', 'local'])
+  })
+})
+
+describe('next attention session', () => {
+  const agentStates = {
+    backend: { status: 'waiting_approval', unread: false },
+    remote: { status: 'error', unread: true },
+    assistant: { status: 'complete', unread: true },
+    local: { status: 'working', unread: false },
+    closed: { status: 'waiting_input', unread: true }
+  } satisfies import('../../../../shared/agentTypes').AgentStates
+
+  it('advances in session order and wraps past completed and working sessions', () => {
+    expect(nextAttentionSessionId({ sessions, agentStates, activeSessionId: 'backend' })).toBe('remote')
+    expect(nextAttentionSessionId({ sessions, agentStates, activeSessionId: 'remote' })).toBe('backend')
+    expect(nextAttentionSessionId({ sessions, agentStates, activeSessionId: 'assistant' })).toBe('backend')
+  })
+
+  it('starts at the first match when there is no current session', () => {
+    expect(nextAttentionSessionId({ sessions, agentStates, activeSessionId: null })).toBe('backend')
+    expect(nextAttentionSessionId({ sessions, agentStates, activeSessionId: 'missing' })).toBe('backend')
+  })
+
+  it('keeps the sole waiting session available after it has been read', () => {
+    expect(nextAttentionSessionId({
+      sessions, agentStates: { remote: { status: 'waiting_input', unread: false } }, activeSessionId: 'remote'
+    })).toBe('remote')
+  })
+
+  it('returns no target when only stale, completed or working states remain', () => {
+    expect(nextAttentionSessionId({
+      sessions,
+      agentStates: {
+        closed: { status: 'error', unread: true },
+        assistant: { status: 'complete', unread: true },
+        backend: { status: 'working', unread: false }
+      },
+      activeSessionId: 'backend'
+    })).toBeNull()
+    expect(nextAttentionSessionId({ sessions: [], agentStates, activeSessionId: null })).toBeNull()
   })
 })

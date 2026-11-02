@@ -326,6 +326,34 @@ describe('focusPane / focusNext / focusPrev', () => {
 })
 
 describe('ensureVisible', () => {
+  it('switches to another workspace and focuses the requested split instead of its remembered sibling', () => {
+    useWorkspaceStore.getState().loadFromPersisted([
+      makeWorkspace({ id: 'w1' }),
+      makeWorkspace({
+        id: 'w2',
+        paneTree: {
+          id: 'split', type: 'split', direction: 'horizontal', ratio: 0.5,
+          first: { id: 'target', type: 'leaf', sessionId: 's2' },
+          second: { id: 'sibling', type: 'leaf', sessionId: 's3' }
+        },
+        focusedPaneId: 'sibling'
+      })
+    ], 'w1')
+    const visibleTransitions: Array<[string | null, string | null]> = []
+    const unsubscribe = useWorkspaceStore.subscribe((state) => {
+      visibleTransitions.push([state.activeWorkspaceId, getFocusedSessionId()])
+    })
+    try {
+      expect(useWorkspaceStore.getState().ensureVisible('s2')).toBe(true)
+    } finally {
+      unsubscribe()
+    }
+    expect(visibleTransitions).toEqual([['w2', 's2']])
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('w2')
+    expect(useWorkspaceStore.getState().workspaces[1].focusedPaneId).toBe('target')
+    expect(getFocusedSessionId()).toBe('s2')
+  })
+
   it('returns true when session is in the active workspace', () => {
     useWorkspaceStore.getState().loadFromPersisted([makeWorkspace({ id: 'w1' })], 'w1')
     expect(useWorkspaceStore.getState().ensureVisible('s1')).toBe(true)
