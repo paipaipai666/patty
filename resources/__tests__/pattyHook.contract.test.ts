@@ -10,7 +10,7 @@ const SCRIPT = resolve(__dirname, '..', 'patty-hook.ps1')
 
 let server: Server
 let port: number
-let inbox: Array<{ paneId?: string; event?: string; source?: string; secret?: string }>
+let inbox: Array<{ paneId?: string; event?: string; source?: string; secret?: string; origin?: { processId: number; sequence: number; conversationId: string | null } }>
 let waiter: ((value: unknown) => void) | null = null
 
 
@@ -58,6 +58,7 @@ async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<
   event?: string
   source?: string
   secret?: string
+  origin?: { processId: number; sequence: number; conversationId: string | null }
 }> {
   inbox = []
   const posted = nextPost()
@@ -87,6 +88,7 @@ async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<
   await Promise.race([posted, timeout])
 
   expect(isCanonicalEvent(inbox[0]?.event), inbox[0]?.event).toBe(true)
+  expect(inbox[0]?.origin).toMatchObject({ processId: child.pid, sequence: expect.any(Number) })
   return inbox[0]
 }
 
@@ -94,9 +96,20 @@ async function runHook(stdinPayload: string, extraArgs: string[] = []): Promise<
 const T = { timeout: 20_000 }
 
 describe('patty-hook.ps1 contract', () => {
+  it('forwards explicit subagent identity from either native hook field style', T, async () => {
+    for (const field of ['agent_id', 'agentId']) {
+      const body = await runHook(JSON.stringify({ [field]: 'child-a', hook_event_name: 'PreToolUse' }))
+      expect(body).toMatchObject({ event: 'pre_tool_use', role: 'subagent' })
+    }
+  })
+  it('preserves conversation identity even when the event type is supplied as an argument', T, async () => {
+    const body = await runHook(JSON.stringify({ session_id: 'conversation-a' }), ['-EventType', 'session_start'])
+    expect(body).toMatchObject({ event: 'session_start', origin: { conversationId: 'conversation-a' } })
+    expect(body.origin?.sequence).toBeGreaterThan(0)
+  })
   it('Claude 1.x Notification: notification_type permission_prompt', T, async () => {
     const body = await runHook(JSON.stringify({ notification_type: 'permission_prompt' }))
-    expect(body).toEqual({ paneId: 'pane-1', event: 'permission_prompt', source: 'claude-code', secret: 'secret-1' })
+    expect(body).toMatchObject({ paneId: 'pane-1', event: 'permission_prompt', source: 'claude-code', secret: 'secret-1' })
   })
 
   it('Claude 1.x Notification: idle_prompt passes through', T, async () => {
@@ -147,7 +160,7 @@ describe('patty-hook.ps1 contract', () => {
 
   it('Codex PermissionRequest → permission_prompt with source codex', T, async () => {
     const body = await runHook(JSON.stringify({ hook_event_name: 'PermissionRequest' }), ['-Source', 'codex'])
-    expect(body).toEqual({ paneId: 'pane-1', event: 'permission_prompt', source: 'codex', secret: 'secret-1' })
+    expect(body).toMatchObject({ paneId: 'pane-1', event: 'permission_prompt', source: 'codex', secret: 'secret-1' })
   })
 
   it('Codex Stop → stop with source codex', T, async () => {
@@ -169,7 +182,7 @@ describe('patty-hook.ps1 contract', () => {
 
   it('Qwen SessionStart → session_start with source qwen-code', T, async () => {
     const body = await runHook(JSON.stringify({ hook_event_name: 'SessionStart' }), ['-Source', 'qwen-code'])
-    expect(body).toEqual({ paneId: 'pane-1', event: 'session_start', source: 'qwen-code', secret: 'secret-1' })
+    expect(body).toMatchObject({ paneId: 'pane-1', event: 'session_start', source: 'qwen-code', secret: 'secret-1' })
   })
 
   it('Qwen PermissionRequest → permission_prompt', T, async () => {
@@ -180,7 +193,7 @@ describe('patty-hook.ps1 contract', () => {
 
   it('Copilot camelCase agentStop → stop with source copilot-cli', T, async () => {
     const body = await runHook(JSON.stringify({ hook_event_name: 'agentStop' }), ['-Source', 'copilot-cli'])
-    expect(body).toEqual({ paneId: 'pane-1', event: 'stop', source: 'copilot-cli', secret: 'secret-1' })
+    expect(body).toMatchObject({ paneId: 'pane-1', event: 'stop', source: 'copilot-cli', secret: 'secret-1' })
   })
 
   it('Copilot camelCase sessionEnd → session_end', T, async () => {

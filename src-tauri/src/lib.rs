@@ -7,6 +7,7 @@ pub mod ssh;
 pub mod sshconn;
 pub mod store;
 mod conpty;
+mod hook_identity;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;

@@ -83,7 +83,8 @@ describe('PattyNotifier (omp extension)', () => {
     PattyNotifier(pi)
     await handlers.get('session_start')?.({}, ctx)
     expect(posted).toEqual([
-      { paneId: 'pane-1', event: 'session_created', source: 'omp', secret: 'secret-1' }
+      { paneId: 'pane-1', event: 'session_created', source: 'omp', secret: 'secret-1',
+        origin: { processId: process.pid, sequence: 1, instanceId: expect.any(String) } }
     ])
   })
 

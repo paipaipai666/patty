@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { appendFileSync, existsSync, renameSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 type SessionRole = 'main' | 'subagent'
 
@@ -61,19 +62,23 @@ const payloadOf = (event: OpaqueEvent): SessionPayload => {
 }
 
 const mainSessions = new Set<string>()
+const instanceId = randomUUID()
+let sequence = 0
+let conversationId: string | undefined
 let aliveInterval: IntervalHandle | null = null
 
-const hookBody = (event: string, role: SessionRole) =>
+const hookBody = (event: string, role: SessionRole, sessionId = conversationId) =>
   JSON.stringify({
     paneId: process.env.PATTY_PANE_ID,
     event,
     source: 'opencode',
     role,
 
-    secret: process.env.PATTY_HOOK_SECRET
+    secret: process.env.PATTY_HOOK_SECRET,
+    origin: { processId: process.pid, sequence: ++sequence, instanceId, conversationId: sessionId }
   })
 
-const notifyPatty = async (event: string, role: SessionRole = 'main') => {
+const notifyPatty = async (event: string, role: SessionRole = 'main', sessionId = conversationId) => {
   log(`→ patty: ${event} role=${role}`)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 1500)
@@ -81,7 +86,7 @@ const notifyPatty = async (event: string, role: SessionRole = 'main') => {
     await fetch(`http://127.0.0.1:${process.env.PATTY_PORT}/hook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: hookBody(event, role),
+      body: hookBody(event, role, sessionId),
       signal: controller.signal
     })
   } catch {
@@ -91,7 +96,7 @@ const notifyPatty = async (event: string, role: SessionRole = 'main') => {
   }
 }
 
-const notifyPattyDetached = (event: string, role: SessionRole = 'main') => {
+const notifyPattyDetached = (event: string, role: SessionRole = 'main', sessionId = conversationId) => {
   log(`→ patty (detached): ${event} role=${role}`)
   try {
     const child = spawn(
@@ -99,12 +104,12 @@ const notifyPattyDetached = (event: string, role: SessionRole = 'main') => {
       ['-s', '-m', '3', '-X', 'POST', `http://127.0.0.1:${process.env.PATTY_PORT}/hook`, '-H', 'Content-Type: application/json', '--data-binary', '@-'],
       { detached: true, stdio: ['ignore', 'ignore', 'ignore', 'pipe'] }
     )
-    child.stdin?.write(hookBody(event, role))
+    child.stdin?.write(hookBody(event, role, sessionId))
     child.stdin?.end()
     child.on('error', () => {})
     child.unref()
   } catch {
-    void notifyPatty(event)
+    void notifyPatty(event, role, sessionId)
   }
 }
 
@@ -150,9 +155,10 @@ const handleEvent = async (event: OpaqueEvent) => {
       const role: SessionRole = parentID ? 'subagent' : 'main'
       if (sessionID && !parentID) {
         mainSessions.add(sessionID)
+        conversationId = sessionID
       }
 
-      await notifyPatty('session_created', role)
+      await notifyPatty('session_created', role, sessionID)
       hookExit()
       startAlive()
       break
@@ -166,15 +172,15 @@ const handleEvent = async (event: OpaqueEvent) => {
         break
       }
       stopAlive()
-      notifyPattyDetached('session_deleted')
+      notifyPattyDetached('session_deleted', 'main', sessionID)
       break
     }
 
     case 'permission.asked':
-      await notifyPatty('permission_prompt')
+      await notifyPatty('permission_prompt', 'main', sessionID)
       break
     case 'question.asked':
-      await notifyPatty('elicitation_dialog')
+      await notifyPatty('elicitation_dialog', 'main', sessionID)
       break
 
     case 'session.idle': {
@@ -182,21 +188,21 @@ const handleEvent = async (event: OpaqueEvent) => {
         log('ignored: session.idle from non-main session')
         break
       }
-      await notifyPatty('idle')
+      await notifyPatty('idle', 'main', sessionID)
       break
     }
 
     case 'session.status': {
       if (sessionID && mainSessions.has(sessionID)) {
-        if (status?.type === 'idle') await notifyPatty('idle')
-        else if (status?.type === 'busy') await notifyPatty('working')
+        if (status?.type === 'idle') await notifyPatty('idle', 'main', sessionID)
+        else if (status?.type === 'busy') await notifyPatty('working', 'main', sessionID)
       }
       break
     }
 
     case 'session.error':
     case 'session.execution.failed':
-      await notifyPatty('error')
+      await notifyPatty('error', 'main', sessionID)
       break
   }
 }

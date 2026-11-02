@@ -2,6 +2,7 @@
    
 
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 
 
 interface OmpExtensionContext {
@@ -20,8 +21,12 @@ export default function PattyNotifier(pi: OmpExtensionApi): void {
 
   if (!PATTY_PORT || !PANE_ID) return
 
+  const instanceId = randomUUID()
+  let sequence = 0
+
   const hookBody = (event: string) =>
-    JSON.stringify({ paneId: PANE_ID, event, source: 'omp', secret: SECRET })
+    JSON.stringify({ paneId: PANE_ID, event, source: 'omp', secret: SECRET,
+      origin: { processId: process.pid, sequence: ++sequence, instanceId } })
 
   const notifyPatty = async (event: string) => {
     const controller = new AbortController()

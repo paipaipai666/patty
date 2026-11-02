@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "description": "Patty hook 线协议：各 AI CLI 适配器（patty-hook.ps1 / opencode-patty-plugin.ts / omp-patty-hook.ts）把原生事件翻译为本文件定义的规范事件，POST 到 127.0.0.1:$PATTY_PORT/hook，载荷 {paneId, event, source, secret, role?}。本文件是事件词汇的单一事实源：src-tauri/src/hooks.rs 的一致性测试与 resources/__tests__/ 的适配器契约测试都消费它——任何一侧漂移（新增、改名、映射变化）都会让测试失败，而不是让指示灯静默熄灭。它只喂测试，不驱动运行时。",
   "sources": ["claude-code", "codex", "opencode", "omp", "qwen-code", "copilot-cli"],
   "roles": ["main", "subagent"],
@@ -28,6 +28,7 @@
     { "contains": "question", "status": "waiting_input" }
   ],
   "notes": [
+    "origin 携带 processId、sequence，以及可用的 instanceId 和 conversationId。processId 是调用者进程，后端需沿父链校验终端归属并解析 CLI 运行实例；conversationId 不能代替运行实例身份。",
     "events 是闭集：值为该事件映射到的 Agent 运行状态。null 不更新状态；session_end/session_deleted 单独清除 Agent。未读信息由前端独立管理。",
     "patterns 是开放家族：Claude StopFailure 的错误类型是动态的（error_rate_limit、error_overloaded……），适配器可以发出任何 error_* 变体。",
     "闭集事件若同时命中某条 pattern，两处 status 必须一致（如 error_retry）。",

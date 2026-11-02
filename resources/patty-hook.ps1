@@ -5,6 +5,8 @@ param(
     [string]$Source = "claude-code"
 )
 
+$eventSequence = [System.Diagnostics.Stopwatch]::GetTimestamp()
+
 
 $logFile = "$env:TEMP\patty-hook-debug.log"
 function Write-DebugLog($Message) {
@@ -26,10 +28,14 @@ if (-not $env:PATTY_PANE_ID -or -not $env:PATTY_PORT) {
 try {
 
     $eventType = $EventType
+    $stdinInput = if ([Console]::IsInputRedirected) { [Console]::In.ReadToEnd() } else { "" }
+    $inputData = $null
+    if ($stdinInput) {
+        try { $inputData = $stdinInput | ConvertFrom-Json } catch { }
+    }
 
     if (-not $eventType) {
 
-        $stdinInput = [Console]::In.ReadToEnd()
         Write-DebugLog "Stdin input: $stdinInput"
 
         $eventType = "unknown"
@@ -112,7 +118,13 @@ try {
         paneId = $env:PATTY_PANE_ID
         event  = $eventType
         source = $Source
+        role = if ($inputData.agent_id -or $inputData.agentId) { "subagent" } else { "main" }
         secret = $env:PATTY_HOOK_SECRET
+        origin = @{
+            processId = $PID
+            sequence = $eventSequence
+            conversationId = if ($inputData.session_id) { [string]$inputData.session_id } elseif ($inputData.sessionId) { [string]$inputData.sessionId } else { $null }
+        }
     } | ConvertTo-Json -Compress
 
     Write-DebugLog "Source: $Source"

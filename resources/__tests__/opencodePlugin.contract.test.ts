@@ -164,7 +164,8 @@ describe('PattyNotifier (opencode plugin, v2 setup path)', () => {
       event: 'session_created',
       source: 'opencode',
       secret: 'secret-1',
-      role: 'main'
+      role: 'main',
+      origin: { processId: process.pid, sequence: 1, instanceId: expect.any(String), conversationId: 's1' }
     })
   })
 
@@ -248,7 +249,7 @@ describe('PattyNotifier (opencode plugin, v2 setup path)', () => {
     expect(spawnCalls).toHaveLength(1)
     expect(spawnCalls[0].cmd).toBe('curl')
     const body = JSON.parse(spawnCalls[0].body)
-    expect(body).toEqual({ paneId: 'pane-1', event: 'session_deleted', source: 'opencode', secret: 'secret-1', role: 'main' })
+    expect(body).toMatchObject({ paneId: 'pane-1', event: 'session_deleted', source: 'opencode', secret: 'secret-1', role: 'main' })
   })
 
   it('subagent session.deleted does not notify Patty', async () => {
