@@ -145,9 +145,10 @@ async function verifyAgentAnimations(sessionId, theme) {
     return { state: glow?.dataset.attention, start: effect?.startTime, duration: effect?.effect.getTiming().duration, iterations: effect?.effect.getTiming().iterations, pointerEvents: glow && getComputedStyle(glow).pointerEvents }
   })()`)
   const brands = []
-  await cdp.evaluate(
-    `document.querySelector(${JSON.stringify(rowSelector)}).click()`
-  )
+  const focusOther = () => cdp.evaluate(`
+    [...document.querySelectorAll('[data-tree-id^="session:"]')].find(row => row.dataset.treeId !== ${JSON.stringify('session:' + sessionId)}).click()
+  `)
+  await focusOther()
   for (const aiType of [
     'claude',
     'opencode',
@@ -156,7 +157,7 @@ async function verifyAgentAnimations(sessionId, theme) {
     'qwen',
     'copilot'
   ]) {
-    await emit('waiting_approval', aiType)
+    await emit('working', aiType)
     await cdp.waitFor(
       `document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type="${aiType}"] canvas') !== null`
     )
@@ -171,11 +172,7 @@ async function verifyAgentAnimations(sessionId, theme) {
       second.checksum,
       `${theme} ${aiType}: frozen animation canvas`
     )
-    assert.notEqual(
-      second.shadow,
-      'none',
-      `${theme} ${aiType}: selected icon has no glow`
-    )
+    assert.equal(second.shadow, 'none', `${theme} ${aiType}: background icon should stay quiet`)
     assert.equal(second.contentLayer, '1')
     assert.equal(second.pointerEvents, 'none')
     brands.push(second)
@@ -193,6 +190,8 @@ async function verifyAgentAnimations(sessionId, theme) {
     )
   }
 
+  await cdp.evaluate(`document.querySelector(${JSON.stringify(rowSelector)}).click()`)
+  await cdp.waitFor(`!document.querySelector(${JSON.stringify(rowSelector)}).querySelector('canvas')`)
   const notifications = []
   for (const [attention, label] of [
     ['complete', 'Completed'],
@@ -201,7 +200,7 @@ async function verifyAgentAnimations(sessionId, theme) {
   ]) {
     await emit(attention, 'claude')
     await cdp.waitFor(
-      `document.querySelector(${JSON.stringify(rowSelector)}).innerText.includes(${JSON.stringify(label)})`
+      `document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[aria-label="${label}"]') !== null`
     )
     await sleep(60)
     const effect = await animation()
@@ -225,19 +224,20 @@ async function verifyAgentAnimations(sessionId, theme) {
     `!document.querySelector(${JSON.stringify(rowSelector)}).querySelector('canvas, [data-testid="agent-attention-glow"]')`
   )
   await emit('waiting_approval', 'claude')
-  await cdp.waitFor(
-    `!!document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type="claude"] canvas')`
-  )
   await cdp.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }]
   })
   await cdp.waitFor(`(() => {
     const row = document.querySelector(${JSON.stringify(rowSelector)})
-    return getComputedStyle(row.querySelector('[data-type]')).display === 'none' && getComputedStyle(row.querySelector('[data-testid="agent-attention-glow"]')).display === 'none' && row.querySelector('[aria-label="Waiting for approval"]') !== null
+    return !row.querySelector('canvas') && getComputedStyle(row.querySelector('[data-testid="agent-attention-glow"]')).display === 'none' && row.querySelector('[aria-label="Waiting for approval"]') !== null
   })()`)
+  await emit('working', 'claude')
+  await focusOther()
+  await cdp.waitFor(`!!document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type]')`)
+  assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type]').parentElement).display`), 'none')
   await cdp.send('Emulation.setEmulatedMedia', { features: [] })
   await cdp.waitFor(
-    `getComputedStyle(document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type]')).display !== 'none'`
+    `getComputedStyle(document.querySelector(${JSON.stringify(rowSelector)}).querySelector('[data-type]').parentElement).display !== 'none'`
   )
   await cdp.evaluate(
     `document.querySelector('[data-tree-id^="session:"]').click()`

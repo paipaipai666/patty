@@ -1,5 +1,15 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo } from 'react'
-import { Code20Regular, Globe20Regular, Checkmark16Regular, ErrorCircle16Regular, Shield16Regular, ChatHelp16Regular, Circle16Regular, ArrowSync16Regular, QuestionCircle16Regular } from '@fluentui/react-icons'
+import {
+  Code20Regular,
+  Globe20Regular,
+  Checkmark16Regular,
+  ErrorCircle16Regular,
+  Shield16Regular,
+  ChatHelp16Regular,
+  Circle16Regular,
+  ArrowSync16Regular,
+  QuestionCircle16Regular
+} from '@fluentui/react-icons'
 import {
   useSessionStore,
   SESSION_COLOR_VARS,
@@ -7,7 +17,7 @@ import {
 } from '../../store/sessionStore'
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import type { AgentStatus } from '../../../shared/agentTypes'
-import { sessionContext, sessionLocation } from '../../utils/sessionPresentation'
+import { directoryLabel, sessionContext, sessionLocation, sessionTool } from '../../utils/sessionPresentation'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
@@ -297,7 +307,10 @@ export const SessionItem = memo(function SessionItem({
               )}
               {activity?.unread && <span className={styles.unreadDot} aria-hidden />}
             </span>
-            <span className={styles.itemContext} title={`${context}\n${sessionLocation(session)}`}>{context}</span>
+            <span className={styles.itemContext} title={`${context}\n${sessionLocation(session)}`}>
+              {session.shell === 'ssh' ? sessionLocation(session) : directoryLabel(session.cwd)}
+              <span className={styles.contextTool}> · {sessionTool(session)}</span>
+            </span>
           </span>
         )}
         <button

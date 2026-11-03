@@ -19,16 +19,17 @@
 .header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 42px;
+  gap: 8px;
+  height: 34px;
   flex-shrink: 0;
-  padding: 0 10px 0 12px;
+  padding: 0 8px 0 10px;
   background: var(--bg-titlebar);
   border-bottom: 1px solid var(--border-subtle);
   color: var(--text-secondary);
 }
 .paneViewFocused .header {
   color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-titlebar));
 }
 .sessionIcon {
   display: flex;
@@ -47,12 +48,12 @@
 .cwd {
   flex: 1;
   min-width: 0;
-  padding-left: 12px;
+  padding-left: 8px;
   border-left: 1px solid var(--border-medium);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
 .actions {
@@ -60,6 +61,15 @@
   flex-shrink: 0;
   gap: 2px;
   margin-left: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+.paneView:hover .actions,
+.paneView:focus-within .actions,
+.paneViewFocused .actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 .action {
   width: 28px;
@@ -103,6 +113,20 @@
 @container (max-width: 420px) {
   .cwd {
     display: none;
+  }
+  .remoteHeader .title {
+    display: none;
+  }
+  .remoteHeader .cwd {
+    display: block;
+    padding-left: 0;
+    border-left: none;
+  }
+}
+@media (hover: none) {
+  .actions {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 @media (forced-colors: active) {

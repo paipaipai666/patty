@@ -29,3 +29,19 @@ The second unit uses fixed two-line rows: task title with a semantic status icon
 The activity grid is limited to background sessions that are working, with a small, muted painted area. Waiting, completed and foreground sessions keep static status indicators. Reduced-motion mode hides the activity effect. Existing read/unread and filtering behavior is preserved.
 
 All 726 frontend tests pass. Added cases cover project labels, SSH ports and IPv6, status after reading, and background-only activity. Browser checks verify the actual status label, context, read behavior and activity visibility in addition to the six layout captures.
+
+## Pane headers and final review
+
+Pane headers are 34px high, down from 42px. Local panes show the working folder's short name with the full path in a tooltip. SSH panes show the actual target, including user and non-default port. At narrow pane widths, the connection target takes precedence over the custom title.
+
+Header actions remain visible in the focused pane and appear on hover or keyboard focus elsewhere. Touch input keeps actions visible. Moving keyboard focus into a pane now updates its workspace focus and selected session together. Three failing behavior tests first reproduced the missing focus update and header context, then passed after implementation.
+
+Final screenshots showed long tool names crowding out directories at 160px. Session metadata now puts the directory first and hides the repeated tool text below 220px; icons, accessible descriptions and full tooltips retain tool identity.
+
+All 729 frontend tests pass. Type, comment and script syntax checks pass. Browser checks verify focus transfer, the 34px header, narrow SSH target visibility and reduced motion, alongside the six theme/width captures. Generated output is excluded from the fixture server's file watcher, and verification results are marked running or failed before they can be mistaken for a previous successful run.
+
+The desktop workflow script was migrated to the new background-only activity and compact status labels. Its WebView2 assertions remain unexecuted on this machine because of the existing CDP blocker. The browser fixture does not claim to resolve that blocker.
+
+The first two commits are `36e6358` (compact toolbar and visual checks) and `67a27d7` (session context and restrained activity). The final pane-header commit includes the screenshot-driven narrow-sidebar adjustment.
+
+The final ordinary desktop release build succeeds. Its startup isolation check still rejects test-only configuration overrides before creating WebView2 data or installing CLI hooks. No backend code or saved-state format changed in this pass.

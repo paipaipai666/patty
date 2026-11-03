@@ -24,6 +24,7 @@ Object.defineProperty(window, 'terminalAPI', { value: {
   onData: listener, onExit: listener, onMaximizeChange: () => () => {},
   createSession: async (id: string) => ({ success: true, pid: 100, replay: id === 'agent'
     ? '\x1b[38;2;224;154;126mClaude Code\x1b[0m\r\n\r\nI found the callback validation issue.\r\n\r\n  npm test -- login-callback\r\n\r\nWaiting for your approval to run the tests.\r\n'
+    : id === 'remote' ? 'deploy@prod-01:/srv/payments$ tail -f service.log\r\n09:00:01 INFO  Service ready\r\n09:00:02 INFO  Health check passed\r\n'
     : 'PS D:\\code\\terminal\\terminal-sidebar> git status --short\r\n M src/renderer/components/Sidebar/Sidebar.tsx\r\n M src/renderer/components/Sidebar/Sidebar.module.css\r\n\r\nPS D:\\code\\terminal\\terminal-sidebar> ' }),
   resize: () => {}, write: () => {}, kill: () => {}, stateSave: async () => {},
   windowMinimize: () => {}, windowMaximize: () => {}, windowClose: () => {}

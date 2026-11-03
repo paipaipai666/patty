@@ -106,6 +106,24 @@ describe('zoneFromPoint', () => {
 })
 
 describe('PaneView', () => {
+  it('targets the owning pane when a header action receives keyboard focus', () => {
+    const { container, props } = renderPaneView()
+    const split = container.querySelector<HTMLButtonElement>('[aria-label="Split terminal to the right"]')!
+    act(() => split.focus())
+    expect(props.onFocus).toHaveBeenCalledWith('p1')
+    expect(useSessionStore.getState().setActive).toHaveBeenCalledWith('s1')
+  })
+
+  it('shows a short directory while keeping its full path available', () => {
+    const { container } = renderPaneView({ session: { id: 's1', title: 'Build', color: 'blue', cwd: 'D:\\work\\payments', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null } })
+    expect(Array.from(container.querySelectorAll('[title]')).find(element => element.getAttribute('title') === 'D:\\work\\payments')?.textContent).toBe('payments')
+  })
+
+  it('identifies an SSH connection in the pane header', () => {
+    const { container } = renderPaneView({ session: { id: 's1', title: 'Production', color: 'blue', cwd: '/srv/payments', shell: 'ssh', ssh: { host: 'prod-01', user: 'deploy', port: 2222 }, pid: 0, createdAt: 1, collectionId: null } })
+    expect(container.querySelector('[title="deploy@prod-01:2222"]')?.textContent).toBe('deploy@prod-01:2222')
+  })
+
   it('renders TerminalPane child', () => {
     const { container } = renderPaneView()
     const tp = container.querySelector('[data-testid="terminal-pane"]')

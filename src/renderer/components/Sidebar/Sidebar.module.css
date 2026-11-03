@@ -441,7 +441,8 @@
   pointer-events: auto;
 }
 @container session-sidebar (max-width: 220px) {
-  .statusLabel {
+  .statusLabel,
+  .contextTool {
     display: none;
   }
 }

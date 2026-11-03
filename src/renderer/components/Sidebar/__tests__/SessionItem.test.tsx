@@ -56,7 +56,8 @@ describe('SessionItem', () => {
   it('shows project context and a named status independently of unread', () => {
     useSessionStore.getState().agentStates = { s1: { status: 'waiting_approval', unread: false } }
     const { container } = render({ session: { ...defaultSession, aiType: 'claude', cwd: 'D:\\work\\payments' } })
-    expect(container.textContent).toContain('Claude Code · payments')
+    expect(container.textContent).toContain('payments')
+    expect(container.textContent).toContain('Claude Code')
     expect(container.querySelector('[aria-label="Waiting for approval"]')?.textContent).toContain('Approval')
     expect(container.querySelector('[role="treeitem"]')?.getAttribute('aria-description')).toBe('Claude Code · payments, Waiting for approval')
     expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()

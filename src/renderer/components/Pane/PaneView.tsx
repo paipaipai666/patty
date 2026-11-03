@@ -13,6 +13,7 @@ import { useWorkspaceStore } from '../../store/workspaceStore'
 import { TerminalPane } from '../Terminal/TerminalPane'
 import { DropTargetOverlay, type DropZone } from './DropTargetOverlay'
 import styles from './PaneView.module.css'
+import { directoryLabel, sessionLocation } from '../../utils/sessionPresentation'
 
 interface PaneViewProps {
   session: TerminalSession
@@ -120,20 +121,25 @@ export function PaneView({
   return (
     <div
       className={`${styles.paneView} ${focused ? styles.paneViewFocused : ''}`}
+      role="group"
+      aria-label={`${session.title}, ${sessionLocation(session)}`}
+      data-pane-id={paneId}
+      data-focused={focused}
       onPointerDown={handleFocus}
+      onFocusCapture={handleFocus}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <div className={styles.header}>
+      <div className={`${styles.header} ${session.shell === 'ssh' ? styles.remoteHeader : ''}`} data-testid="pane-header">
         <span className={styles.sessionIcon} aria-hidden>
           {session.shell === 'ssh' ? <Globe16Regular /> : <Code16Regular />}
         </span>
         <span className={styles.title} title={SHELL_LABELS[session.shell]}>
           {session.title}
         </span>
-        <span className={styles.cwd} title={session.cwd || '~'}>
-          {session.cwd || '~'}
+        <span className={styles.cwd} title={sessionLocation(session)}>
+          {session.shell === 'ssh' ? sessionLocation(session) : directoryLabel(session.cwd)}
         </span>
         <div className={styles.actions}>
           <button

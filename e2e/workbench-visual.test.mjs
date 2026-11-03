@@ -12,11 +12,12 @@ const executable = process.env.PATTY_VISUAL_BROWSER || [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
 ].find(existsSync)
-assert.ok(executable, 'Set PATTY_VISUAL_BROWSER to a Chromium browser executable')
+assert.ok(executable && existsSync(executable), 'Set PATTY_VISUAL_BROWSER to a Chromium browser executable')
 const profile = mkdtempSync(join(tmpdir(), 'patty-visual-'))
 const output = resolve('output/workbench-visual')
 mkdirSync(output, { recursive: true })
-const server = await createServer({ configFile: false, root: resolve('.'), plugins: [react()], server: { host: '127.0.0.1', port: 0 } })
+writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'running' }))
+const server = await createServer({ configFile: false, root: resolve('.'), plugins: [react()], server: { host: '127.0.0.1', port: 0, watch: { ignored: ['**/output/**', '**/out/**'] } } })
 let browser
 let cdp
 try {
@@ -58,7 +59,12 @@ try {
       writeFileSync(join(output, `${theme}-${width}.png`), Buffer.from(shot.data, 'base64'))
     }
   }
-  assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:agent"]').textContent.includes('Claude Code · terminal-sidebar')`), true)
+  await cdp.evaluate(`document.querySelector('[data-pane-id="pane-agent"] [aria-label="Split terminal to the right"]').focus()`)
+  await cdp.waitFor(`document.querySelector('[data-pane-id="pane-agent"]').dataset.focused === 'true'`)
+  assert.equal(await cdp.evaluate(`window.workbenchPreview.sessions.getState().activeSessionId`), 'agent')
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-testid="pane-header"]').getBoundingClientRect().height`), 34)
+  await cdp.waitFor(`getComputedStyle(document.querySelector('[data-pane-id="pane-agent"] [aria-label="Split terminal to the right"]').parentElement).opacity === '1'`)
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:agent"]').getAttribute('aria-description').includes('Claude Code · terminal-sidebar')`), true)
   assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:agent"] canvas') === null`), true)
   assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:agent"] [aria-label="Waiting for approval"]') !== null`), true)
   await cdp.evaluate(`document.querySelector('[aria-label="New terminal or collection"]').click()`)
@@ -75,9 +81,23 @@ try {
   await cdp.waitFor(`!!document.querySelector('[data-tree-id="session:review"] canvas')`)
   await cdp.evaluate(`window.workbenchPreview.sessions.getState().setActive('review')`)
   await cdp.waitFor(`!document.querySelector('[data-tree-id="session:review"] canvas')`)
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 540, height: 720, deviceScaleFactor: 1, mobile: false })
+  await cdp.evaluate(`window.workbenchPreview.sessions.getState().setSidebarWidth(160); window.workbenchPreview.sessions.getState().setActive('remote'); window.workbenchPreview.workspaces.getState().ensureVisible('remote')`)
+  await cdp.waitFor(`!!document.querySelector('[data-testid="pane-header"] [title="deploy@prod-01.example.com:2222"]')`)
+  assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-testid="pane-header"] [title="deploy@prod-01.example.com:2222"]')).display !== 'none'`), true)
+  await sleep(200)
+  const narrow = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+  writeFileSync(join(output, 'ssh-narrow.png'), Buffer.from(narrow.data, 'base64'))
+  await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] })
+  await cdp.evaluate(`window.workbenchPreview.sessions.getState().setActive('shell')`)
+  await cdp.waitFor(`!!document.querySelector('[data-tree-id="session:review"] canvas')`)
+  assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-tree-id="session:review"] canvas').parentElement.parentElement).display`), 'none')
   assert.deepEqual(errors, [])
   writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'passed', scope: 'Real React components and xterm with fixture transport; no desktop PTY or CLI integration', metrics }, null, 2))
-  console.log(`PASS: workbench layout, menu focus and attention navigation; screenshots in ${output}`)
+  console.log(`PASS: layout, keyboard focus, attention, activity, remote header and reduced motion; screenshots in ${output}`)
+} catch (error) {
+  writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'failed', message: String(error) }, null, 2))
+  throw error
 } finally {
   await cdp?.send('Browser.close').catch(() => {})
   cdp?.close()
