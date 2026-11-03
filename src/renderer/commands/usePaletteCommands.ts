@@ -2,7 +2,7 @@ import { useSessionStore } from '../store/sessionStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { getFocusedSessionId, useWorkspaceStore } from '../store/workspaceStore'
 import { selectSession, createSshTerminal } from '../store/sessionLifecycle'
-import { nextAttentionSessionId } from '../components/Sidebar/sessionQuery'
+import { collectionNames, nextAttentionSessionId } from '../components/Sidebar/sessionQuery'
 import { sessionLocation, sessionTool } from '../utils/sessionPresentation'
 import { BUILTIN_THEMES } from '../styles/themes'
 import type { AppCommand, CommandFocus } from './applicationCommands'
@@ -23,6 +23,8 @@ function openSettings(category: string, origin: Element | null): CommandFocus {
 
 export function usePaletteCommands(shortcutCommands: AppCommand[], pickFolder: () => Promise<string | undefined>): AppCommand[] {
   const sessions = useSessionStore(state => state.sessions)
+  const collections = useSessionStore(state => state.collections)
+  const collectionIndex = new Map(collections.map(item => [item.id, item]))
   const activeSessionId = useSessionStore(state => state.activeSessionId)
   const sidebarVisible = useSessionStore(state => state.sidebarVisible)
   useSessionStore(state => state.agentStates)
@@ -61,7 +63,7 @@ export function usePaletteCommands(shortcutCommands: AppCommand[], pickFolder: (
   const sessionCommands: AppCommand[] = sessions.map(session => ({
     id: `session:${session.id}`, label: `Switch to ${session.title}`, group: 'Sessions',
     description: `${sessionTool(session)} · ${sessionLocation(session)}`,
-    keywords: `切换 会话 ${session.cwd} ${session.shell} ${session.ssh?.host ?? ''}`,
+    keywords: `切换 会话 ${session.cwd} ${session.shell} ${session.ssh?.host ?? ''} ${session.ssh?.user ?? ''} ${session.ssh?.port ?? ''} ${SHELL_LABELS[session.shell]} ${collectionNames(session.collectionId, collectionIndex).join(' ')}`,
     run: () => {
       if (!useSessionStore.getState().sessions.some(item => item.id === session.id)) return 'previous'
       selectSession(session.id)

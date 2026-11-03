@@ -55,58 +55,70 @@ function render() {
     onCloseSession={vi.fn()}
     onSelectSession={selectSession}
   />))
-  const button = container.querySelector<HTMLButtonElement>('[aria-label="Next session needing attention"]')
-  if (!button) throw new Error('Missing next attention button')
+  const button = container.querySelector<HTMLButtonElement>('[aria-label="Notifications"]')
+  if (!button) throw new Error('Missing notification button')
   return button
 }
 
-describe('next attention control', () => {
-  it('disables navigation with no target and reacts to incoming and cleared states', () => {
+describe('session notifications', () => {
+  function entries() { return Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).filter(button => button.querySelector('strong')) }
+  it('keeps the default sidebar quiet and returns keyboard focus after dismissal', () => {
     const button = render()
-    expect(button.disabled).toBe(true)
-    act(() => button.click())
-    expect(useSessionStore.getState().activeSessionId).toBe('scratch')
-    expect(getFocusedSessionId()).toBe('scratch')
-    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_input' } })))
-    expect(button.disabled).toBe(false)
-    act(() => button.click())
-    expect(getFocusedSessionId()).toBe('server')
-    expect(useSessionStore.getState().agentStates.server).toEqual({ status: 'waiting_input', unread: false })
-    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'working' } })))
-    expect(button.disabled).toBe(true)
-    act(() => button.click())
-    expect(useSessionStore.getState().activeSessionId).toBe('server')
-    expect(getFocusedSessionId()).toBe('server')
+    expect(button.getAttribute('aria-description')).toBe('0 new or waiting sessions')
+    expect(container.querySelector('select')).toBeNull()
+    act(() => { button.focus(); button.click() })
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Nothing needs your attention.')
+    const close = document.querySelector<HTMLButtonElement>('[aria-label="Close notifications"]')!
+    expect(document.activeElement).toBe(close)
+    act(() => close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })))
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Notification view')
+    act(() => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(button)
   })
 
-  it('cycles across hidden and filtered sessions, focusing the target split and preserving runtime state', () => {
-    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'codex', status: 'waiting_approval' } }))
-    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } }))
+  it('selects a hidden workspace and its exact pane without clearing a waiting state', async () => {
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } }))
     const button = render()
-    const select = container.querySelector<HTMLSelectElement>('[aria-label="Session view"]')!
-    const input = container.querySelector<HTMLInputElement>('[aria-label="Search sessions"]')!
-    act(() => {
-      select.value = 'complete'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'scratch')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(container.querySelectorAll('[data-tree-id^="session:"]')).toHaveLength(0)
+    expect(button.getAttribute('aria-description')).toBe('1 new or waiting sessions')
     act(() => button.click())
+    expect(entries().map(item => item.querySelector('strong')?.textContent)).toEqual(['server'])
+    await act(async () => entries()[0].click())
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
     expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('ws-api')
-    expect(useWorkspaceStore.getState().workspaces[0].focusedPaneId).toBe('pane-server')
     expect(getFocusedSessionId()).toBe('server')
-    expect(useSessionStore.getState().activeSessionId).toBe('server')
     expect(useSessionStore.getState().agentStates.server).toEqual({ status: 'waiting_approval', unread: false })
+    expect(button.getAttribute('aria-description')).toBe('1 new or waiting sessions')
     act(() => button.click())
-    expect(getFocusedSessionId()).toBe('review')
-    expect(useSessionStore.getState().agentStates.review).toEqual({ status: 'error', unread: false })
+    expect(entries()[0].textContent).toContain('Waiting for approval')
+  })
+
+  it('updates open results and preserves an empty completed filter when tasks change', () => {
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_input' } }))
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'codex', status: 'complete' } }))
+    const button = render()
     act(() => button.click())
-    expect(getFocusedSessionId()).toBe('server')
-    expect(input.value).toBe('scratch')
-    expect(select.value).toBe('complete')
-    expect(useSessionStore.getState().collections[0].collapsed).toBe(true)
-    expect(container.querySelector('option[value="attention"]')?.textContent).toBe('Needs you (2)')
-    expect(useWorkspaceStore.getState().workspaces).toHaveLength(3)
+    expect(entries().map(item => item.querySelector('strong')?.textContent)).toEqual(['server', 'review'])
+    act(() => useSessionStore.getState().setActive('review'))
+    expect(entries().map(item => item.querySelector('strong')?.textContent)).toEqual(['server'])
+    const filter = document.querySelector<HTMLSelectElement>('[aria-label="Notification view"]')!
+    act(() => { filter.value = 'complete'; filter.dispatchEvent(new Event('change', { bubbles: true })) })
+    expect(entries().map(item => item.querySelector('strong')?.textContent)).toEqual(['review'])
+    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'codex', status: 'working' } })))
+    expect(entries()).toHaveLength(0)
+    expect(filter.value).toBe('complete')
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('No completed sessions.')
+    expect(getFocusedSessionId()).toBe('scratch')
+  })
+
+  it('dismisses on outside pointer interaction and removes a deleted target from an open list', () => {
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'error' } }))
+    const button = render()
+    act(() => button.click())
+    expect(entries()).toHaveLength(1)
+    act(() => useSessionStore.setState(state => ({ sessions: state.sessions.filter(item => item.id !== 'server') })))
+    expect(entries()).toHaveLength(0)
+    act(() => document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
   })
 })

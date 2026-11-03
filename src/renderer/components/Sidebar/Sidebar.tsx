@@ -7,7 +7,7 @@ import {
 } from 'react'
 import {
   Add16Regular,
-  ArrowRight16Regular,
+  Alert20Regular,
   Search16Regular,
   ChevronDown16Regular,
   Folder16Regular,
@@ -18,7 +18,9 @@ import {
 import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { SessionList } from './SessionList'
-import { countSessionViews, nextAttentionSessionId, type SessionView } from './sessionQuery'
+import { noticeSessions } from './sessionQuery'
+import { Notifications } from './Notifications'
+import { useCommandExecution } from '../../commands/useApplicationKeyboard'
 import type { SshProfile } from '../../../shared/settingsTypes'
 import styles from './Sidebar.module.css'
 
@@ -28,6 +30,8 @@ interface SidebarProps {
   onNewSsh: (profile: SshProfile) => void
   onCloseSession: (id: string) => void
   onSelectSession: (id: string) => void
+  onOpenCommands?: () => void
+  blocked?: boolean
   onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
 
@@ -37,6 +41,8 @@ export function Sidebar({
   onNewSsh,
   onCloseSession,
   onSelectSession,
+  onOpenCommands,
+  blocked = false,
   onCollectionContextMenu
 }: SidebarProps) {
   const sidebarWidth = useSessionStore((s) => s.sidebarWidth)
@@ -47,9 +53,13 @@ export function Sidebar({
   const sidebarPosition = useSettingsStore((s) => s.settings.sidebarPosition)
   const sshProfiles = useSettingsStore((s) => s.settings.sshProfiles)
   const openSettings = useSettingsStore((s) => s.openSettings)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [sessionView, setSessionView] = useState<SessionView>('all')
-  const viewCounts = countSessionViews(sessions, agentStates)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const notificationButton = useRef<HTMLButtonElement>(null)
+  const closeNotifications = useCallback(() => setNotificationsOpen(false), [])
+  const execute = useCommandExecution()
+  const notices = noticeSessions(sessions, agentStates)
+  const settingsOpen = useSettingsStore(state => state.settingsOpen)
+  useEffect(() => { if (blocked || settingsOpen) setNotificationsOpen(false) }, [blocked, settingsOpen])
   const [menu, setMenu] = useState<'create' | 'ssh' | null>(null)
   const [isCreatingCollection, setIsCreatingCollection] = useState(false)
   const [newCollectionName, setNewCollectionName] = useState('')
@@ -169,7 +179,6 @@ export function Sidebar({
     <div className={styles.sidebar} style={{ width: sidebarWidth }}>
       <div className={styles.header} ref={headerRef}>
         <div className={styles.headingRow}>
-          <h2 className={styles.heading}>Sessions <span className={styles.sessionCount}>{sessions.length}</span></h2>
           <div className={styles.createRow}>
             <button
               type="button"
@@ -306,45 +315,11 @@ export function Sidebar({
             </div>
           </div>
         </div>
-        <div className={styles.search}>
-          <Search16Regular aria-hidden />
-          <input
-            type="search"
-            className={styles.searchInput}
-            placeholder="Search sessions..."
-            aria-label="Search sessions"
-            title="Search by name, folder, shell, agent, SSH target, or collection"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-          />
-        </div>
-        <div className={styles.filterRow}>
-          <select
-            className={styles.viewFilter}
-            aria-label="Session view"
-            value={sessionView}
-            onChange={(event) => {
-              const value = event.target.value
-              if (value === 'all' || value === 'attention' || value === 'complete') setSessionView(value)
-            }}
-          >
-            <option value="all">All ({viewCounts.all})</option>
-            <option value="attention">Needs you ({viewCounts.attention})</option>
-            <option value="complete">Completed ({viewCounts.complete})</option>
-          </select>
-          <button
-            type="button"
-            className={styles.nextAttention}
-            aria-label="Next session needing attention"
-            title={viewCounts.attention > 0 ? 'Go to the next waiting or failed session across all sessions' : 'No sessions need attention'}
-            disabled={viewCounts.attention === 0}
-            onClick={() => {
-              const id = nextAttentionSessionId(useSessionStore.getState())
-              if (id !== null) onSelectSession(id)
-            }}
-          >
-            <ArrowRight16Regular aria-hidden />
+        <div className={styles.tools}>
+          <button ref={notificationButton} type="button" className={styles.toolButton} aria-label="Notifications" aria-description={`${notices.length} new or waiting sessions`} title="Notifications" aria-haspopup="dialog" aria-expanded={notificationsOpen} onClick={() => { setMenu(null); setNotificationsOpen(true) }}>
+            <Alert20Regular aria-hidden />{notices.length > 0 && <span className={styles.notificationDot} aria-hidden />}
           </button>
+          <button type="button" className={styles.toolButton} aria-label="Open command palette" title="Find sessions and commands" onClick={onOpenCommands}><Search16Regular aria-hidden /></button>
         </div>
       </div>
       {isCreatingCollection && (
@@ -373,17 +348,19 @@ export function Sidebar({
         onClose={onCloseSession}
         onSelect={onSelectSession}
         onCollectionContextMenu={onCollectionContextMenu}
-        searchQuery={searchQuery}
-        sessionView={sessionView}
       />
+      {notificationsOpen && !blocked && !settingsOpen && notificationButton.current && <Notifications anchor={notificationButton.current} onClose={closeNotifications} onSelect={id => {
+        void execute({ id: `notice:${id}`, label: 'Switch session', group: 'Sessions', description: '', run: () => { onSelectSession(id); return 'terminal' } })
+      }} />}
       <div className={styles.footer}>
         <button
           type="button"
           className={styles.settingsBtn}
+          aria-label="Settings"
+          title="Settings"
           onClick={() => openSettings()}
         >
           <Settings20Regular aria-hidden />
-          <span>Settings</span>
         </button>
       </div>
       <div

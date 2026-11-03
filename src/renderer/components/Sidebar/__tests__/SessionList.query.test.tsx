@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore, type TerminalSession } from '../../../store/sessionStore'
 import { useWorkspaceStore } from '../../../store/workspaceStore'
 import { SessionList } from '../SessionList'
-import { Sidebar } from '../Sidebar'
 import type { SessionView } from '../sessionQuery'
 
 vi.mock('../../ContributionGrid/ContributionGrid', () => ({ ContributionGrid: () => null }))
@@ -117,50 +116,3 @@ describe('session search results', () => {
   })
 })
 
-describe('sidebar attention controls', () => {
-  function renderSidebar() {
-    act(() => root.render(<Sidebar
-      onNewTerminal={vi.fn()}
-      onNewTerminalPickFolder={vi.fn()}
-      onNewSsh={vi.fn()}
-      onCloseSession={vi.fn()}
-      onSelectSession={vi.fn()}
-    />))
-  }
-
-  it('counts attention and completed sessions independently and updates from live store events', () => {
-    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } }))
-    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } }))
-    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'scratch', agent: { aiType: 'claude', status: 'complete' } }))
-    renderSidebar()
-    expect(Array.from(container.querySelectorAll('option')).map((option) => option.textContent)).toEqual([
-      'All (3)', 'Needs you (2)', 'Completed (1)'
-    ])
-    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: null })))
-    expect(container.querySelector('option[value="attention"]')?.textContent).toBe('Needs you (1)')
-  })
-
-  it('combines the view picker with the search field without changing the active workspace', () => {
-    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_approval' } }))
-    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'review', agent: { aiType: 'claude', status: 'error' } }))
-    renderSidebar()
-    const select = container.querySelector<HTMLSelectElement>('[aria-label="Session view"]')!
-    act(() => {
-      select.value = 'attention'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
-    expect(resultIds()).toEqual(['session:server', 'session:review'])
-    const input = container.querySelector<HTMLInputElement>('[aria-label="Search sessions"]')!
-    act(() => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'payments')
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(resultIds()).toEqual(['session:server'])
-    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: null })))
-    expect(resultIds()).toEqual([])
-    expect(input.value).toBe('payments')
-    expect(select.value).toBe('attention')
-    expect(useSessionStore.getState().activeSessionId).toBe('scratch')
-    expect(useSessionStore.getState().collections[0].collapsed).toBe(true)
-  })
-})

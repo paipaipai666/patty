@@ -221,12 +221,12 @@ function session(id: string): TerminalSession {
 }
 
 describe('App', () => {
-  it('renders the app layout (TitleBar, Sidebar, TerminalArea, StatusBar, Toasts)', () => {
+  it('renders the terminal workbench without a permanent status bar', () => {
     const { container } = render()
     expect(container.querySelector('[data-testid="titlebar"]')).toBeTruthy()
     expect(container.querySelector('[data-testid="sidebar"]')).toBeTruthy()
     expect(container.querySelector('[data-testid="terminal-area"]')).toBeTruthy()
-    expect(container.querySelector('[data-testid="statusbar"]')).toBeTruthy()
+    expect(container.querySelector('[data-testid="statusbar"]')).toBeNull()
     expect(container.querySelector('[data-testid="toasts"]')).toBeTruthy()
     expect(container.querySelector('[data-testid="settings-modal"]')).toBeTruthy()
   })

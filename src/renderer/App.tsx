@@ -18,7 +18,7 @@ import { TitleBar } from './components/TitleBar/TitleBar'
 import { Sidebar } from './components/Sidebar/Sidebar'
 import { TerminalArea } from './components/Terminal/TerminalArea'
 import { CommandBar } from './components/CommandBar/CommandBar'
-import { StatusBar } from './components/StatusBar/StatusBar'
+import { SessionInfo } from './components/App/SessionInfo'
 import { MetricsDashboard } from './components/MetricsDashboard/MetricsDashboard'
 import { SshMonitorPanel } from './components/SshMonitor/SshMonitorPanel'
 import { ContextMenu, type MenuItem } from './components/App/ContextMenu'
@@ -77,6 +77,10 @@ export default function App() {
   const [metricsOpen, setMetricsOpen] = useState(false)
   const [sshMonitorOpen, setSshMonitorOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [sessionInfoId, setSessionInfoId] = useState<string | null>(null)
+  const closeSessionInfo = useCallback(() => setSessionInfoId(null), [])
+  const [commandBarOpen, setCommandBarOpen] = useState(false)
+  useEffect(() => { if (commandBarOpen) document.querySelector<HTMLInputElement>('[aria-label="SSH command input"]')?.focus() }, [commandBarOpen])
 
   const [sshAuthQueue, setSshAuthQueue] = useState<Array<{ id: string; info: SshAuthRequest }>>([])
   const [sshHostkeyQueue, setSshHostkeyQueue] = useState<Array<{ id: string; info: SshHostkeyRequest }>>([])
@@ -265,8 +269,15 @@ export default function App() {
       closePane: handleClosePane
   })
   const executeCommand = useCommandExecution()
-  const paletteCommands = usePaletteCommands(shortcutCommands, handleNewTerminalPickFolder)
-  const modalOpen = settingsOpen || Boolean(promptOptions || sshAuthQueue.length || sshHostkeyQueue.length)
+  const paletteCommands = [...usePaletteCommands(shortcutCommands, handleNewTerminalPickFolder), ...[
+    { id: 'session-info', label: 'Show session details', group: 'Actions', description: 'Current session · Folder, shell and process', keywords: '会话 详情 路径 进程 PID', disabledReason: () => useSessionStore.getState().activeSessionId ? undefined : 'No active session', run: () => { setSessionInfoId(useSessionStore.getState().activeSessionId); return 'dialog' as const } },
+    { id: 'metrics', label: 'Show performance metrics', group: 'Actions', description: 'Application diagnostics', keywords: '性能 监控', run: () => { setMetricsOpen(true); return 'dialog' as const } },
+    { id: 'ssh-monitor', label: 'Show SSH monitor', group: 'Actions', description: 'Current remote session', keywords: '远程 监控', disabledReason: () => useSessionStore.getState().sessions.find(item => item.id === useSessionStore.getState().activeSessionId)?.shell === 'ssh' ? undefined : 'Select an SSH session first', run: () => { setSshMonitorOpen(true); return 'dialog' as const } },
+    { id: 'ssh-command-input', label: commandBarOpen ? 'Hide SSH command input' : 'Show SSH command input', group: 'Actions', description: 'Current remote session · Command history and completion', keywords: '远程 命令 输入 历史', disabledReason: () => useSessionStore.getState().sessions.find(item => item.id === useSessionStore.getState().activeSessionId)?.shell === 'ssh' ? undefined : 'Select an SSH session first', run: () => { setCommandBarOpen(value => !value); return 'previous' as const } }
+  ]]
+  const externalModalOpen = settingsOpen || Boolean(promptOptions || sshAuthQueue.length || sshHostkeyQueue.length)
+  const modalOpen = externalModalOpen || sessionInfoId !== null
+  useEffect(() => { if (externalModalOpen) setSessionInfoId(null) }, [externalModalOpen])
   useEffect(() => { if (modalOpen) setCommandPaletteOpen(false) }, [modalOpen])
   useApplicationKeyboard({
     commands: [...paletteCommands, ...shortcutCommands.filter(command => command.id === 'commandPalette')],
@@ -280,6 +291,7 @@ export default function App() {
     const { sessionId } = contextMenu
 
     return [
+      { label: 'Session Details', action: () => setSessionInfoId(sessionId) },
       {
         label: 'Split Horizontal',
         action: () => handleSplit('horizontal')
@@ -375,7 +387,7 @@ export default function App() {
       <TitleBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} onOpenCommands={() => setCommandPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         <div ref={sidebarWrapperRef} className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
-          <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
+          <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onOpenCommands={() => setCommandPaletteOpen(true)} blocked={modalOpen || commandPaletteOpen} onCollectionContextMenu={handleCollectionContextMenu} />
         </div>
         <div
           className={styles.content}
@@ -386,13 +398,7 @@ export default function App() {
           if (activeId) handleContextMenu(e, activeId)
         }}>
           <TerminalArea onNewTerminal={handleNewTerminal} />
-          <CommandBar />
-          <StatusBar
-            metricsOpen={metricsOpen}
-            onToggleMetrics={() => setMetricsOpen((o) => !o)}
-            sshMonitorOpen={sshMonitorOpen}
-            onToggleSshMonitor={() => setSshMonitorOpen((o) => !o)}
-          />
+          <div hidden={!commandBarOpen}><CommandBar /></div>
           <MetricsDashboard open={metricsOpen} onClose={() => setMetricsOpen(false)} />
           <SshMonitorPanel open={sshMonitorOpen} onClose={() => setSshMonitorOpen(false)} />
         </div>
@@ -454,6 +460,7 @@ export default function App() {
         }
       />
       <SettingsModal />
+      {sessionInfoId && !externalModalOpen && <SessionInfo sessionId={sessionInfoId} onClose={closeSessionInfo} />}
       {commandPaletteOpen && !modalOpen && <CommandPalette commands={paletteCommands} shortcut={shortcuts.commandPalette} onClose={() => setCommandPaletteOpen(false)} onExecute={executeCommand} />}
       <Toasts />
     </div>

@@ -3,6 +3,15 @@ import type { Collection, TerminalSession } from '../../store/sessionStore'
 import { AGENT_LABELS, type AgentStates, type AgentStatus } from '../../../shared/agentTypes'
 
 export type SessionView = 'all' | 'attention' | 'complete'
+export type NoticeView = SessionView
+
+export function noticeSessions(sessions: TerminalSession[], agentStates: AgentStates, view: NoticeView = 'all'): TerminalSession[] {
+  if (view !== 'all') return filterSessionsByAttention({ sessions, agentStates, view })
+  return sessions.filter(session => {
+    const state = agentStates[session.id]
+    return attentionView(state?.status) === 'attention' || (state?.status === 'complete' && state.unread)
+  })
+}
 
 function attentionView(status: AgentStatus | undefined): Exclude<SessionView, 'all'> | null {
   if (status === 'waiting_approval' || status === 'waiting_input' || status === 'error') return 'attention'
@@ -42,7 +51,7 @@ function normalize(value: string): string {
   return value.normalize('NFKC').toLowerCase().replaceAll('\\', '/')
 }
 
-function collectionNames(id: string | null, collections: Map<string, Collection>): string[] {
+export function collectionNames(id: string | null, collections: Map<string, Collection>): string[] {
   const names: string[] = []
   const visited = new Set<string>()
   while (id !== null && !visited.has(id)) {

@@ -10,10 +10,37 @@
 }
 .header {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
   padding: 12px;
   flex-shrink: 0;
+}
+.tools {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.toolButton {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+.toolButton:hover {
+  background: var(--bg-item-hover);
+  color: var(--text-primary);
+}
+.notificationDot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--amber);
 }
 .headingRow {
   display: flex;

@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState, useEffect, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Search20Regular, Dismiss16Regular, ChevronRight16Regular } from '@fluentui/react-icons'
+import { Search20Regular, Dismiss16Regular } from '@fluentui/react-icons'
 import type { AppCommand } from '../../commands/applicationCommands'
 import { focusActiveTerminal } from '../../commands/useApplicationKeyboard'
 import { formatShortcut, isComposingKey, normalizeShortcut } from '../../commands/shortcuts'
@@ -77,7 +77,7 @@ export function CommandPalette({ commands, shortcut, onClose, onExecute }: {
 
   return createPortal(<div className={styles.overlay} onMouseDown={event => { if (event.target === event.currentTarget) cancel() }}>
     <div ref={dialogRef} className={styles.palette} role="dialog" aria-modal="true" aria-labelledby={`${id}-title`} onKeyDown={keydown}>
-      <div className={styles.heading}><h2 id={`${id}-title`}>Command palette</h2><span>{shortcut}</span></div>
+      <div className={styles.heading}><h2 id={`${id}-title`}>Find sessions and commands</h2><span>{shortcut}</span></div>
       <div className={styles.search}>
         <Search20Regular aria-hidden />
         <input ref={inputRef} role="combobox" aria-label="Search commands" aria-autocomplete="list" aria-expanded="true" aria-controls={`${id}-list`} aria-activedescendant={optionId} aria-describedby={`${id}-help`} autoComplete="off" spellCheck={false}
@@ -95,7 +95,6 @@ export function CommandPalette({ commands, shortcut, onClose, onExecute }: {
             data-command-id={command.id} title={`${command.label}\n${disabledReason ?? command.description}`}
             onPointerMove={() => { if (!disabledReason) setActiveId(command.id) }}
             onMouseDown={event => event.preventDefault()} onClick={() => execute(command)}>
-            <ChevronRight16Regular className={styles.chevron} aria-hidden />
             <span className={styles.copy}><span className={styles.label}>{command.label}</span><span className={styles.description}>{disabledReason ?? command.description}</span></span>
             {command.shortcut && <kbd>{command.shortcut}</kbd>}
           </div>

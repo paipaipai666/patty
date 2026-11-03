@@ -74,6 +74,7 @@ function render(props: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onNewSsh: vi.fn(),
     onCloseSession: vi.fn(),
     onSelectSession: vi.fn(),
+    onOpenCommands: vi.fn(),
     ...props
   }
   const container = document.createElement('div')
@@ -105,10 +106,11 @@ describe('Sidebar', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('renders sidebar with search input', () => {
-    const { container } = render()
-    const search = container.querySelector('input[aria-label="Search sessions"]')
-    expect(search).not.toBeNull()
+  it('opens unified search from one button without a permanent input', () => {
+    const { container, props } = render()
+    expect(container.querySelector('input[type="search"]')).toBeNull()
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')!.click())
+    expect(props.onOpenCommands).toHaveBeenCalledTimes(1)
   })
 
   it('renders new terminal/collection button', () => {
