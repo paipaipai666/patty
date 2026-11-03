@@ -47,12 +47,17 @@ function render(
 }
 
 describe('TitleBar', () => {
-  it('leaves the unified app chrome free of repeated labels and controls', () => {
-    const { container } = render()
+  it('keeps the collapse button available without repeated labels and controls', () => {
+    const onToggle = vi.fn()
+    const { container } = render({ onToggleSidebar: onToggle })
     expect(container.textContent).not.toContain('Patty')
-    expect(container.querySelectorAll('button')).toHaveLength(3)
+    expect(container.querySelectorAll('button')).toHaveLength(4)
     expect(container.querySelector('[aria-label="Settings"]')).toBeNull()
-    expect(container.querySelector('[aria-label="Hide sidebar"]')).toBeNull()
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Hide sidebar"]')!
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(button.title).toBe('Hide sidebar')
+    act(() => button.click())
+    expect(onToggle).toHaveBeenCalledTimes(1)
     expect(container.querySelector('[aria-label="Open command palette"]')).toBeNull()
     expect(container.querySelector('[data-tauri-drag-region]')).not.toBeNull()
   })
@@ -61,7 +66,10 @@ describe('TitleBar', () => {
     const onToggle = vi.fn()
     const onSearch = vi.fn()
     const { container } = render({ sidebarVisible: false, onToggleSidebar: onToggle, onOpenCommands: onSearch })
-    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Show sidebar"]')!.click())
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Show sidebar"]')!
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(button.title).toBe('Show sidebar')
+    act(() => button.click())
     act(() => container.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')!.click())
     expect(onToggle).toHaveBeenCalledTimes(1)
     expect(onSearch).toHaveBeenCalledTimes(1)

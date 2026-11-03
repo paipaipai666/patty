@@ -151,16 +151,16 @@ export function TitleBar({
   return (
     <div className={styles.titlebar}>
       <div className={styles.dragRegion} data-tauri-drag-region="deep">
-        {!sidebarVisible && <button
+        <button
           type="button"
           onClick={onToggleSidebar}
           className={styles.btnToggle}
           aria-label={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}
           aria-pressed={sidebarVisible}
-          title="Toggle sidebar"
+          title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}
         >
           <SidebarIcon open={sidebarVisible} />
-        </button>}
+        </button>
         {!sidebarVisible && onOpenCommands && <button type="button" className={styles.commandButton} onClick={onOpenCommands} aria-label="Open command palette" title={`Find sessions and commands${commandShortcut ? ` (${commandShortcut})` : ''}`}>
           <Search16Regular aria-hidden />
         </button>}

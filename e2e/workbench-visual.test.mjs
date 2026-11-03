@@ -290,6 +290,20 @@ try {
   await cdp.waitFor(`document.activeElement?.getAttribute('aria-label') === 'Open command palette'`)
   await cdp.evaluate(`document.querySelector('[aria-label="Show sidebar"]').click()`)
   await cdp.waitFor(`window.workbenchPreview.sessions.getState().sidebarVisible && !!document.querySelector('[aria-label="Notifications"]')`)
+  for (const side of ['left', 'right']) {
+    await cdp.evaluate(`window.workbenchPreview.settings.setState(state => ({settings: {...state.settings, sidebarPosition: ${JSON.stringify(side)}}}))`)
+    const corner = await cdp.evaluate(`(() => { const button = document.querySelector('[aria-label="Hide sidebar"]'); const rect = button.getBoundingClientRect(); return { x: rect.left, y: rect.top, width: rect.width, height: rect.height } })()`)
+    assert.ok(corner.x <= 16 && corner.y <= 12 && corner.width >= 24 && corner.height >= 24)
+    const point = { x: corner.x + corner.width / 2, y: corner.y + corner.height / 2 }
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point })
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point })
+    await cdp.waitFor(`!window.workbenchPreview.sessions.getState().sidebarVisible && document.activeElement?.getAttribute('aria-label') === 'Show sidebar'`)
+    assert.deepEqual(await cdp.evaluate(`(() => { const rect = document.querySelector('[aria-label="Show sidebar"]').getBoundingClientRect(); return { x: rect.left, y: rect.top, width: rect.width, height: rect.height } })()`), corner)
+    await press('Enter', 'Enter', 13)
+    await cdp.waitFor(`window.workbenchPreview.sessions.getState().sidebarVisible && document.activeElement?.getAttribute('aria-label') === 'Hide sidebar'`)
+    assert.equal(await cdp.evaluate(`document.activeElement.getAttribute('aria-pressed')`), 'true')
+  }
+  await cdp.evaluate(`window.workbenchPreview.settings.setState(state => ({settings: {...state.settings, sidebarPosition: 'left'}}))`)
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
   await cdp.evaluate(`window.workbenchPreview.setTheme('dark'); window.workbenchPreview.setMaterialResult('mica')`)
   await cdp.waitFor(`document.documentElement.dataset.windowMaterial === 'mica'`)
