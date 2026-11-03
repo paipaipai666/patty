@@ -57,7 +57,6 @@ vi.mock('../components/Terminal/TerminalArea', () => ({ TerminalArea: () => null
 vi.mock('../components/StatusBar/StatusBar', () => ({ StatusBar: () => null }))
 vi.mock('../components/MetricsDashboard/MetricsDashboard', () => ({ MetricsDashboard: () => null }))
 vi.mock('../components/SshMonitor/SshMonitorPanel', () => ({ SshMonitorPanel: () => null }))
-vi.mock('../components/CommandBar/CommandBar', () => ({ CommandBar: () => null }))
 vi.mock('../components/App/ContextMenu', () => ({ ContextMenu: () => null }))
 vi.mock('../components/App/PromptDialog', () => ({ PromptDialog: () => null }))
 vi.mock('../components/Settings/SettingsModal', () => ({ SettingsModal: () => null }))
@@ -111,6 +110,66 @@ afterEach(() => {
 })
 
 describe('close-session kill ownership (REVIEW P1-6)', () => {
+  it('opens SSH input on request, retains its draft when hidden and returns focus on Escape', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => root.render(<App />))
+    act(() => {
+      useSessionStore.setState(state => ({ sessions: state.sessions.map(item => ({ ...item, shell: 'ssh', ssh: { host: 'prod-01', user: 'deploy', port: 2222 } })) }))
+      useWorkspaceStore.getState().createWorkspace('s1')
+    })
+    const workspace = useWorkspaceStore.getState().workspaces.find(item => item.id === useWorkspaceStore.getState().activeWorkspaceId)!
+    const pane = document.createElement('div')
+    pane.dataset.paneId = workspace.focusedPaneId ?? ''
+    const terminal = document.createElement('textarea')
+    terminal.className = 'xterm-helper-textarea'
+    pane.appendChild(terminal)
+    document.body.appendChild(pane)
+    terminal.focus()
+    const open = async () => {
+      act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'P', ctrlKey: true, shiftKey: true, bubbles: true })))
+      await act(async () => document.querySelector<HTMLButtonElement>('[data-command-id="ssh-command-input"]')!.click())
+    }
+    const input = container.querySelector<HTMLInputElement>('[aria-label="SSH command input"]')!
+    expect(input.closest('[hidden]')).not.toBeNull()
+    await open()
+    expect(document.activeElement).toBe(input)
+    expect(input.closest('[hidden]')).toBeNull()
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'tail -f service.log')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(input.closest('[hidden]')).not.toBeNull()
+    expect(document.activeElement).toBe(terminal)
+    await open()
+    expect(input.value).toBe('tail -f service.log')
+    expect(document.activeElement).toBe(input)
+    expect(kill).not.toHaveBeenCalled()
+    pane.remove()
+  })
+
+  it('opens live session details from unified search without restoring permanent chrome', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => root.render(<App />))
+    act(() => {
+      useSessionStore.setState(state => ({ sessions: state.sessions.map(item => ({ ...item, cwd: 'D:/work/payments', pid: 42 })) }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'P', ctrlKey: true, shiftKey: true, bubbles: true }))
+    })
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-command-id="session-info"]')!.click())
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('D:/work/payments')
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('PID 42')
+    expect(document.querySelector('[role="combobox"]')).toBeNull()
+    act(() => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(kill).not.toHaveBeenCalled()
+  })
+
   it('keeps the running agent when closing only its layout pane', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

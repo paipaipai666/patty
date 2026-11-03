@@ -1,9 +1,9 @@
 import { createRoot } from 'react-dom/client'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Sidebar } from '../../src/renderer/components/Sidebar/Sidebar'
 import { PaneTreeRoot } from '../../src/renderer/components/Pane/PaneTree'
 import { TitleBar } from '../../src/renderer/components/TitleBar/TitleBar'
-import { StatusBar } from '../../src/renderer/components/StatusBar/StatusBar'
+import { SessionInfo } from '../../src/renderer/components/App/SessionInfo'
 import { SettingsModal } from '../../src/renderer/components/Settings/SettingsModal'
 import { useSessionStore, type TerminalSession } from '../../src/renderer/store/sessionStore'
 import { useWorkspaceStore } from '../../src/renderer/store/workspaceStore'
@@ -62,6 +62,8 @@ Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, addCustom
 
 function Workbench() {
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [infoId, setInfoId] = useState<string | null>(null)
+  const closeInfo = useCallback(() => setInfoId(null), [])
   const visible = useSessionStore((state) => state.sidebarVisible)
   const position = useSettingsStore((state) => state.settings.sidebarPosition)
   const shortcuts = useSettingsStore(state => state.settings.shortcuts)
@@ -75,7 +77,10 @@ function Workbench() {
       splitHorizontal: () => { createTerminalSplit('horizontal') }, splitVertical: () => { createTerminalSplit('vertical') },
       closePane: () => useWorkspaceStore.getState().closeFocused()
     })
-  const commands = usePaletteCommands(shortcutCommands, async () => undefined)
+  const commands = [...usePaletteCommands(shortcutCommands, async () => undefined), {
+    id: 'session-info', label: 'Show session details', group: 'Actions', description: 'Current session · Folder, shell and process',
+    run: () => { setInfoId(useSessionStore.getState().activeSessionId); return 'dialog' as const }
+  }]
   useApplicationKeyboard({
     commands: [...commands, ...shortcutCommands.filter(command => command.id === 'commandPalette')],
     blocked: paletteOpen, execute, navigateToIndex: index => useSessionStore.getState().navigateToIndex(index)
@@ -83,13 +88,13 @@ function Workbench() {
   return <div className="visual-workbench">
     <TitleBar sidebarVisible={visible} onToggleSidebar={() => useSessionStore.getState().toggleSidebar()} onOpenCommands={() => setPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
     <main className="visual-stage" style={{ flexDirection: position === 'right' ? 'row-reverse' : undefined }}>
-      {visible && <Sidebar onNewTerminal={() => useSessionStore.getState().addSession()} onNewTerminalPickFolder={() => {}} onNewSsh={() => {}} onSelectSession={selectSession} onCloseSession={closeSession} />}
+      {visible && <Sidebar onNewTerminal={() => useSessionStore.getState().addSession()} onNewTerminalPickFolder={() => {}} onNewSsh={() => {}} onSelectSession={selectSession} onCloseSession={closeSession} onOpenCommands={() => setPaletteOpen(true)} blocked={paletteOpen || infoId !== null} />}
       <div className="visual-content">
         <div className="visual-panes"><PaneTreeRoot /></div>
-        <StatusBar metricsOpen={false} onToggleMetrics={() => {}} />
       </div>
     </main>
     <SettingsModal />
+    {infoId && <SessionInfo sessionId={infoId} onClose={closeInfo} />}
     {paletteOpen && <CommandPalette commands={commands} shortcut={shortcuts.commandPalette} onClose={() => setPaletteOpen(false)} onExecute={execute} />}
   </div>
 }

@@ -28,8 +28,8 @@ import { Toasts } from './components/App/Toasts'
 import { toast } from './store/toastStore'
 import type { SshProfile, SshAuthRequest, SshHostkeyRequest } from '../shared/settingsTypes'
 import styles from './App.module.css'
-import { createShortcutCommands } from './commands/applicationCommands'
-import { useApplicationKeyboard, useCommandExecution } from './commands/useApplicationKeyboard'
+import { createShortcutCommands, type AppCommand } from './commands/applicationCommands'
+import { focusActiveTerminal, useApplicationKeyboard, useCommandExecution } from './commands/useApplicationKeyboard'
 import { usePaletteCommands } from './commands/usePaletteCommands'
 import { CommandPalette } from './components/CommandPalette/CommandPalette'
 
@@ -269,12 +269,13 @@ export default function App() {
       closePane: handleClosePane
   })
   const executeCommand = useCommandExecution()
-  const paletteCommands = [...usePaletteCommands(shortcutCommands, handleNewTerminalPickFolder), ...[
-    { id: 'session-info', label: 'Show session details', group: 'Actions', description: 'Current session · Folder, shell and process', keywords: '会话 详情 路径 进程 PID', disabledReason: () => useSessionStore.getState().activeSessionId ? undefined : 'No active session', run: () => { setSessionInfoId(useSessionStore.getState().activeSessionId); return 'dialog' as const } },
-    { id: 'metrics', label: 'Show performance metrics', group: 'Actions', description: 'Application diagnostics', keywords: '性能 监控', run: () => { setMetricsOpen(true); return 'dialog' as const } },
-    { id: 'ssh-monitor', label: 'Show SSH monitor', group: 'Actions', description: 'Current remote session', keywords: '远程 监控', disabledReason: () => useSessionStore.getState().sessions.find(item => item.id === useSessionStore.getState().activeSessionId)?.shell === 'ssh' ? undefined : 'Select an SSH session first', run: () => { setSshMonitorOpen(true); return 'dialog' as const } },
-    { id: 'ssh-command-input', label: commandBarOpen ? 'Hide SSH command input' : 'Show SSH command input', group: 'Actions', description: 'Current remote session · Command history and completion', keywords: '远程 命令 输入 历史', disabledReason: () => useSessionStore.getState().sessions.find(item => item.id === useSessionStore.getState().activeSessionId)?.shell === 'ssh' ? undefined : 'Select an SSH session first', run: () => { setCommandBarOpen(value => !value); return 'previous' as const } }
-  ]]
+  const workbenchCommands: AppCommand[] = [
+    { id: 'session-info', label: 'Show session details', group: 'Actions', description: 'Current session · Folder, shell and process', keywords: '会话 详情 路径 进程 PID', disabledReason: () => useSessionStore.getState().sessions.some(item => item.id === useSessionStore.getState().activeSessionId) ? undefined : 'No active session', run: () => { setSessionInfoId(useSessionStore.getState().activeSessionId); return 'dialog' } },
+    { id: 'metrics', label: 'Show performance metrics', group: 'Actions', description: 'Application diagnostics', keywords: '性能 监控', run: () => { setMetricsOpen(true); return 'dialog' } },
+    { id: 'ssh-monitor', label: 'Show SSH monitor', group: 'Actions', description: 'Current remote session', keywords: '远程 监控', disabledReason: () => useSessionStore.getState().sessions.find(item => item.id === useSessionStore.getState().activeSessionId)?.shell === 'ssh' ? undefined : 'Select an SSH session first', run: () => { setSshMonitorOpen(true); return 'dialog' } },
+    { id: 'ssh-command-input', label: commandBarOpen ? 'Hide SSH command input' : 'Show SSH command input', group: 'Actions', description: 'Current remote session · Command history and completion', keywords: '远程 命令 输入 历史', disabledReason: () => useSessionStore.getState().sessions.find(item => item.id === useSessionStore.getState().activeSessionId)?.shell === 'ssh' ? undefined : 'Select an SSH session first', run: () => { setCommandBarOpen(!commandBarOpen); return commandBarOpen ? 'terminal' : 'dialog' } }
+  ]
+  const paletteCommands = [...usePaletteCommands(shortcutCommands, handleNewTerminalPickFolder), ...workbenchCommands]
   const externalModalOpen = settingsOpen || Boolean(promptOptions || sshAuthQueue.length || sshHostkeyQueue.length)
   const modalOpen = externalModalOpen || sessionInfoId !== null
   useEffect(() => { if (externalModalOpen) setSessionInfoId(null) }, [externalModalOpen])
@@ -386,7 +387,7 @@ export default function App() {
     <div className={styles.app}>
       <TitleBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} onOpenCommands={() => setCommandPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
-        <div ref={sidebarWrapperRef} className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
+        <div ref={sidebarWrapperRef} className={styles.sidebarWrapper} aria-hidden={!sidebarVisible} style={{ width: sidebarVisible ? sidebarWidth : 0, visibility: sidebarVisible ? 'visible' : 'hidden' }}>
           <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onOpenCommands={() => setCommandPaletteOpen(true)} blocked={modalOpen || commandPaletteOpen} onCollectionContextMenu={handleCollectionContextMenu} />
         </div>
         <div
@@ -397,7 +398,7 @@ export default function App() {
           if (activeId) handleContextMenu(e, activeId)
         }}>
           <TerminalArea onNewTerminal={handleNewTerminal} />
-          <div hidden={!commandBarOpen}><CommandBar /></div>
+          <div hidden={!commandBarOpen}><CommandBar onClose={() => { setCommandBarOpen(false); focusActiveTerminal() }} /></div>
           <MetricsDashboard open={metricsOpen} onClose={() => setMetricsOpen(false)} />
           <SshMonitorPanel open={sshMonitorOpen} onClose={() => setSshMonitorOpen(false)} />
         </div>

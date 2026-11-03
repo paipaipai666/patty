@@ -176,8 +176,8 @@ export function Sidebar({
   }
 
   return (
-    <div className={styles.sidebar} style={{ width: sidebarWidth }}>
-      <div className={styles.header} ref={headerRef}>
+    <div className={styles.sidebar} data-sidebar style={{ width: sidebarWidth }}>
+      <div className={styles.header} data-sidebar-toolbar ref={headerRef}>
         <div className={styles.headingRow}>
           <div className={styles.createRow}>
             <button

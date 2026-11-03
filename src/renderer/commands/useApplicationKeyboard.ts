@@ -10,9 +10,12 @@ export function focusActiveTerminal(): boolean {
   const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId) ?? state.workspaces[0]
   const pane = Array.from(document.querySelectorAll<HTMLElement>('[data-pane-id]')).find(element => element.dataset.paneId === workspace?.focusedPaneId)
   const input = pane?.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
-  const target = input ?? document.querySelector<HTMLElement>('[data-terminal-entry]') ?? document.querySelector<HTMLElement>('[aria-label="New terminal"]') ?? document.querySelector<HTMLElement>('[aria-label="Open command palette"]')
-  target?.focus()
-  return Boolean(target && document.activeElement === target)
+  const targets = [input, document.querySelector<HTMLElement>('[data-terminal-entry]'), document.querySelector<HTMLElement>('[aria-label="New terminal"]'), document.querySelector<HTMLElement>('[aria-label="Open command palette"]')]
+  for (const target of targets) {
+    target?.focus()
+    if (target && document.activeElement === target) return true
+  }
+  return false
 }
 
 export function useCommandExecution() {

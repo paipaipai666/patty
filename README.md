@@ -22,20 +22,20 @@ Patty keeps sessions in a searchable sidebar and displays them in split workspac
 - **SSH.** Save connection profiles, import `~/.ssh/config`, and connect with passwords or private keys. An SSH command bar provides command history and suggestions. The remote monitor displays CPU, memory, network, and disk usage on Linux hosts.
 - **Terminal display.** Choose system fonts, cursor shape, blinking, opacity, and scrollback size. Terminal output supports Unicode and inline image previews.
 - **Themes.** Choose Dark, Light, Dracula, Nord, Tokyo Night, or Solarized Light. Create custom themes with color pickers or JSON, and import or export them.
-- **AI attention indicators.** See when supported coding tools need input, finish a turn, or report an error, with tool icons, animated activity grids, and status labels in the sidebar.
+- **AI attention indicators.** Quiet sidebar markers identify waiting, failed, or unread sessions. Open Notifications for full states and jump to the matching workspace and terminal.
 - **Local metrics.** Open the Metrics dashboard for CPU, memory, GPU, and process information. Local metrics are sampled while the dashboard is open.
 
 ## Screenshots
 
 ### Dark theme
 
-![Dark theme with two terminal panes, collections, and an AI attention indicator](main-dark.png)
+![Quiet dark workbench with headerless terminals and notification and search buttons](docs/images/quiet-workbench-dark.png)
 
 ### Light theme
 
-![Light theme with two terminal panes and sidebar session navigation](main-light.png)
+![Quiet light workbench with unified application chrome](docs/images/quiet-workbench-light.png)
 
-These previews were captured during the Graphite workbench validation on 2026-10-28, using demonstration sessions and a simulated AI attention event. The title-bar logo visible in these captures has since been removed.
+These previews were captured on 2026-11-03 from the real React components and xterm.js with fixture transport. They show demonstration sessions, not a live desktop PTY or SSH connection.
 
 ## Install
 
@@ -46,15 +46,15 @@ Patty requires Windows and Microsoft Edge WebView2. PowerShell 7, Git Bash, WSL,
 ## Use sessions and workspaces
 
 1. Click **New terminal** in the sidebar to open the default shell. Use its dropdown to choose a folder, create a collection, or open an SSH profile. Change the default shell under **Settings → Terminal**.
-2. Use the pane header buttons to split to the right or below. Drag the divider to resize the panes.
+2. Use `Ctrl+Shift+D` to split right or `Ctrl+Shift+E` to split below. The same actions are in unified search and the terminal context menu. Drag the divider to resize the panes.
 3. Select a session in the sidebar to focus it and return to its saved workspace layout. Drag sidebar sessions into panes to rearrange the layout.
-4. Double-click a session name or press `F2` while its sidebar row is focused to rename it. Right-click a session or collection for more actions.
+4. Double-click a session name or press `F2` while its sidebar row is focused to rename it. Right-click a terminal or collection for more actions.
 
-Search sessions by name, working directory, shell, AI tool, SSH host or user, or collection name. Combine words to narrow the results across fields, such as `payments codex`. Search also finds sessions inside collapsed collections and accepts either slash style in Windows paths.
+Click the sidebar search button or press `Ctrl+Shift+P` to find sessions and commands in one place. Search sessions by name, folder, shell, AI tool, SSH target, or ancestor collection name. Combine words across fields, such as `payments codex`. Collapsed collections remain searchable, and Windows paths accept either slash style.
 
-Use **Session view** below the search field to show all sessions, sessions that need attention, or completed turns. Needs attention includes tools waiting for input and tools reporting an error. The counts cover all current sessions; search narrows the selected view. Filtering reveals matching sessions inside collapsed collections and keeps the active terminal running.
+Open the bell button for **Notifications**. Its default view includes waiting and failed sessions plus unread completions. The **Needs you** view includes waiting and failed sessions even after reading them. **Completed** includes all current completed turns. Selecting a notification opens the owning workspace and focuses the exact terminal.
 
-The status bar shows the selected session, shell, directory or SSH target, and local process ID when available. **Metrics** opens the local dashboard; **Monitor** is available for SSH sessions.
+The terminal has no permanent title or status bar. The sidebar selection identifies the focused session; remote rows retain their connection target. Find **Show session details**, **Show performance metrics**, or **Show SSH monitor** in unified search. The SSH command input is also opened on request; Escape hides it and returns focus to the terminal without discarding its draft.
 
 Patty saves session definitions, collections, workspace layouts, and settings automatically. Restarting Patty opens new shell processes; it does not resume running commands or restore terminal scrollback.
 
@@ -94,15 +94,15 @@ Run supported AI tools inside a local Patty terminal so their hooks can identify
 | Completed | The tool finished responding |
 | Error | The tool reported an error |
 
-Session rows show the tool and working folder or SSH target below the task name. Status badges use compact labels such as Approval, Answer, and Done; their tooltips and accessible names provide the full status. Narrow sidebars keep the status icon. A separate dot marks unread activity. The activity grid appears only while a background agent is working.
+Session rows prioritize the task name. A small static marker represents waiting, error, unknown status, or unread activity. Full states remain available through accessible descriptions, previews, and Notifications. Ordinary running sessions have no animated grid or status label.
 
-Narrow sidebars prioritize the folder or SSH target below each task. Pane headers show a short local folder or the remote connection target; full paths remain in tooltips. Split and close controls stay visible for the focused pane and appear on hover or keyboard focus in other panes.
+Remote rows retain their exact connection target. Duplicate session names show additional location context. Terminal panes contain only terminal content and a resizable divider; their actions remain available from unified search, keyboard shortcuts, and the terminal context menu.
 
 Hover or keyboard-focus a session for 400ms to preview its complete title, tool, folder, SSH target and latest agent status. The preview does not select the session or mark its notice read. You can move the pointer into the card to read or select its text. Press Escape to dismiss it.
 
-Selecting a session or typing in its terminal marks its latest notice as read and stops the attention glow. Its runtime status remains visible. The **Needs you** view continues to include waiting and failed sessions after they are read. The **Completed** view includes completed responses until the tool reports new work or exits. A new prompt or tool execution replaces the previous completion or error with **Working**. Available state transitions depend on the events each CLI adapter reports.
+Selecting a session or typing in its terminal marks its latest notice as read. Its runtime state is preserved. Waiting and failed sessions remain in Notifications until their actual state changes. Read completions leave the default notification view but remain under Completed. A new prompt or tool execution replaces the previous completion or error with Working. Available transitions depend on the events each CLI adapter reports.
 
-Use the **Next session needing attention** arrow beside the sidebar view selector to cycle through waiting and failed sessions in session order. It searches all sessions, including collapsed collections and results hidden by the current search or view. It selects the target workspace and pane, preserves the current search and view, and marks the notice as read. When no session needs attention, the button is disabled. You can reach the button with Tab and activate it with Enter or Space.
+Find **Next session needing attention** in unified search to cycle through waiting and failed sessions, including those in collapsed collections. The command opens the target workspace and pane and marks the notice read. It explains when no matching session exists.
 
 Use **Settings → Notifications** to enable or disable each adapter. Enabling an adapter installs Patty's integration in that tool's configuration; disabling it removes Patty's integration. Restart an already-running AI tool after changing its hook configuration. Available events depend on the tool's hooks.
 
@@ -110,7 +110,7 @@ Patty checks that hook events belong to the current local terminal and CLI proce
 
 OpenCode and Oh My Pi send periodic heartbeats. If a heartbeat expires while the process remains alive, **Status unavailable** replaces its last reported state until a fresh state event arrives. Claude Code, Codex, Qwen Code, and Copilot CLI use event callbacks; silence alone does not count as exit. Reloading the window reads the backend's current states. Runtime states are not restored after an application restart.
 
-The sidebar heading contains **New terminal** (+) and a menu for other creation options. Search keeps its own row; the view selector and next-attention arrow share a row.
+The sidebar toolbar contains New terminal (+), its creation menu, Notifications, and unified search. Settings remains at the bottom. When the sidebar is hidden, the title bar exposes buttons to restore it or open unified search.
 
 ## Settings
 
@@ -131,7 +131,7 @@ Scrollback changes apply to newly created terminals. The sidebar width can be ad
 
 These are the default application shortcuts. Remap them under **Settings → Shortcuts**.
 
-Open the command palette with **Commands** in the title bar or `Ctrl+Shift+P`. Search existing actions, sessions, SSH profiles and themes by name, folder or tool. Rows show their scope and explain unavailable operations. Use the arrow keys or Page Up/Page Down to navigate, Enter to run, and Escape to cancel. Tab moves between search and the close button. Cancel returns to the original control; session and pane actions focus their destination terminal.
+Open unified search with the sidebar magnifier or `Ctrl+Shift+P`. Search existing actions, sessions, SSH profiles and themes by name, folder or tool. Rows show their scope and explain unavailable operations. Use the arrow keys or Page Up/Page Down to navigate, Enter to run, and Escape to cancel. Tab moves between search and the close button. Cancel returns to the original control; session and pane actions focus their destination terminal.
 
 | Shortcut | Action |
 | --- | --- |

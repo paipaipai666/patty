@@ -38,7 +38,7 @@ beforeEach(() => {
   save.mockReset().mockResolvedValue({})
   folder.mockReset().mockResolvedValue(undefined)
   Object.defineProperty(window, 'terminalAPI', { configurable: true, value: { settingsSet: save, kill: () => {} } })
-  useSessionStore.setState({ sessions: [], activeSessionId: null, agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, sidebarVisible: true })
+  useSessionStore.setState({ sessions: [], collections: [], activeSessionId: null, agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, sidebarVisible: true })
   useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null })
   useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS }, settingsOpen: false, settingsCategory: null })
   useToastStore.setState({ toasts: [] })
@@ -57,6 +57,19 @@ function command(id: string): HTMLButtonElement {
 async function execute(id: string) { await act(async () => command(id).click()) }
 
 describe('live palette commands', () => {
+  it('finds a session by its ancestor collection and exact remote target', () => {
+    act(() => {
+      useSessionStore.setState({
+        collections: [{ id: 'team', name: 'Platform', parentId: null, collapsed: true, createdAt: 1 }, { id: 'project', name: 'Payments', parentId: 'team', collapsed: true, createdAt: 2 }],
+        sessions: [{ id: 'remote', title: 'Logs', shell: 'ssh', ssh: { host: 'prod-01', user: 'deploy', port: 2222 }, cwd: '/srv/payments', collectionId: 'project', color: 'blue', pid: 0, createdAt: 1 }]
+      })
+      root.render(<Harness query="Platform Payments deploy 2222" />)
+    })
+    expect(container.querySelectorAll('button')).toHaveLength(1)
+    expect(container.textContent).toContain('Switch to Logs')
+    expect(useSessionStore.getState().collections.every(item => item.collapsed)).toBe(true)
+  })
+
   it('explains unavailable workspace actions and creates no orphan when they are selected', async () => {
     expect(command('splitHorizontal').textContent).toContain('Select a terminal pane first')
     expect(command('closeTerminal').textContent).toContain('No active terminal')

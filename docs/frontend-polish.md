@@ -81,3 +81,7 @@ The ordinary desktop release build succeeds with the final source. Its isolation
 ## Command palette follow-up
 
 The user approved the command palette and keyboard flow next. Implementation, acceptance criteria and verification are recorded in [Command palette and keyboard flow](command-palette.md). Resume remains paused.
+
+## Quiet workbench follow-up
+
+2026-11-03. The user approved the quieter shell after reviewing the mockup: one application chrome region, headerless terminals, icon-only unified search and notifications. This supersedes the earlier pane-header and permanent sidebar-search presentation. See [delivery and verification](quiet-workbench.md) for the final behavior, screenshots and validation boundaries.

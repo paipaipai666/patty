@@ -30,7 +30,7 @@ function pushHistory(cmd: string) {
   }
 }
 
-export function CommandBar() {
+export function CommandBar({ onClose }: { onClose?: () => void } = {}) {
 
   useWorkspaceStore((s) => s.workspaces)
   useWorkspaceStore((s) => s.activeWorkspaceId)
@@ -117,7 +117,9 @@ export function CommandBar() {
       return
     }
     if (e.key === 'Escape') {
+      e.preventDefault()
       e.currentTarget.blur()
+      onClose?.()
     }
   }
 
