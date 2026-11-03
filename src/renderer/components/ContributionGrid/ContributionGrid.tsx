@@ -198,6 +198,7 @@ export function ContributionGrid({ aiType }: Props) {
       heat = Array.from({ length: ROWS }, () => new Array(COLS).fill(0))
 
       let tick = 0
+      for (; tick < COLS; tick++) updateHeat(heat, tick, COLS)
 
       currentGrid = {
         tick() {
@@ -246,7 +247,7 @@ export function ContributionGrid({ aiType }: Props) {
   if (!aiType) return null
 
   return (
-    <div ref={containerRef} className={styles.grid}>
+    <div ref={containerRef} className={styles.grid} aria-hidden>
       <canvas ref={canvasRef} />
     </div>
   )

@@ -63,6 +63,13 @@ function render() {
 }
 
 describe('working animation lifecycle', () => {
+  it('shows a developed trail on its first scheduled frame', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.99)
+    const grid = render()
+    grid.tick()
+    expect(context.roundRect).toHaveBeenCalledWith(6, 6, 5, 5, 1)
+  })
+
   it('draws with the agent color and refreshes it after a theme change', async () => {
     const grid = render()
     grid.tick()

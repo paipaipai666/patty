@@ -211,12 +211,6 @@
 .itemActive .itemTitle {
   font-weight: 600;
 }
-.activityTrace {
-  position: absolute;
-  inset: 0;
-  mask-image: linear-gradient(to right, transparent 50%, black);
-  pointer-events: none;
-}
 .permission {
   color: var(--amber);
 }

@@ -204,7 +204,7 @@ export const SessionItem = memo(function SessionItem({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {session.aiType && activity?.status === 'working' && <div className={styles.activityTrace} aria-hidden><ContributionGrid aiType={session.aiType} /></div>}
+      {session.aiType && activity?.status === 'working' && <ContributionGrid aiType={session.aiType} />}
       <div className={styles.itemContent}>
         {session.aiType ? (
           <span

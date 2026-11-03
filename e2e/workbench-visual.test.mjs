@@ -20,6 +20,44 @@ writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'runni
 const server = await createServer({ configFile: false, root: resolve('.'), plugins: [react()], server: { host: '127.0.0.1', port: 0, watch: { ignored: ['**/output/**', '**/out/**'] } } })
 let browser
 let cdp
+
+async function captureFlameRow() {
+  const clip = await cdp.evaluate(`(() => { const rect = document.querySelector('[data-tree-id="session:review"]').getBoundingClientRect(); return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 } })()`)
+  const shot = await cdp.send('Page.captureScreenshot', { format: 'png', clip })
+  return shot.data
+}
+
+async function measureFlame(first, second, baseline) {
+  return cdp.evaluate(`(async () => {
+    const decode = async data => {
+      const bitmap = await createImageBitmap(await (await fetch('data:image/png;base64,' + data)).blob())
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const context = canvas.getContext('2d')
+      context.drawImage(bitmap, 0, 0)
+      const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height)
+      bitmap.close()
+      return pixels
+    }
+    const [first, second, baseline] = await Promise.all(${JSON.stringify([first, second, baseline])}.map(decode))
+    let visiblePixels = 0, motionPixels = 0, left = first.width, right = -1
+    for (let index = 0; index < first.data.length; index += 4) {
+      let contrast = 0, motion = 0
+      for (let channel = 0; channel < 3; channel++) {
+        contrast = Math.max(contrast, Math.abs(first.data[index + channel] - baseline.data[index + channel]), Math.abs(second.data[index + channel] - baseline.data[index + channel]))
+        motion = Math.max(motion, Math.abs(first.data[index + channel] - second.data[index + channel]))
+      }
+      if (contrast >= 12) {
+        visiblePixels++
+        const x = (index / 4) % first.width
+        left = Math.min(left, x)
+        right = Math.max(right, x)
+      }
+      if (motion >= 8) motionPixels++
+    }
+    return { width: first.width, visiblePixels, motionPixels, trailWidth: Math.max(0, right - left + 1) }
+  })()`)
+}
+
 try {
   await server.listen()
   const address = server.httpServer.address()
@@ -39,6 +77,7 @@ try {
   await cdp.waitFor(`!!document.querySelector('[aria-label="New terminal"]') && document.querySelectorAll('.xterm').length === 2`)
   await sleep(600)
   const metrics = []
+  const flames = []
   for (const theme of ['dark', 'light']) {
     for (const width of [160, 264, 320]) {
       await cdp.evaluate(`window.workbenchPreview.setTheme(${JSON.stringify(theme)}); window.workbenchPreview.sessions.getState().setSidebarWidth(${width})`)
@@ -128,14 +167,38 @@ try {
   await cdp.waitFor(`!!document.querySelector('[data-tree-id="session:review"] canvas')`)
   await cdp.evaluate(`window.workbenchPreview.sessions.getState().setActive('review')`)
   await cdp.waitFor(`!!document.querySelector('[data-tree-id="session:review"][aria-selected="true"] canvas')`)
-  for (const [index, aiType] of ['claude', 'opencode', 'codex', 'omp', 'qwen', 'copilot'].entries()) {
-    await cdp.evaluate(`window.workbenchPreview.sessions.getState().applyAgentUpdate({ paneId: 'review', revision: ${4 + index}, agent: { aiType: ${JSON.stringify(aiType)}, status: 'working' } })`)
+  await cdp.evaluate(`window.workbenchPreview.sessions.getState().setSidebarWidth(264)`)
+  let flameRevision = 4
+  for (const theme of ['light', 'dark']) for (const aiType of ['claude', 'opencode', 'codex', 'omp', 'qwen', 'copilot']) {
+    await cdp.evaluate(`window.workbenchPreview.setTheme(${JSON.stringify(theme)}); window.workbenchPreview.sessions.getState().setActive(${JSON.stringify(theme === 'light' ? 'review' : 'shell')}); window.workbenchPreview.sessions.getState().applyAgentUpdate({ paneId: 'review', revision: ${flameRevision++}, agent: { aiType: ${JSON.stringify(aiType)}, status: 'working' } })`)
     await cdp.waitFor(`!!document.querySelector('[data-tree-id="session:review"] [data-type="${aiType}"] canvas')`)
     await cdp.waitFor(`(() => { const canvas = document.querySelector('[data-tree-id="session:review"] canvas'); return [...canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data].some((value, index) => index % 4 === 3 && value > 0) })()`)
     const before = await cdp.evaluate(`document.querySelector('[data-tree-id="session:review"] canvas').toDataURL()`)
     await sleep(450)
     assert.notEqual(await cdp.evaluate(`document.querySelector('[data-tree-id="session:review"] canvas').toDataURL()`), before, `${aiType}: frozen working animation`)
+    const first = await captureFlameRow()
+    await sleep(450)
+    const second = await captureFlameRow()
+    await cdp.evaluate(`document.querySelector('[data-tree-id="session:review"] canvas').parentElement.style.visibility = 'hidden'`)
+    const baseline = await captureFlameRow()
+    await cdp.evaluate(`document.querySelector('[data-tree-id="session:review"] canvas').parentElement.style.visibility = ''`)
+    const measured = await measureFlame(first, second, baseline)
+    flames.push({ theme, aiType, ...measured })
+    assert.ok(measured.visiblePixels >= 120 && measured.trailWidth >= measured.width * 0.25, `${theme} ${aiType}: flame is too faint or confined: ${JSON.stringify(measured)}`)
+    assert.ok(measured.motionPixels >= 10, `${theme} ${aiType}: rendered flame is not moving`)
+    writeFileSync(join(output, `flame-${theme}-${aiType}.png`), Buffer.from(second, 'base64'))
+    if (theme === 'light' && aiType === 'codex') {
+      for (let frame = 0; frame < 12; frame++) {
+        writeFileSync(join(output, `flame-motion-${String(frame).padStart(2, '0')}.png`), Buffer.from(await captureFlameRow(), 'base64'))
+        await sleep(180)
+      }
+    }
   }
+  const flamePoint = await cdp.evaluate(`(() => { const rect = document.querySelector('[data-tree-id="session:review"]').getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } })()`)
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...flamePoint })
+  await cdp.waitFor(`getComputedStyle(document.querySelector('[data-tree-id="session:review"] canvas').parentElement).opacity === '0.75'`)
+  assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-tree-id="session:review"] canvas').parentElement, '::after').opacity`), '1')
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 720, y: 15 })
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 540, height: 720, deviceScaleFactor: 1, mobile: false })
   await cdp.evaluate(`window.workbenchPreview.sessions.getState().setSidebarWidth(160); window.workbenchPreview.sessions.getState().setActive('remote'); window.workbenchPreview.workspaces.getState().ensureVisible('remote')`)
   await cdp.waitFor(`document.querySelector('[data-tree-id="session:remote"]').textContent.includes('deploy@prod-01.example.com:2222')`)
@@ -344,7 +407,7 @@ try {
   await cdp.waitFor(`document.documentElement.dataset.windowMaterial === 'solid'`)
   assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-sidebar]')).backgroundColor`), 'rgb(32, 32, 32)')
   assert.deepEqual(errors, [])
-  writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'passed', scope: 'Real React components and xterm with fixture transport; simulated material responses validate CSS gating only, not native desktop appearance; no desktop PTY or CLI integration', metrics }, null, 2))
+  writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'passed', scope: 'Real React components and xterm with fixture transport; simulated material responses validate CSS gating only, not native desktop appearance; no desktop PTY or CLI integration', metrics, flames }, null, 2))
   console.log(`PASS: workbench, previews, themes, command execution, remapping and keyboard focus; screenshots in ${output}`)
 } catch (error) {
   writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'failed', message: String(error) }, null, 2))
