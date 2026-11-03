@@ -18,7 +18,7 @@ export function TransientPanel({ title, anchor, onClose, children }: {
   useLayoutEffect(() => {
     panel.current?.querySelector<HTMLButtonElement>('button')?.focus()
     const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !panel.current?.contains(event.target)) onClose()
+      if (event.target instanceof Node && !panel.current?.contains(event.target) && !anchor?.contains(event.target)) onClose()
     }
     const contain = (event: FocusEvent) => {
       if (event.target instanceof Node && !panel.current?.contains(event.target)) panel.current?.querySelector<HTMLButtonElement>('button')?.focus()
@@ -34,7 +34,7 @@ export function TransientPanel({ title, anchor, onClose, children }: {
       if (origin.current instanceof HTMLElement && origin.current.isConnected && origin.current !== document.body) origin.current.focus()
       else focusActiveTerminal()
     }
-  }, [onClose])
+  }, [onClose, anchor])
   const keydown = (event: KeyboardEvent) => {
     if (isComposingKey(event.nativeEvent)) return
     if (event.key === 'Escape') {

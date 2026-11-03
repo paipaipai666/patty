@@ -26,7 +26,7 @@ afterEach(() => {
 
 function render(
   overrides: {
-    onOpenSettings?: (() => void) | null
+    onOpenCommands?: () => void
     sidebarVisible?: boolean
     onToggleSidebar?: () => void
   } = {}
@@ -37,11 +37,7 @@ function render(
   act(() => {
     root.render(
       <TitleBar
-        onOpenSettings={
-          overrides.onOpenSettings === undefined
-            ? vi.fn()
-            : (overrides.onOpenSettings as (() => void) | undefined)
-        }
+        onOpenCommands={overrides.onOpenCommands}
         sidebarVisible={overrides.sidebarVisible ?? true}
         onToggleSidebar={overrides.onToggleSidebar ?? vi.fn()}
       />
@@ -51,73 +47,24 @@ function render(
 }
 
 describe('TitleBar', () => {
-  it('does not add another workspace selector when saved layouts exist', () => {
-    useWorkspaceStore.setState({
-      workspaces: ['Workspace 17', 'Workspace 17', 'Build logs'].map(
-        (name, index) => ({
-          id: `workspace-${index}`,
-          name,
-          collectionId: null,
-          paneTree: {
-            type: 'leaf',
-            id: `pane-${index}`,
-            sessionId: `session-${index}`
-          },
-          focusedPaneId: `pane-${index}`
-        })
-      ),
-      activeWorkspaceId: 'workspace-0'
-    })
+  it('leaves the unified app chrome free of repeated labels and controls', () => {
     const { container } = render()
-    expect(container.querySelector('select')).toBeNull()
-    expect(container.textContent).toContain('Patty')
-    expect(container.textContent).not.toContain('Workspaces')
-    expect(
-      container.querySelector('[aria-label="Hide sidebar"]')
-    ).not.toBeNull()
+    expect(container.textContent).not.toContain('Patty')
+    expect(container.querySelectorAll('button')).toHaveLength(3)
+    expect(container.querySelector('[aria-label="Settings"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Hide sidebar"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Open command palette"]')).toBeNull()
+    expect(container.querySelector('[data-tauri-drag-region]')).not.toBeNull()
   })
 
-  it('renders title "Patty"', () => {
-    const { container } = render()
-    expect(container.textContent).toContain('Patty')
-  })
-
-  it('sidebar toggle button calls onToggleSidebar', () => {
+  it('keeps restore-sidebar and search buttons available when the sidebar is hidden', () => {
     const onToggle = vi.fn()
-    const { container } = render({ onToggleSidebar: onToggle })
-    const btn = container.querySelector<HTMLElement>(
-      '[aria-label="Hide sidebar"]'
-    )
-    expect(btn).toBeTruthy()
-    act(() => {
-      btn!.click()
-    })
+    const onSearch = vi.fn()
+    const { container } = render({ sidebarVisible: false, onToggleSidebar: onToggle, onOpenCommands: onSearch })
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Show sidebar"]')!.click())
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')!.click())
     expect(onToggle).toHaveBeenCalledTimes(1)
-  })
-
-  it('settings button calls onOpenSettings', () => {
-    const onOpen = vi.fn()
-    const { container } = render({ onOpenSettings: onOpen })
-    const btn = container.querySelector<HTMLElement>('[aria-label="Settings"]')
-    expect(btn).toBeTruthy()
-    act(() => {
-      btn!.click()
-    })
-    expect(onOpen).toHaveBeenCalledTimes(1)
-  })
-
-  it('settings button is hidden when onOpenSettings is not provided', () => {
-    render({ onOpenSettings: null })
-
-    document.body.innerHTML = ''
-    const altContainer = document.createElement('div')
-    document.body.appendChild(altContainer)
-    const root = createRoot(altContainer)
-    act(() => {
-      root.render(<TitleBar sidebarVisible={true} onToggleSidebar={vi.fn()} />)
-    })
-    expect(altContainer.querySelector('[aria-label="Settings"]')).toBeNull()
-    act(() => root.unmount())
+    expect(onSearch).toHaveBeenCalledTimes(1)
   })
 
   it('window control buttons call terminalAPI methods', () => {

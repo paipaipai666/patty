@@ -1,25 +1,12 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo } from 'react'
-import {
-  Code20Regular,
-  Globe20Regular,
-  Checkmark16Regular,
-  ErrorCircle16Regular,
-  Shield16Regular,
-  ChatHelp16Regular,
-  Circle16Regular,
-  ArrowSync16Regular,
-  QuestionCircle16Regular
-} from '@fluentui/react-icons'
+import { Code20Regular, Globe20Regular } from '@fluentui/react-icons'
 import {
   useSessionStore,
-  SESSION_COLOR_VARS,
   type TerminalSession
 } from '../../store/sessionStore'
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
-import type { AgentStatus } from '../../../shared/agentTypes'
-import { AGENT_STATUS_LABELS, directoryLabel, sessionContext, sessionLocation, sessionTool } from '../../utils/sessionPresentation'
+import { AGENT_STATUS_LABELS, sessionContext, sessionLocation } from '../../utils/sessionPresentation'
 import { useSessionPreview } from './SessionPreview'
-import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
 interface SessionItemProps {
@@ -29,16 +16,6 @@ interface SessionItemProps {
   onSelect: (id: string) => void
   depth?: number
 }
-
-const STATUS_BADGES = {
-  unknown: { label: 'Unavailable', icon: QuestionCircle16Regular },
-  idle: { label: 'Idle', icon: Circle16Regular },
-  working: { label: 'Working', icon: ArrowSync16Regular },
-  waiting_approval: { label: 'Approval', icon: Shield16Regular },
-  waiting_input: { label: 'Answer', icon: ChatHelp16Regular },
-  complete: { label: 'Done', icon: Checkmark16Regular },
-  error: { label: 'Error', icon: ErrorCircle16Regular }
-} satisfies Record<AgentStatus, { label: string; icon: typeof Circle16Regular }>
 
 export const SessionItem = memo(function SessionItem({
   session,
@@ -60,21 +37,12 @@ export const SessionItem = memo(function SessionItem({
   const inputRef = useRef<HTMLInputElement>(null)
   const itemRef = useRef<HTMLDivElement>(null)
   const restoreFocus = useRef(false)
-  const previousAttention = useRef<AgentStatus | null>(null)
-  const [glowNonce, setGlowNonce] = useState(0)
 
   useEffect(() => () => preview.release(session.id), [preview.release, session.id])
   useEffect(() => {
     if (draggingSessionId || isEditing) preview.release(session.id)
   }, [draggingSessionId, isEditing, preview.release, session.id])
 
-  useEffect(() => {
-    const unreadAttention = activity?.unread ? activity.status : null
-    if (unreadAttention && unreadAttention !== previousAttention.current) {
-      setGlowNonce((value) => value + 1)
-    }
-    previousAttention.current = unreadAttention
-  }, [activity?.status, activity?.unread])
 
   useLayoutEffect(() => {
     if (!isEditing && restoreFocus.current) {
@@ -83,26 +51,16 @@ export const SessionItem = memo(function SessionItem({
     }
   }, [isEditing])
   const statusText = activity ? AGENT_STATUS_LABELS[activity.status] : SHELL_LABELS[session.shell]
-  const badge = activity ? STATUS_BADGES[activity.status] : null
-  const StatusIcon = badge?.icon
   const context = sessionContext(session)
   const previewOpen = preview.activeId === session.id
   const statusClass =
     attentionType === 'permission'
       ? styles.permission
-      : attentionType === 'complete'
-        ? styles.complete
-        : attentionType === 'error'
+      : attentionType === 'error'
           ? styles.error
           : ''
-  const attentionGlowClass = !activity?.unread ? null :
-    attentionType === 'permission'
-      ? styles.glow_permission
-      : attentionType === 'complete'
-        ? styles.glow_complete
-        : attentionType === 'error'
-          ? styles.glow_error
-          : null
+  const showNotice = attentionType === 'permission' || attentionType === 'error' || activity?.status === 'unknown' || activity?.unread
+  const duplicateTitle = useSessionStore(state => state.sessions.some(other => other.id !== session.id && other.title === session.title))
 
   const handleDoubleClick = () => {
     preview.dismiss()
@@ -216,15 +174,6 @@ export const SessionItem = memo(function SessionItem({
     )
   }
 
-  const AI_ICON_CLASS: Record<string, string> = {
-    claude: styles.aiIconClaude,
-    opencode: styles.aiIconOpencode,
-    codex: styles.aiIconCodex,
-    omp: styles.aiIconOmp,
-    qwen: styles.aiIconQwen,
-    copilot: styles.aiIconCopilot
-  }
-
   return (
     <div
       ref={itemRef}
@@ -256,20 +205,10 @@ export const SessionItem = memo(function SessionItem({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {isAi && activity?.status === 'working' && !isActive && <div className={styles.activityTrace} aria-hidden><ContributionGrid aiType={session.aiType ?? null} /></div>}
-      {attentionGlowClass && (
-        <div
-          key={glowNonce}
-          className={`${styles.glowFx} ${attentionGlowClass}`}
-          data-testid="agent-attention-glow"
-          data-attention={attentionType}
-          aria-hidden
-        />
-      )}
       <div className={styles.itemContent}>
         {isAi ? (
           <span
-            className={`${styles.aiIcon} ${AI_ICON_CLASS[session.aiType!]}`}
+            className={styles.aiIcon}
             data-testid="agent-icon"
             aria-hidden
           >
@@ -278,9 +217,6 @@ export const SessionItem = memo(function SessionItem({
         ) : (
           <span
             className={styles.sessionIcon}
-            style={{
-              color: SESSION_COLOR_VARS[session.color] || 'var(--color-blue)'
-            }}
             aria-hidden
           >
             {session.shell === 'ssh' ? <Globe20Regular /> : <Code20Regular />}
@@ -301,23 +237,19 @@ export const SessionItem = memo(function SessionItem({
           <span className={styles.itemText}>
             <span className={styles.itemTitleRow}>
               <span className={styles.itemTitle} title={previewOpen ? undefined : session.title}>{session.title}</span>
-              {badge && StatusIcon && (
+              {showNotice && (
               <span
-                className={`${styles.itemStatus} ${statusClass}`}
+                className={`${styles.noticeMark} ${statusClass}`}
                 role={attentionType ? 'status' : undefined}
                 aria-label={statusText}
                 title={previewOpen ? undefined : statusText}
               >
-                <StatusIcon aria-hidden />
-                <span className={styles.statusLabel} aria-hidden>{badge.label}</span>
               </span>
               )}
-              {activity?.unread && <span className={styles.unreadDot} aria-hidden />}
             </span>
-            <span className={styles.itemContext} title={previewOpen ? undefined : `${context}\n${sessionLocation(session)}`}>
-              {session.shell === 'ssh' ? sessionLocation(session) : directoryLabel(session.cwd)}
-              <span className={styles.contextTool}> · {sessionTool(session)}</span>
-            </span>
+            {(session.shell === 'ssh' || duplicateTitle) && <span className={styles.itemContext} title={previewOpen ? undefined : `${context}\n${sessionLocation(session)}`}>
+              {sessionLocation(session)}
+            </span>}
           </span>
         )}
         <button

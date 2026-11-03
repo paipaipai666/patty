@@ -391,7 +391,6 @@ export default function App() {
         </div>
         <div
           className={styles.content}
-          style={{ [sidebarOnRight ? 'borderRight' : 'borderLeft']: '1px solid var(--border-subtle)' }}
           onContextMenu={(e) => {
 
           const activeId = useSessionStore.getState().activeSessionId

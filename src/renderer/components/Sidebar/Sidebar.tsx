@@ -316,7 +316,7 @@ export function Sidebar({
           </div>
         </div>
         <div className={styles.tools}>
-          <button ref={notificationButton} type="button" className={styles.toolButton} aria-label="Notifications" aria-description={`${notices.length} new or waiting sessions`} title="Notifications" aria-haspopup="dialog" aria-expanded={notificationsOpen} onClick={() => { setMenu(null); setNotificationsOpen(true) }}>
+          <button ref={notificationButton} type="button" className={styles.toolButton} aria-label="Notifications" aria-description={`${notices.length} new or waiting sessions`} title="Notifications" aria-haspopup="dialog" aria-expanded={notificationsOpen} onClick={() => { setMenu(null); setNotificationsOpen(value => !value) }}>
             <Alert20Regular aria-hidden />{notices.length > 0 && <span className={styles.notificationDot} aria-hidden />}
           </button>
           <button type="button" className={styles.toolButton} aria-label="Open command palette" title="Find sessions and commands" onClick={onOpenCommands}><Search16Regular aria-hidden /></button>

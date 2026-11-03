@@ -106,22 +106,19 @@ describe('zoneFromPoint', () => {
 })
 
 describe('PaneView', () => {
-  it('targets the owning pane when a header action receives keyboard focus', () => {
+  it('targets the owning terminal before opening its context menu', () => {
     const { container, props } = renderPaneView()
-    const split = container.querySelector<HTMLButtonElement>('[aria-label="Split terminal to the right"]')!
-    act(() => split.focus())
+    act(() => container.querySelector('[data-pane-id]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })))
     expect(props.onFocus).toHaveBeenCalledWith('p1')
     expect(useSessionStore.getState().setActive).toHaveBeenCalledWith('s1')
+    expect(container.querySelector('[data-testid="pane-header"]')).toBeNull()
+    expect(container.querySelector('button')).toBeNull()
   })
 
-  it('shows a short directory while keeping its full path available', () => {
-    const { container } = renderPaneView({ session: { id: 's1', title: 'Build', color: 'blue', cwd: 'D:\\work\\payments', shell: 'powershell', pid: 0, createdAt: 1, collectionId: null } })
-    expect(Array.from(container.querySelectorAll('[title]')).find(element => element.getAttribute('title') === 'D:\\work\\payments')?.textContent).toBe('payments')
-  })
-
-  it('identifies an SSH connection in the pane header', () => {
+  it('keeps the exact SSH identity accessible without adding a terminal toolbar', () => {
     const { container } = renderPaneView({ session: { id: 's1', title: 'Production', color: 'blue', cwd: '/srv/payments', shell: 'ssh', ssh: { host: 'prod-01', user: 'deploy', port: 2222 }, pid: 0, createdAt: 1, collectionId: null } })
-    expect(container.querySelector('[title="deploy@prod-01:2222"]')?.textContent).toBe('deploy@prod-01:2222')
+    expect(container.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Production, deploy@prod-01:2222')
+    expect(container.querySelector('[data-testid="pane-header"]')).toBeNull()
   })
 
   it('renders TerminalPane child', () => {

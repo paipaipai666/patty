@@ -7,6 +7,7 @@ vi.mock('../../../store/sessionStore', () => {
     renameSession: vi.fn(),
     setDraggingSession: vi.fn(),
     agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0,
+    sessions: [],
     getState: () => state
   }
   const useSessionStore = (sel: (s: typeof state) => unknown) => sel(state)
@@ -58,24 +59,25 @@ function render(props: Partial<Parameters<typeof SessionItem>[0]> = {}) {
 }
 
 describe('SessionItem', () => {
-  it('shows project context and a named status independently of unread', () => {
+  it('keeps status and context accessible while showing one quiet attention mark', () => {
     useSessionStore.getState().agentStates = { s1: { status: 'waiting_approval', unread: false } }
     const { container } = render({ session: { ...defaultSession, aiType: 'claude', cwd: 'D:\\work\\payments' } })
-    expect(container.textContent).toContain('payments')
-    expect(container.textContent).toContain('Claude Code')
-    expect(container.querySelector('[aria-label="Waiting for approval"]')?.textContent).toContain('Approval')
+    expect(container.textContent).not.toContain('payments')
+    expect(container.textContent).not.toContain('Claude Code')
+    expect(container.querySelector('[aria-label="Waiting for approval"]')).not.toBeNull()
     expect(container.querySelector('[role="treeitem"]')?.getAttribute('aria-description')).toBe('Claude Code · payments, Waiting for approval')
     expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
   })
 
-  it('limits animated activity to a background working session', () => {
+  it('keeps both background and foreground work free of animated indicators', () => {
     useSessionStore.getState().agentStates = { s1: { status: 'working', unread: false } }
     const session = { ...defaultSession, aiType: 'codex' as const }
     const { container, root } = render({ session })
-    expect(container.querySelector('[data-testid="background-activity"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
     act(() => root.render(<SessionPreviewProvider><SessionItem session={session} isActive onClose={vi.fn()} onSelect={vi.fn()} /></SessionPreviewProvider>))
     expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
-    expect(container.querySelector('[aria-label="Working"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Working"]')).toBeNull()
+    expect(container.querySelector('[role="treeitem"]')?.getAttribute('aria-description')).toContain('Working')
   })
 
   it('renders session title', () => {

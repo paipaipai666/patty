@@ -2,8 +2,7 @@
   display: flex;
   align-items: center;
   height: var(--titlebar-height);
-  background: var(--bg-titlebar);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-sidebar);
   flex-shrink: 0;
   position: relative;
   z-index: 5;
@@ -19,40 +18,18 @@
   -webkit-app-region: drag;
   app-region: drag;
 }
-.title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
 .commandButton {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
   border-radius: 4px;
   color: var(--text-secondary);
-  font-size: 12px;
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
 .commandButton:hover {
-  color: var(--text-primary);
   background: var(--bg-item-hover);
-}
-.commandButton kbd {
-  font: 10px var(--font-ui);
-  margin-left: 4px;
-}
-@media (max-width: 640px) {
-  .commandButton kbd {
-    display: none;
-  }
-}
-@media (max-width: 400px) {
-  .commandButton span {
-    display: none;
-  }
 }
 .controls {
   display: flex;

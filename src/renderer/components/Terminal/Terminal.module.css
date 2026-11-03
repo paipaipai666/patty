@@ -2,9 +2,9 @@
   flex: 1;
   min-height: 0;
   position: relative;
-  padding: 6px 6px 6px 5px;
+  padding: 0;
   overflow: hidden;
-  background: var(--bg-app);
+  background: var(--bg-terminal);
 }
 .pane {
   position: absolute;

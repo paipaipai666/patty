@@ -53,12 +53,12 @@ function resultIds(): Array<string | undefined> {
 }
 
 describe('session search results', () => {
-  it('reading a question stops its glow while preserving its label and attention view', () => {
+  it('reading a question preserves its quiet status mark and attention view', () => {
     useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'waiting_input' } }))
     render('', 'attention')
     expect(resultIds()).toEqual(['session:server'])
     expect(container.querySelector('[aria-label="Waiting for answer"]')).not.toBeNull()
-    expect(container.querySelector('[data-testid="agent-attention-glow"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="agent-attention-glow"]')).toBeNull()
     act(() => useSessionStore.getState().setActive('server'))
     expect(resultIds()).toEqual(['session:server'])
     expect(container.querySelector('[aria-label="Waiting for answer"]')).not.toBeNull()
@@ -67,7 +67,7 @@ describe('session search results', () => {
     act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'claude', status: 'working' } })))
     expect(resultIds()).toEqual([])
     render('server')
-    expect(container.textContent).toContain('Working')
+    expect(container.querySelector('[data-tree-id="session:server"]')?.getAttribute('aria-description')).toContain('Working')
   })
 
   it('reveals a result inside a collapsed parent and selects it from the keyboard', () => {
@@ -115,4 +115,3 @@ describe('session search results', () => {
     expect(container.textContent).toContain('No matches')
   })
 })
-
