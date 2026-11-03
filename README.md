@@ -131,8 +131,11 @@ Scrollback changes apply to newly created terminals. The sidebar width can be ad
 
 These are the default application shortcuts. Remap them under **Settings → Shortcuts**.
 
+Open the command palette with **Commands** in the title bar or `Ctrl+Shift+P`. Search existing actions, sessions, SSH profiles and themes by name, folder or tool. Rows show their scope and explain unavailable operations. Use the arrow keys or Page Up/Page Down to navigate, Enter to run, and Escape to cancel. Tab moves between search and the close button. Cancel returns to the original control; session and pane actions focus their destination terminal.
+
 | Shortcut | Action |
 | --- | --- |
+| `Ctrl+Shift+P` | Open the command palette |
 | `Ctrl+T` | New terminal |
 | `Ctrl+W` | Close the current terminal |
 | `Ctrl+]` | Next session |
@@ -143,7 +146,9 @@ These are the default application shortcuts. Remap them under **Settings → Sho
 | `Ctrl+Shift+E` | Split below |
 | `Ctrl+Shift+W` | Close the focused pane |
 
-`Ctrl+1` through `Ctrl+9` select sessions by index. With a sidebar row focused, `F2` renames it and `Delete` closes a session. These bindings are separate from the remappable shortcuts above. When terminal input has focus, terminal and shell key bindings take precedence.
+`Ctrl+1` through `Ctrl+9` select sessions by index. With a sidebar row focused, `F2` renames it and `Delete` closes a session. These bindings are separate from the remappable shortcuts above. Registered application shortcuts also work while terminal input has focus; other keys retain their terminal behavior. Workspace shortcuts leave ordinary text fields alone. The palette shortcut also works from those fields.
+
+Shortcut editing rejects duplicate bindings, unmodified text keys and reserved copy, paste and session-position shortcuts. Input-method composition and open dialogs suppress application actions.
 
 In the terminal, `Ctrl+C` copies selected text or sends an interrupt when nothing is selected. `Ctrl+V` pastes; `Ctrl+Shift+C` and `Ctrl+Shift+V` also copy and paste.
 

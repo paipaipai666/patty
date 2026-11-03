@@ -21,7 +21,7 @@ export function TerminalArea({ onNewTerminal }: { onNewTerminal?: () => void } =
           <div className={styles.emptyLogo}><Code24Regular aria-hidden /></div>
           <h2 className={styles.emptyTitle}>Patty</h2>
           <p className={styles.emptyDesc}>Create a terminal or connect to a saved SSH host.</p>
-          {onNewTerminal && <button type="button" className={styles.emptyAction} onClick={onNewTerminal}><Add16Regular aria-hidden />New terminal</button>}
+          {onNewTerminal && <button type="button" data-terminal-entry className={styles.emptyAction} onClick={onNewTerminal}><Add16Regular aria-hidden />New terminal</button>}
         </div>
       </div>
     )

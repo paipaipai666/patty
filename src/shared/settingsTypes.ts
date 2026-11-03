@@ -57,6 +57,7 @@ export interface SshHostkeyRequest {
 }
 
 export interface ShortcutMap {
+  commandPalette: string
   newTerminal: string
   closeTerminal: string
   nextTab: string

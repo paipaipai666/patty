@@ -56,10 +56,11 @@ export async function createTerminalInCollection(
 
 
                                                   
-export function createTerminalSplit(direction: SplitDirection): string {
+export function createTerminalSplit(direction: SplitDirection): string | null {
   const focusedSessionId = getFocusedSessionId()
   const sessions = useSessionStore.getState().sessions
   const focused = focusedSessionId ? sessions.find((s) => s.id === focusedSessionId) : undefined
+  if (!focused) return null
   const id = useSessionStore.getState().addSession({
     cwd: focused?.cwd || undefined,
     shell: focused?.shell,

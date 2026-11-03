@@ -77,3 +77,7 @@ Four theme behavior tests cover the six built-ins, grouping, selected state, exa
 All 737 frontend tests, TypeScript and comment checks pass. Real-browser verification covers mouse selection, native arrow-key selection, Tab navigation, unchanged theme on hover, custom palette rendering, equal card widths and a 540px window without horizontal overflow. It also checks that background focus cannot open a preview while settings are visible. Dark, light and narrow-window captures are in `output/workbench-visual`.
 
 The ordinary desktop release build succeeds with the final source. Its isolation smoke test rejects test-only configuration overrides before browser or CLI integration startup, then removes its temporary data. Desktop WebView2 interaction remains unverified because of the recorded CDP blocker; the browser fixture covers the frontend behavior described above.
+
+## Command palette follow-up
+
+The user approved the command palette and keyboard flow next. Implementation, acceptance criteria and verification are recorded in [Command palette and keyboard flow](command-palette.md). Resume remains paused.

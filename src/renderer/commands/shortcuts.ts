@@ -1,5 +1,7 @@
 import type { ShortcutMap } from '../../shared/settingsTypes'
 
+export const TERMINAL_EDITING_SHORTCUTS = ['ctrl+c', 'ctrl+v', 'ctrl+shift+c', 'ctrl+shift+v']
+
 export const SHORTCUT_DEFINITIONS: { key: keyof ShortcutMap; label: string }[] = [
   { key: 'newTerminal', label: 'New terminal' },
   { key: 'closeTerminal', label: 'Close terminal' },
@@ -9,7 +11,8 @@ export const SHORTCUT_DEFINITIONS: { key: keyof ShortcutMap; label: string }[] =
   { key: 'settings', label: 'Open settings' },
   { key: 'splitHorizontal', label: 'Split horizontally' },
   { key: 'splitVertical', label: 'Split vertically' },
-  { key: 'closePane', label: 'Close pane' }
+  { key: 'closePane', label: 'Close pane' },
+  { key: 'commandPalette', label: 'Open command palette' }
 ]
 
 export function formatShortcut(event: KeyboardEvent): string {

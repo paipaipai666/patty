@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client'
+import { useState } from 'react'
 import { Sidebar } from '../../src/renderer/components/Sidebar/Sidebar'
 import { PaneTreeRoot } from '../../src/renderer/components/Pane/PaneTree'
 import { TitleBar } from '../../src/renderer/components/TitleBar/TitleBar'
@@ -10,6 +11,8 @@ import { useSettingsStore } from '../../src/renderer/store/settingsStore'
 import { selectSession, closeSession, createTerminal, createTerminalSplit } from '../../src/renderer/store/sessionLifecycle'
 import { createShortcutCommands } from '../../src/renderer/commands/applicationCommands'
 import { useApplicationKeyboard, useCommandExecution } from '../../src/renderer/commands/useApplicationKeyboard'
+import { usePaletteCommands } from '../../src/renderer/commands/usePaletteCommands'
+import { CommandPalette } from '../../src/renderer/components/CommandPalette/CommandPalette'
 import { DEFAULT_SETTINGS } from '../../src/shared/defaultSettings'
 import { applyTheme, getThemeColors } from '../../src/renderer/styles/themes'
 import '../../src/renderer/styles/global.css'
@@ -58,23 +61,27 @@ function addCustomTheme() {
 Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, addCustomTheme, writes, sessions: useSessionStore, workspaces: useWorkspaceStore, settings: useSettingsStore } })
 
 function Workbench() {
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const visible = useSessionStore((state) => state.sidebarVisible)
   const position = useSettingsStore((state) => state.settings.sidebarPosition)
   const shortcuts = useSettingsStore(state => state.settings.shortcuts)
   const execute = useCommandExecution()
-  useApplicationKeyboard({
-    commands: createShortcutCommands(shortcuts, {
+  const shortcutCommands = createShortcutCommands(shortcuts, {
+      commandPalette: () => setPaletteOpen(true),
       newTerminal: () => { createTerminal() },
       closeTerminal: () => { const id = useSessionStore.getState().activeSessionId; if (id) closeSession(id) },
       nextTab: () => useSessionStore.getState().navigateNext(), prevTab: () => useSessionStore.getState().navigatePrev(),
       toggleSidebar: () => useSessionStore.getState().toggleSidebar(), settings: () => useSettingsStore.getState().openSettings(),
       splitHorizontal: () => { createTerminalSplit('horizontal') }, splitVertical: () => { createTerminalSplit('vertical') },
       closePane: () => useWorkspaceStore.getState().closeFocused()
-    }),
-    execute, navigateToIndex: index => useSessionStore.getState().navigateToIndex(index)
+    })
+  const commands = usePaletteCommands(shortcutCommands, async () => undefined)
+  useApplicationKeyboard({
+    commands: [...commands, ...shortcutCommands.filter(command => command.id === 'commandPalette')],
+    blocked: paletteOpen, execute, navigateToIndex: index => useSessionStore.getState().navigateToIndex(index)
   })
   return <div className="visual-workbench">
-    <TitleBar sidebarVisible={visible} onToggleSidebar={() => useSessionStore.getState().toggleSidebar()} />
+    <TitleBar sidebarVisible={visible} onToggleSidebar={() => useSessionStore.getState().toggleSidebar()} onOpenCommands={() => setPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
     <main className="visual-stage" style={{ flexDirection: position === 'right' ? 'row-reverse' : undefined }}>
       {visible && <Sidebar onNewTerminal={() => useSessionStore.getState().addSession()} onNewTerminalPickFolder={() => {}} onNewSsh={() => {}} onSelectSession={selectSession} onCloseSession={closeSession} />}
       <div className="visual-content">
@@ -83,6 +90,7 @@ function Workbench() {
       </div>
     </main>
     <SettingsModal />
+    {paletteOpen && <CommandPalette commands={commands} shortcut={shortcuts.commandPalette} onClose={() => setPaletteOpen(false)} onExecute={execute} />}
   </div>
 }
 

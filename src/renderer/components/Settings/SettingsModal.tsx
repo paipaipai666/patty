@@ -9,7 +9,7 @@ import { ShortcutsSection } from './sections/ShortcutsSection'
 import { LayoutSection } from './sections/LayoutSection'
 import { NotificationsSection } from './sections/NotificationsSection'
 import styles from './SettingsModal.module.css'
-import { formatShortcut, isComposingKey, normalizeShortcut, SHORTCUT_DEFINITIONS } from '../../commands/shortcuts'
+import { formatShortcut, isComposingKey, normalizeShortcut, SHORTCUT_DEFINITIONS, TERMINAL_EDITING_SHORTCUTS } from '../../commands/shortcuts'
 
 type Category = 'appearance' | 'terminal' | 'shortcuts' | 'layout' | 'notifications' | 'ssh'
 
@@ -45,7 +45,7 @@ export function SettingsModal() {
       setCaptureError(null)
       return
     }
-    setActiveCategory(settingsCategory === 'ssh' ? 'ssh' : 'appearance')
+    setActiveCategory(CATEGORIES.find(category => category.key === settingsCategory)?.key ?? 'appearance')
   }, [settingsOpen, settingsCategory])
 
   const handleKeyDown = useCallback(
@@ -74,7 +74,7 @@ export function SettingsModal() {
           return
         }
         const normalized = normalizeShortcut(combo)
-        if (['ctrl+c', 'ctrl+v', 'ctrl+shift+c', 'ctrl+shift+v'].includes(normalized) || /^ctrl\+[1-9]$/.test(normalized)) {
+        if (TERMINAL_EDITING_SHORTCUTS.includes(normalized) || /^ctrl\+[1-9]$/.test(normalized)) {
           setCaptureError('Reserved for terminal copy, paste, interrupt or session navigation.')
           return
         }

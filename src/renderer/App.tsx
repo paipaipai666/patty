@@ -30,6 +30,8 @@ import type { SshProfile, SshAuthRequest, SshHostkeyRequest } from '../shared/se
 import styles from './App.module.css'
 import { createShortcutCommands } from './commands/applicationCommands'
 import { useApplicationKeyboard, useCommandExecution } from './commands/useApplicationKeyboard'
+import { usePaletteCommands } from './commands/usePaletteCommands'
+import { CommandPalette } from './components/CommandPalette/CommandPalette'
 
 interface ContextMenuState {
   x: number
@@ -74,6 +76,7 @@ export default function App() {
   const [promptOptions, setPromptOptions] = useState<PromptOptions | null>(null)
   const [metricsOpen, setMetricsOpen] = useState(false)
   const [sshMonitorOpen, setSshMonitorOpen] = useState(false)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
 
   const [sshAuthQueue, setSshAuthQueue] = useState<Array<{ id: string; info: SshAuthRequest }>>([])
   const [sshHostkeyQueue, setSshHostkeyQueue] = useState<Array<{ id: string; info: SshHostkeyRequest }>>([])
@@ -193,9 +196,10 @@ export default function App() {
       const result = await window.terminalAPI.selectDirectory()
       if (result.canceled) return
       if (result.directory) localStorage.setItem(LAST_CWD_KEY, result.directory)
-      createTerminal({ cwd: result.directory || undefined, shell: defaultShell })
+      return createTerminal({ cwd: result.directory || undefined, shell: defaultShell })
     } catch (err) {
       console.error('Failed to create terminal:', err)
+      toast('Could not create terminal. Try again.')
     }
   }, [defaultShell])
 
@@ -246,6 +250,7 @@ export default function App() {
 
 
   const shortcutCommands = createShortcutCommands(shortcuts, {
+      commandPalette: () => setCommandPaletteOpen(true),
       newTerminal: handleNewTerminal,
       closeTerminal: () => {
         const activeId = useSessionStore.getState().activeSessionId
@@ -260,9 +265,12 @@ export default function App() {
       closePane: handleClosePane
   })
   const executeCommand = useCommandExecution()
+  const paletteCommands = usePaletteCommands(shortcutCommands, handleNewTerminalPickFolder)
+  const modalOpen = settingsOpen || Boolean(promptOptions || sshAuthQueue.length || sshHostkeyQueue.length)
+  useEffect(() => { if (modalOpen) setCommandPaletteOpen(false) }, [modalOpen])
   useApplicationKeyboard({
-    commands: shortcutCommands,
-    blocked: settingsOpen || Boolean(promptOptions || contextMenu || collectionContextMenu || sshAuthQueue.length || sshHostkeyQueue.length),
+    commands: [...paletteCommands, ...shortcutCommands.filter(command => command.id === 'commandPalette')],
+    blocked: commandPaletteOpen || settingsOpen || Boolean(promptOptions || contextMenu || collectionContextMenu || sshAuthQueue.length || sshHostkeyQueue.length),
     navigateToIndex,
     execute: executeCommand
   })
@@ -364,7 +372,7 @@ export default function App() {
 
   return (
     <div className={styles.app}>
-      <TitleBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} />
+      <TitleBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} onOpenCommands={() => setCommandPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         <div ref={sidebarWrapperRef} className={styles.sidebarWrapper} style={{ width: sidebarVisible ? sidebarWidth : 0 }}>
           <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onCollectionContextMenu={handleCollectionContextMenu} />
@@ -446,6 +454,7 @@ export default function App() {
         }
       />
       <SettingsModal />
+      {commandPaletteOpen && !modalOpen && <CommandPalette commands={paletteCommands} shortcut={shortcuts.commandPalette} onClose={() => setCommandPaletteOpen(false)} onExecute={executeCommand} />}
       <Toasts />
     </div>
   )

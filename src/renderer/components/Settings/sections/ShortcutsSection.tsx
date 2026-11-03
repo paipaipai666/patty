@@ -24,7 +24,7 @@ export function ShortcutsSection({
             <span className={`${styles.shortcutKey} ${capturing === key ? styles.shortcutCapture : ''}`}>
               {capturing === key ? 'Press keys...' : shortcuts[key]}
             </span>
-            <button type="button" className={styles.shortcutBtn} onClick={() => onStartCapture(key)}>
+            <button type="button" className={styles.shortcutBtn} aria-label={`${capturing === key ? 'Cancel' : 'Edit'} ${label.toLowerCase()} shortcut`} onClick={() => onStartCapture(key)}>
               {capturing === key ? 'Cancel' : 'Edit'}
             </button>
           </div>

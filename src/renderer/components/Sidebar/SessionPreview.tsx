@@ -63,7 +63,7 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
   }, [dismiss])
 
   const enter = useCallback((next: Target, source: Source) => {
-    if (settingsOpen || sidebarVisible === false) return
+    if (settingsOpen || sidebarVisible === false || document.querySelector('[aria-modal="true"]')) return
     sources.current[source] = next.id
     clearTimeout(closeTimer.current)
     clearTimeout(openTimer.current)
@@ -109,6 +109,7 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => { if (event.key === 'Escape') dismiss() }
+    const focusin = () => { if (document.querySelector('[aria-modal="true"]')) dismiss() }
     const pointerdown = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || !panel.current?.contains(event.target)) dismiss()
     }
@@ -116,12 +117,14 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
       if (!(event.target instanceof Node) || !panel.current?.contains(event.target)) dismiss()
     }
     window.addEventListener('keydown', keydown)
+    window.addEventListener('focusin', focusin)
     window.addEventListener('pointerdown', pointerdown, true)
     window.addEventListener('blur', dismiss)
     window.addEventListener('resize', dismiss)
     window.addEventListener('scroll', scroll, true)
     return () => {
       window.removeEventListener('keydown', keydown)
+      window.removeEventListener('focusin', focusin)
       window.removeEventListener('pointerdown', pointerdown, true)
       window.removeEventListener('blur', dismiss)
       window.removeEventListener('resize', dismiss)

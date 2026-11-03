@@ -41,6 +41,7 @@ pub fn default_settings() -> Value {
         "defaultShell": "powershell",
         "sidebarPosition": "left",
         "shortcuts": {
+            "commandPalette": "Ctrl+Shift+P",
             "newTerminal": "Ctrl+T",
             "closeTerminal": "Ctrl+W",
             "nextTab": "Ctrl+]",
@@ -256,6 +257,18 @@ mod tests {
         assert_eq!(merged["shortcuts"]["newTerminal"], "Ctrl+N");
         assert_eq!(merged["shortcuts"]["closeTerminal"], "Ctrl+W");
         assert_eq!(merged["theme"], "dark");
+    }
+
+    #[test]
+    fn command_palette_shortcut_backfills_old_settings_and_preserves_custom_bindings() {
+        let legacy = json!({ "shortcuts": { "newTerminal": "Ctrl+N" } });
+        let merged = merge_settings(&legacy, &default_settings());
+        assert_eq!(merged["shortcuts"]["commandPalette"], "Ctrl+Shift+P");
+        assert_eq!(merged["shortcuts"]["newTerminal"], "Ctrl+N");
+        let customized = json!({ "shortcuts": { "commandPalette": "Ctrl+Alt+P" } });
+        let merged = merge_settings(&customized, &default_settings());
+        assert_eq!(merged["shortcuts"]["commandPalette"], "Ctrl+Alt+P");
+        assert_eq!(merged["shortcuts"]["splitHorizontal"], "Ctrl+Shift+D");
     }
 
     #[test]

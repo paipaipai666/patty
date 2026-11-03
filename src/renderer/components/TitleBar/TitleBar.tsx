@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Search16Regular } from '@fluentui/react-icons'
 import styles from './TitleBar.module.css'
 
 function MinimizeIcon() {
@@ -140,12 +141,16 @@ function SidebarIcon({ open }: { open: boolean }) {
 }
 
 interface TitleBarProps {
+  onOpenCommands?: () => void
+  commandShortcut?: string
   onOpenSettings?: () => void
   sidebarVisible: boolean
   onToggleSidebar: () => void
 }
 
 export function TitleBar({
+  onOpenCommands,
+  commandShortcut,
   onOpenSettings,
   sidebarVisible,
   onToggleSidebar
@@ -173,6 +178,9 @@ export function TitleBar({
           <SidebarIcon open={sidebarVisible} />
         </button>
         <span className={styles.title}>Patty</span>
+        {onOpenCommands && <button type="button" className={styles.commandButton} onClick={onOpenCommands} aria-label="Open command palette" title={`Command palette${commandShortcut ? ` (${commandShortcut})` : ''}`}>
+          <Search16Regular aria-hidden /><span>Commands</span>{commandShortcut && <kbd>{commandShortcut}</kbd>}
+        </button>}
       </div>
       <div className={styles.controls}>
         {onOpenSettings && (

@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultShell: 'powershell',
   sidebarPosition: 'left',
   shortcuts: {
+    commandPalette: 'Ctrl+Shift+P',
     newTerminal: 'Ctrl+T',
     closeTerminal: 'Ctrl+W',
     nextTab: 'Ctrl+]',

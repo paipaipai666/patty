@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
+import type { TerminalSession } from '../store/sessionStore'
 
 const hoisted = vi.hoisted(() => {
   const mockAddSession = vi.fn().mockReturnValue('sess-new')
@@ -17,8 +18,10 @@ const hoisted = vi.hoisted(() => {
   const mockSettingsInit = vi.fn().mockResolvedValue(undefined)
   const mockOpenSettings = vi.fn()
 
+  const sessions: TerminalSession[] = []
   const sessionState = {
-    sessions: [],
+    sessions,
+    agentStates: {},
     collections: [],
 
     activeSessionId: null as string | null,
@@ -62,6 +65,7 @@ const hoisted = vi.hoisted(() => {
     defaultShell: 'powershell',
     sidebarPosition: 'left',
     shortcuts: {
+      commandPalette: 'Ctrl+Shift+P',
       newTerminal: 'Ctrl+T',
       closeTerminal: 'Ctrl+W',
       nextTab: 'Ctrl+]',
@@ -189,6 +193,8 @@ beforeEach(() => {
   ;(window as any).terminalAPI = terminalAPI
   ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
   hoisted.shownPrompts = {}
+  hoisted.sessionState.sessions = []
+  hoisted.sessionState.activeSessionId = null
   roots.forEach(r => r.unmount())
   roots.length = 0
   document.body.innerHTML = ''
@@ -208,6 +214,10 @@ function render() {
   roots.push(root)
   act(() => { root.render(<App />) })
   return { container, root }
+}
+
+function session(id: string): TerminalSession {
+  return { id, title: id, shell: 'powershell', cwd: '', pid: 0, color: 'blue', collectionId: null, createdAt: 1 }
 }
 
 describe('App', () => {
@@ -247,6 +257,7 @@ describe('App', () => {
 
   it('Ctrl+W calls handleCloseSession when active session exists', () => {
     hoisted.sessionState.activeSessionId = 'sess-act'
+    hoisted.sessionState.sessions = [session('sess-act')]
     render()
     hoisted.mockRemoveSession.mockClear()
     hoisted.mockRemoveSessionEverywhere.mockClear()
@@ -279,6 +290,7 @@ describe('App', () => {
   })
 
   it('Ctrl+] navigates next tab', () => {
+    hoisted.sessionState.sessions = [session('a'), session('b')]
     render()
     hoisted.mockNavigateNext.mockClear()
     act(() => {
@@ -288,6 +300,7 @@ describe('App', () => {
   })
 
   it('Ctrl+[ navigates prev tab', () => {
+    hoisted.sessionState.sessions = [session('a'), session('b')]
     render()
     hoisted.mockNavigatePrev.mockClear()
     act(() => {
@@ -341,6 +354,19 @@ describe('App', () => {
     act(() => { options.onSubmit('hunter2') })
     expect(terminalAPI.sshAuthRespond).toHaveBeenCalledWith('sess-1', 'hunter2')
     expect(hoisted.shownPrompts["deploy@10.0.0.5's password:"]).toBeUndefined()
+  })
+
+  it('dismisses the command palette when SSH authentication arrives and keeps it closed afterward', async () => {
+    let auth: ((id: string, info: unknown) => void) | null = null
+    terminalAPI.onSshAuth = vi.fn((callback: typeof auth) => { auth = callback; return vi.fn() })
+    terminalAPI.sshAuthRespond = vi.fn()
+    render()
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'P', ctrlKey: true, shiftKey: true, bubbles: true })))
+    expect(document.querySelector('[role="combobox"]')).not.toBeNull()
+    act(() => auth?.('remote', { kind: 'password', prompt: 'SSH password', attempt: 1 }))
+    expect(document.querySelector('[role="combobox"]')).toBeNull()
+    act(() => hoisted.shownPrompts['SSH password'].onCancel())
+    expect(document.querySelector('[role="combobox"]')).toBeNull()
   })
 
   it('cancelling the ssh auth dialog responds with null', () => {

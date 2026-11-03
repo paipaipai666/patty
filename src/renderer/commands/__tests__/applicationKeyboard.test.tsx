@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS } from '../../../shared/defaultSettings'
 import { useSessionStore } from '../../store/sessionStore'
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { createShortcutCommands } from '../applicationCommands'
-import { useApplicationKeyboard, useCommandExecution } from '../useApplicationKeyboard'
+import { focusActiveTerminal, useApplicationKeyboard, useCommandExecution } from '../useApplicationKeyboard'
 
 vi.mock('../../store/dirtyScheduler', () => ({ markDirty: vi.fn() }))
 
@@ -16,6 +16,7 @@ const created = vi.fn()
 function Harness({ blocked = false, shortcut = 'Ctrl+T' }: { blocked?: boolean; shortcut?: string }) {
   const execute = useCommandExecution()
   const commands = createShortcutCommands({ ...DEFAULT_SETTINGS.shortcuts, newTerminal: shortcut }, {
+    commandPalette: () => {},
     newTerminal: created, closeTerminal: () => {}, nextTab: () => useSessionStore.getState().navigateNext(),
     prevTab: () => useSessionStore.getState().navigatePrev(), toggleSidebar: () => {}, settings: () => {},
     splitHorizontal: () => {}, splitVertical: () => {}, closePane: () => {}
@@ -120,5 +121,26 @@ describe('application keyboard', () => {
     expect(created).not.toHaveBeenCalled()
     await press('Y', { shiftKey: true })
     expect(created).toHaveBeenCalledOnce()
+  })
+
+  it('focuses the new-terminal action when the last layout pane is gone', () => {
+    useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null })
+    const entry = document.createElement('button')
+    entry.dataset.terminalEntry = ''
+    entry.textContent = 'New terminal'
+    container.appendChild(entry)
+    expect(focusActiveTerminal()).toBe(true)
+    expect(document.activeElement).toBe(entry)
+  })
+
+  it('preserves reserved terminal keys even if a legacy setting assigned them to an action', async () => {
+    element('textarea').focus()
+    act(() => root.render(<Harness shortcut="Ctrl+C" />))
+    expect((await press('c')).defaultPrevented).toBe(false)
+    expect(created).not.toHaveBeenCalled()
+    act(() => root.render(<Harness shortcut="Ctrl+2" />))
+    await press('2')
+    expect(useSessionStore.getState().activeSessionId).toBe('b')
+    expect(created).not.toHaveBeenCalled()
   })
 })

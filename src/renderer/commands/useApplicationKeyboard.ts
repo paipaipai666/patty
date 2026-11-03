@@ -3,33 +3,33 @@ import { useWorkspaceStore } from '../store/workspaceStore'
 import { useSessionStore } from '../store/sessionStore'
 import { toast } from '../store/toastStore'
 import type { AppCommand, CommandFocus } from './applicationCommands'
-import { formatShortcut, isComposingKey, normalizeShortcut } from './shortcuts'
+import { formatShortcut, isComposingKey, normalizeShortcut, TERMINAL_EDITING_SHORTCUTS } from './shortcuts'
 
 export function focusActiveTerminal(): boolean {
   const state = useWorkspaceStore.getState()
   const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId) ?? state.workspaces[0]
-  if (!workspace?.focusedPaneId) return false
-  const pane = Array.from(document.querySelectorAll<HTMLElement>('[data-pane-id]')).find(element => element.dataset.paneId === workspace.focusedPaneId)
+  const pane = Array.from(document.querySelectorAll<HTMLElement>('[data-pane-id]')).find(element => element.dataset.paneId === workspace?.focusedPaneId)
   const input = pane?.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
-  input?.focus()
-  return document.activeElement === input
+  const target = input ?? document.querySelector<HTMLElement>('[data-terminal-entry]') ?? document.querySelector<HTMLElement>('[aria-label="New terminal"]') ?? document.querySelector<HTMLElement>('[aria-label="Open command palette"]')
+  target?.focus()
+  return Boolean(target && document.activeElement === target)
 }
 
 export function useCommandExecution() {
   const [request, setRequest] = useState<{ focus: CommandFocus; origin: Element | null } | null>(null)
   useEffect(() => {
     if (!request || request.focus === 'dialog' || document.querySelector('[aria-modal="true"]')) return
-    if (request.focus === 'previous' && request.origin instanceof HTMLElement && request.origin.isConnected) {
+    if (request.focus === 'previous' && request.origin instanceof HTMLElement && request.origin.isConnected && request.origin !== document.body) {
       request.origin.focus()
+      if (document.activeElement !== request.origin) focusActiveTerminal()
     } else {
       focusActiveTerminal()
     }
   }, [request])
   return useCallback(async (command: AppCommand, origin: Element | null = document.activeElement) => {
-    if (command.disabledReason) return
-    if (origin instanceof HTMLElement && origin.isConnected) origin.focus()
+    if (command.disabledReason?.()) return
     try {
-      const focus = await command.run()
+      const focus = await command.run(origin)
       if (focus === 'terminal') {
         const id = useSessionStore.getState().activeSessionId
         if (id) useWorkspaceStore.getState().ensureVisible(id)
@@ -57,8 +57,9 @@ export function useApplicationKeyboard({ commands, blocked = false, navigateToIn
       const active = document.activeElement
       const editable = active instanceof HTMLElement && !active.closest('.xterm') && (active.isContentEditable || Boolean(active.closest('input, textarea, select, [contenteditable="true"]')))
       const combo = normalizeShortcut(formatShortcut(event))
-      const command = commands.find(item => item.shortcut && normalizeShortcut(item.shortcut) === combo && (!editable || item.allowInEditable))
+      if (TERMINAL_EDITING_SHORTCUTS.includes(combo)) return
       const index = !editable && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && /^[1-9]$/.test(event.key) ? Number(event.key) - 1 : null
+      const command = index === null ? commands.find(item => item.shortcut && normalizeShortcut(item.shortcut) === combo && (!editable || item.allowInEditable)) : undefined
       if (!command && index === null) return
       event.preventDefault()
       event.stopImmediatePropagation()

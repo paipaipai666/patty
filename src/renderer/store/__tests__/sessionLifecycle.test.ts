@@ -94,6 +94,11 @@ describe('createTerminalInCollection', () => {
 })
 
 describe('createTerminalSplit', () => {
+  it('does not create an orphan session when no pane can be split', () => {
+    expect(createTerminalSplit('horizontal')).toBeNull()
+    expect(useSessionStore.getState().sessions).toHaveLength(0)
+    expect(useWorkspaceStore.getState().workspaces).toHaveLength(0)
+  })
   it('keeps the SSH target when creating a neighboring terminal', () => {
     const base = createSshTerminal({ id: 'ssh-profile', name: 'production', host: 'example.test', user: 'deploy', port: 2222 })
     selectSession(base)

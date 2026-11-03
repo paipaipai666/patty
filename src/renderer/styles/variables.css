@@ -1,5 +1,6 @@
 :root {
   --z-session-preview: 40;
+  --z-command-palette: 1000;
   --accent: #006bde;
   --focus-ring: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
   --accent-alpha: rgba(0, 107, 222, 0.16);

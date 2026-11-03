@@ -23,6 +23,7 @@ vi.mock('../store/settingsStore', () => {
       defaultShell: 'powershell',
       sidebarPosition: 'left',
       shortcuts: {
+        commandPalette: 'Ctrl+Shift+P',
         newTerminal: 'Ctrl+T',
         closeTerminal: 'Ctrl+W',
         nextTab: 'Ctrl+]',
