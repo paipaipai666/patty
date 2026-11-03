@@ -1,6 +1,16 @@
 import type { TerminalSession } from '../store/sessionStore'
-import { AGENT_LABELS } from '../../shared/agentTypes'
+import { AGENT_LABELS, type AgentStatus } from '../../shared/agentTypes'
 import { SHELL_LABELS } from '../../shared/settingsTypes'
+
+export const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
+  unknown: 'Status unavailable',
+  idle: 'Idle',
+  working: 'Working',
+  waiting_approval: 'Waiting for approval',
+  waiting_input: 'Waiting for answer',
+  complete: 'Completed',
+  error: 'Error'
+}
 
 export function directoryLabel(path: string): string {
   return path.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) || path || 'Home'

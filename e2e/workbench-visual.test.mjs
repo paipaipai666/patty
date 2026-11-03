@@ -59,6 +59,24 @@ try {
       writeFileSync(join(output, `${theme}-${width}.png`), Buffer.from(shot.data, 'base64'))
     }
   }
+  for (const [theme, side] of [['dark', 'left'], ['light', 'right']]) {
+    await cdp.evaluate(`window.workbenchPreview.setTheme(${JSON.stringify(theme)}); window.workbenchPreview.sessions.getState().setSidebarWidth(160); window.workbenchPreview.settings.setState(state => ({settings: {...state.settings, sidebarPosition: ${JSON.stringify(side)}}}))`)
+    await sleep(250)
+    const anchor = await cdp.evaluate(`(() => { const row = document.querySelector('[data-tree-id="session:agent"]').getBoundingClientRect(); return { x: row.left + 12, y: row.top + row.height / 2 } })()`)
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...anchor })
+    await cdp.waitFor(`!!document.querySelector('[role="tooltip"]')`)
+    const preview = await cdp.evaluate(`(() => { const card = document.querySelector('[role="tooltip"]'); const rect = card.getBoundingClientRect(); const row = document.querySelector('[data-tree-id="session:agent"]'); return { text: card.textContent, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, linked: row.getAttribute('aria-describedby') === card.id } })()`)
+    assert.ok(preview.text.includes('Waiting for approval') && preview.text.includes('terminal-sidebar'))
+    assert.ok(preview.left >= 12 && preview.right <= 1428 && preview.top >= 12 && preview.bottom <= 888)
+    assert.equal(preview.linked, true)
+    assert.equal(await cdp.evaluate(`window.workbenchPreview.sessions.getState().agentStates.agent.unread`), true)
+    const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+    writeFileSync(join(output, `preview-${theme}-${side}.png`), Buffer.from(shot.data, 'base64'))
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await cdp.waitFor(`!document.querySelector('[role="tooltip"]')`)
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 720, y: 15 })
+  }
+  await cdp.evaluate(`window.workbenchPreview.settings.setState(state => ({settings: {...state.settings, sidebarPosition: 'left'}}))`)
   await cdp.evaluate(`document.querySelector('[data-pane-id="pane-agent"] [aria-label="Split terminal to the right"]').focus()`)
   await cdp.waitFor(`document.querySelector('[data-pane-id="pane-agent"]').dataset.focused === 'true'`)
   assert.equal(await cdp.evaluate(`window.workbenchPreview.sessions.getState().activeSessionId`), 'agent')

@@ -98,6 +98,8 @@ Session rows show the tool and working folder or SSH target below the task name.
 
 Narrow sidebars prioritize the folder or SSH target below each task. Pane headers show a short local folder or the remote connection target; full paths remain in tooltips. Split and close controls stay visible for the focused pane and appear on hover or keyboard focus in other panes.
 
+Hover or keyboard-focus a session for 400ms to preview its complete title, tool, folder, SSH target and latest agent status. The preview does not select the session or mark its notice read. You can move the pointer into the card to read or select its text. Press Escape to dismiss it.
+
 Selecting a session or typing in its terminal marks its latest notice as read and stops the attention glow. Its runtime status remains visible. The **Needs you** view continues to include waiting and failed sessions after they are read. The **Completed** view includes completed responses until the tool reports new work or exits. A new prompt or tool execution replaces the previous completion or error with **Working**. Available state transitions depend on the events each CLI adapter reports.
 
 Use the **Next session needing attention** arrow beside the sidebar view selector to cycle through waiting and failed sessions in session order. It searches all sessions, including collapsed collections and results hidden by the current search or view. It selects the target workspace and pane, preserves the current search and view, and marks the notice as read. When no session needs attention, the button is disabled. You can reach the button with Tab and activate it with Enter or Space.

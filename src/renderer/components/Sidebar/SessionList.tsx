@@ -8,6 +8,7 @@ import {
 import { useWorkspaceStore } from '../../store/workspaceStore'
 import { collectTreeSessionIds } from '../../../shared/paneTreeNormalize'
 import { SessionItem } from './SessionItem'
+import { SessionPreviewProvider } from './SessionPreview'
 import { CollectionItem } from './CollectionItem'
 import { filterSessionsByAttention, searchSessions, type SessionView } from './sessionQuery'
 import styles from './Sidebar.module.css'
@@ -69,7 +70,11 @@ function renderCollection(
   )
 }
 
-export function SessionList({
+export function SessionList(props: SessionListProps) {
+  return <SessionPreviewProvider><SessionListContent {...props} /></SessionPreviewProvider>
+}
+
+function SessionListContent({
   onClose,
   onSelect,
   onCollectionContextMenu,

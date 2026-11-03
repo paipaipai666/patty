@@ -17,7 +17,8 @@ import {
 } from '../../store/sessionStore'
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import type { AgentStatus } from '../../../shared/agentTypes'
-import { directoryLabel, sessionContext, sessionLocation, sessionTool } from '../../utils/sessionPresentation'
+import { AGENT_STATUS_LABELS, directoryLabel, sessionContext, sessionLocation, sessionTool } from '../../utils/sessionPresentation'
+import { useSessionPreview } from './SessionPreview'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
@@ -27,16 +28,6 @@ interface SessionItemProps {
   onClose: (id: string) => void
   onSelect: (id: string) => void
   depth?: number
-}
-
-const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
-  unknown: 'Status unavailable',
-  idle: 'Idle',
-  working: 'Working',
-  waiting_approval: 'Waiting for approval',
-  waiting_input: 'Waiting for answer',
-  complete: 'Completed',
-  error: 'Error'
 }
 
 const STATUS_BADGES = {
@@ -56,6 +47,8 @@ export const SessionItem = memo(function SessionItem({
   onSelect,
   depth = 0
 }: SessionItemProps) {
+  const preview = useSessionPreview()
+  const draggingSessionId = useSessionStore(state => state.draggingSessionId)
   const renameSession = useSessionStore((s) => s.renameSession)
   const activity = useSessionStore(
     (s) => s.agentStates[session.id]
@@ -69,6 +62,11 @@ export const SessionItem = memo(function SessionItem({
   const restoreFocus = useRef(false)
   const previousAttention = useRef<AgentStatus | null>(null)
   const [glowNonce, setGlowNonce] = useState(0)
+
+  useEffect(() => () => preview.release(session.id), [preview.release, session.id])
+  useEffect(() => {
+    if (draggingSessionId || isEditing) preview.release(session.id)
+  }, [draggingSessionId, isEditing, preview.release, session.id])
 
   useEffect(() => {
     const unreadAttention = activity?.unread ? activity.status : null
@@ -88,6 +86,7 @@ export const SessionItem = memo(function SessionItem({
   const badge = activity ? STATUS_BADGES[activity.status] : null
   const StatusIcon = badge?.icon
   const context = sessionContext(session)
+  const previewOpen = preview.activeId === session.id
   const statusClass =
     attentionType === 'permission'
       ? styles.permission
@@ -106,6 +105,7 @@ export const SessionItem = memo(function SessionItem({
           : null
 
   const handleDoubleClick = () => {
+    preview.dismiss()
     setIsEditing(true)
     setEditValue(session.title)
     setTimeout(() => inputRef.current?.select(), 0)
@@ -139,6 +139,7 @@ export const SessionItem = memo(function SessionItem({
     }
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
+      preview.dismiss()
       onSelect(session.id)
     } else if (e.key === 'Delete') {
       e.preventDefault()
@@ -150,6 +151,7 @@ export const SessionItem = memo(function SessionItem({
   }
 
   const handleDragStart = (e: React.DragEvent) => {
+    preview.dismiss()
     e.stopPropagation()
     e.dataTransfer.setData(
       'application/json',
@@ -237,14 +239,19 @@ export const SessionItem = memo(function SessionItem({
       aria-selected={isActive}
       aria-label={session.title}
       aria-description={`${context}${activity ? `, ${statusText}${activity.unread ? ', unread' : ''}` : ''}`}
+      aria-describedby={previewOpen ? preview.tooltipId : undefined}
       aria-level={depth + 1}
       aria-keyshortcuts="F2 Delete"
       data-tree-id={`session:${session.id}`}
       data-agent-status={activity?.status}
       data-agent-unread={activity?.unread}
-      onClick={() => onSelect(session.id)}
+      onClick={() => { preview.dismiss(); onSelect(session.id) }}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
+      onMouseEnter={event => { if (!isEditing && !draggingSessionId) preview.enter({ id: session.id, anchor: event.currentTarget }, 'pointer') }}
+      onMouseLeave={() => preview.leave(session.id, 'pointer')}
+      onFocus={event => { if (!isEditing && !draggingSessionId) preview.enter({ id: session.id, anchor: event.currentTarget }, 'focus') }}
+      onBlur={event => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) preview.leave(session.id, 'focus') }}
       draggable={!isEditing}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
@@ -293,13 +300,13 @@ export const SessionItem = memo(function SessionItem({
         ) : (
           <span className={styles.itemText}>
             <span className={styles.itemTitleRow}>
-              <span className={styles.itemTitle} title={session.title}>{session.title}</span>
+              <span className={styles.itemTitle} title={previewOpen ? undefined : session.title}>{session.title}</span>
               {badge && StatusIcon && (
               <span
                 className={`${styles.itemStatus} ${statusClass}`}
                 role={attentionType ? 'status' : undefined}
                 aria-label={statusText}
-                title={statusText}
+                title={previewOpen ? undefined : statusText}
               >
                 <StatusIcon aria-hidden />
                 <span className={styles.statusLabel} aria-hidden>{badge.label}</span>
@@ -307,7 +314,7 @@ export const SessionItem = memo(function SessionItem({
               )}
               {activity?.unread && <span className={styles.unreadDot} aria-hidden />}
             </span>
-            <span className={styles.itemContext} title={`${context}\n${sessionLocation(session)}`}>
+            <span className={styles.itemContext} title={previewOpen ? undefined : `${context}\n${sessionLocation(session)}`}>
               {session.shell === 'ssh' ? sessionLocation(session) : directoryLabel(session.cwd)}
               <span className={styles.contextTool}> · {sessionTool(session)}</span>
             </span>

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
@@ -18,6 +18,10 @@ vi.mock('../../ContributionGrid/ContributionGrid', () => ({ ContributionGrid: ()
 
 import { useSessionStore } from '../../../store/sessionStore'
 import { SessionItem } from '../SessionItem'
+import { SessionPreviewProvider } from '../SessionPreview'
+
+const roots: ReturnType<typeof createRoot>[] = []
+afterEach(() => { act(() => { for (const root of roots.splice(0)) root.unmount() }) })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -48,7 +52,8 @@ function render(props: Partial<Parameters<typeof SessionItem>[0]> = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
-  act(() => { root.render(<SessionItem {...allProps} />) })
+  roots.push(root)
+  act(() => { root.render(<SessionPreviewProvider><SessionItem {...allProps} /></SessionPreviewProvider>) })
   return { container, root, props: allProps }
 }
 
@@ -68,7 +73,7 @@ describe('SessionItem', () => {
     const session = { ...defaultSession, aiType: 'codex' as const }
     const { container, root } = render({ session })
     expect(container.querySelector('[data-testid="background-activity"]')).not.toBeNull()
-    act(() => root.render(<SessionItem session={session} isActive onClose={vi.fn()} onSelect={vi.fn()} />))
+    act(() => root.render(<SessionPreviewProvider><SessionItem session={session} isActive onClose={vi.fn()} onSelect={vi.fn()} /></SessionPreviewProvider>))
     expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
     expect(container.querySelector('[aria-label="Working"]')).not.toBeNull()
   })

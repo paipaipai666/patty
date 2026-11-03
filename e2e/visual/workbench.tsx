@@ -43,13 +43,14 @@ function setTheme(theme: 'dark' | 'light') {
   applyTheme(theme, [])
 }
 setTheme('dark')
-Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, sessions: useSessionStore, workspaces: useWorkspaceStore } })
+Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, sessions: useSessionStore, workspaces: useWorkspaceStore, settings: useSettingsStore } })
 
 function Workbench() {
   const visible = useSessionStore((state) => state.sidebarVisible)
+  const position = useSettingsStore((state) => state.settings.sidebarPosition)
   return <div className="visual-workbench">
     <TitleBar sidebarVisible={visible} onToggleSidebar={() => useSessionStore.getState().toggleSidebar()} />
-    <main className="visual-stage">
+    <main className="visual-stage" style={{ flexDirection: position === 'right' ? 'row-reverse' : undefined }}>
       {visible && <Sidebar onNewTerminal={() => useSessionStore.getState().addSession()} onNewTerminalPickFolder={() => {}} onNewSsh={() => {}} onSelectSession={selectSession} onCloseSession={closeSession} />}
       <div className="visual-content">
         <div className="visual-panes"><PaneTreeRoot /></div>

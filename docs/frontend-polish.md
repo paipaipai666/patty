@@ -45,3 +45,21 @@ The desktop workflow script was migrated to the new background-only activity and
 The first two commits are `36e6358` (compact toolbar and visual checks) and `67a27d7` (session context and restrained activity). The final pane-header commit includes the screenshot-driven narrow-sidebar adjustment.
 
 The final ordinary desktop release build succeeds. Its startup isolation check still rejects test-only configuration overrides before creating WebView2 data or installing CLI hooks. No backend code or saved-state format changed in this pass.
+
+## Follow-up: previews and theme thumbnails
+
+The user approved continuing with these two frontend units.
+
+1. Goal: reveal complete session context without selecting it, and let users compare themes visually.
+2. Non-goals: no terminal-output capture, generated summary, Hook change, persistence migration or command palette in these units.
+3. Modules: sidebar preview provider and rows, appearance controls, theme presentation, component tests and the browser fixture.
+4. Rollback: revert each frontend commit independently. Existing session and custom-theme data stays compatible.
+5. Commits: session hover/focus preview, then theme thumbnails with keyboard selection.
+
+The preview sketches compared inline expansion with a floating card. The card preserves list positions at the 160px minimum and can flip beside a right-side sidebar. It uses one owner per list, renders outside clipped containers, waits 400ms for pointer or focus intent, and permits moving the pointer into the card to read or select text. Escape, selection, dragging, renaming, outside pointer actions, scrolling, hiding the sidebar and opening settings dismiss it. Unmount cancels pending timers.
+
+The card shows reported title, tool, status, unread state, folder and SSH connection. Looking at it never selects the session or marks a notice read. Agent events update an open card; removing its session removes the card. Native text tooltips remain the fallback while the structured preview is closed.
+
+Seven focused behavior tests pass. Real-browser captures cover dark/left and light/right sidebars at 160px, including viewport bounds and unchanged unread state. Existing desktop CDP limitations still apply.
+
+The preview unit passes all 736 frontend tests, TypeScript and comment checks. Its browser fixture also checks the existing workbench layout, navigation, focus and reduced-motion behavior.
