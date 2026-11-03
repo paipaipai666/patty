@@ -63,7 +63,7 @@ async function screenshot(name, width = 1486, height = 1059) {
       event: 'pty:agent', payload: { paneId: ${JSON.stringify(attentionSessionId)}, revision: ${++agentRevision}, agent: { aiType: 'claude', status: 'waiting_approval' } }
     })`)
     await cdp.waitFor(
-      `document.querySelector('[data-tree-id="session:${attentionSessionId}"]').innerText.includes('Waiting for approval')`
+      `document.querySelector('[data-tree-id="session:${attentionSessionId}"]').querySelector('[aria-label="Waiting for approval"]') !== null`
     )
     await sleep(50)
   }
@@ -233,7 +233,7 @@ async function verifyAgentAnimations(sessionId, theme) {
   })
   await cdp.waitFor(`(() => {
     const row = document.querySelector(${JSON.stringify(rowSelector)})
-    return getComputedStyle(row.querySelector('[data-type]')).display === 'none' && getComputedStyle(row.querySelector('[data-testid="agent-attention-glow"]')).display === 'none' && row.innerText.includes('Waiting for approval')
+    return getComputedStyle(row.querySelector('[data-type]')).display === 'none' && getComputedStyle(row.querySelector('[data-testid="agent-attention-glow"]')).display === 'none' && row.querySelector('[aria-label="Waiting for approval"]') !== null
   })()`)
   await cdp.send('Emulation.setEmulatedMedia', { features: [] })
   await cdp.waitFor(
@@ -404,7 +404,7 @@ try {
     event: 'pty:agent', payload: { paneId: ${JSON.stringify(agentId)}, revision: ${++agentRevision}, agent: { aiType: 'claude', status: 'waiting_approval' } }
   })`)
   await cdp.waitFor(
-    `document.querySelector('[data-tree-id="session:${agentId}"]').innerText.includes('Waiting for approval')`
+    `document.querySelector('[data-tree-id="session:${agentId}"]').querySelector('[aria-label="Waiting for approval"]') !== null`
   )
   await cdp.evaluate(
     `document.querySelector('[aria-label="Resize terminal panes"]').focus()`

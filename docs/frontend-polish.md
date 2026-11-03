@@ -21,3 +21,11 @@ The runner uses its own temporary browser profile and a local Vite server. Scree
 The first unit passes all 721 frontend tests, type and comment checks. Visual checks cover dark and light themes at 160, 264 and 320px, menu keyboard focus restoration and next-attention navigation. The toolbar measures 128px high in all six layouts, with controls inside the sidebar bounds.
 
 The existing WebView2 CDP blocker remains a separate desktop limitation.
+
+## Session rows
+
+The second unit uses fixed two-line rows: task title with a semantic status icon and a separate unread dot, then tool and folder or SSH target. Compact badge text is hidden below 220px; full status names remain available through accessible labels and tooltips. The close action appears on hover or keyboard focus without reserving its full width at rest.
+
+The activity grid is limited to background sessions that are working, with a small, muted painted area. Waiting, completed and foreground sessions keep static status indicators. Reduced-motion mode hides the activity effect. Existing read/unread and filtering behavior is preserved.
+
+All 726 frontend tests pass. Added cases cover project labels, SSH ports and IPv6, status after reading, and background-only activity. Browser checks verify the actual status label, context, read behavior and activity visibility in addition to the six layout captures.

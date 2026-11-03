@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, memo } from 'react'
-import { Code20Regular, Globe20Regular } from '@fluentui/react-icons'
+import { Code20Regular, Globe20Regular, Checkmark16Regular, ErrorCircle16Regular, Shield16Regular, ChatHelp16Regular, Circle16Regular, ArrowSync16Regular, QuestionCircle16Regular } from '@fluentui/react-icons'
 import {
   useSessionStore,
   SESSION_COLOR_VARS,
@@ -7,6 +7,7 @@ import {
 } from '../../store/sessionStore'
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import type { AgentStatus } from '../../../shared/agentTypes'
+import { sessionContext, sessionLocation } from '../../utils/sessionPresentation'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
@@ -27,6 +28,16 @@ const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
   complete: 'Completed',
   error: 'Error'
 }
+
+const STATUS_BADGES = {
+  unknown: { label: 'Unavailable', icon: QuestionCircle16Regular },
+  idle: { label: 'Idle', icon: Circle16Regular },
+  working: { label: 'Working', icon: ArrowSync16Regular },
+  waiting_approval: { label: 'Approval', icon: Shield16Regular },
+  waiting_input: { label: 'Answer', icon: ChatHelp16Regular },
+  complete: { label: 'Done', icon: Checkmark16Regular },
+  error: { label: 'Error', icon: ErrorCircle16Regular }
+} satisfies Record<AgentStatus, { label: string; icon: typeof Circle16Regular }>
 
 export const SessionItem = memo(function SessionItem({
   session,
@@ -64,6 +75,9 @@ export const SessionItem = memo(function SessionItem({
     }
   }, [isEditing])
   const statusText = activity ? AGENT_STATUS_LABELS[activity.status] : SHELL_LABELS[session.shell]
+  const badge = activity ? STATUS_BADGES[activity.status] : null
+  const StatusIcon = badge?.icon
+  const context = sessionContext(session)
   const statusClass =
     attentionType === 'permission'
       ? styles.permission
@@ -202,7 +216,7 @@ export const SessionItem = memo(function SessionItem({
   return (
     <div
       ref={itemRef}
-      className={`${styles.item} ${isActive ? styles.itemActive : ''} ${isAi ? styles.itemAi : ''}`}
+      className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
       style={{
         paddingLeft: `${depth * 16 + 8}px`,
         position: 'relative',
@@ -212,7 +226,7 @@ export const SessionItem = memo(function SessionItem({
       tabIndex={isEditing ? -1 : 0}
       aria-selected={isActive}
       aria-label={session.title}
-      aria-description={isAi ? `${statusText}${activity?.unread ? ', unread' : ''}` : undefined}
+      aria-description={`${context}${activity ? `, ${statusText}${activity.unread ? ', unread' : ''}` : ''}`}
       aria-level={depth + 1}
       aria-keyshortcuts="F2 Delete"
       data-tree-id={`session:${session.id}`}
@@ -225,7 +239,7 @@ export const SessionItem = memo(function SessionItem({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {isAi && <ContributionGrid aiType={session.aiType ?? null} />}
+      {isAi && activity?.status === 'working' && !isActive && <div className={styles.activityTrace} aria-hidden><ContributionGrid aiType={session.aiType ?? null} /></div>}
       {attentionGlowClass && (
         <div
           key={glowNonce}
@@ -268,20 +282,22 @@ export const SessionItem = memo(function SessionItem({
           />
         ) : (
           <span className={styles.itemText}>
-            <span className={styles.itemTitle} title={session.title}>
-              {session.title}
-            </span>
-            {isAi && (
+            <span className={styles.itemTitleRow}>
+              <span className={styles.itemTitle} title={session.title}>{session.title}</span>
+              {badge && StatusIcon && (
               <span
                 className={`${styles.itemStatus} ${statusClass}`}
                 role={attentionType ? 'status' : undefined}
+                aria-label={statusText}
+                title={statusText}
               >
-                {attentionType && (
-                  <span className={styles.statusDot} aria-hidden />
-                )}
-                {statusText}
+                <StatusIcon aria-hidden />
+                <span className={styles.statusLabel} aria-hidden>{badge.label}</span>
               </span>
-            )}
+              )}
+              {activity?.unread && <span className={styles.unreadDot} aria-hidden />}
+            </span>
+            <span className={styles.itemContext} title={`${context}\n${sessionLocation(session)}`}>{context}</span>
           </span>
         )}
         <button

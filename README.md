@@ -94,6 +94,8 @@ Run supported AI tools inside a local Patty terminal so their hooks can identify
 | Completed | The tool finished responding |
 | Error | The tool reported an error |
 
+Session rows show the tool and working folder or SSH target below the task name. Status badges use compact labels such as Approval, Answer, and Done; their tooltips and accessible names provide the full status. Narrow sidebars keep the status icon. A separate dot marks unread activity. The activity grid appears only while a background agent is working.
+
 Selecting a session or typing in its terminal marks its latest notice as read and stops the attention glow. Its runtime status remains visible. The **Needs you** view continues to include waiting and failed sessions after they are read. The **Completed** view includes completed responses until the tool reports new work or exits. A new prompt or tool execution replaces the previous completion or error with **Working**. Available state transitions depend on the events each CLI adapter reports.
 
 Use the **Next session needing attention** arrow beside the sidebar view selector to cycle through waiting and failed sessions in session order. It searches all sessions, including collapsed collections and results hidden by the current search or view. It selects the target workspace and pane, preserves the current search and view, and marks the notice as read. When no session needs attention, the button is disabled. You can reach the button with Tab and activate it with Enter or Space.

@@ -58,6 +58,9 @@ try {
       writeFileSync(join(output, `${theme}-${width}.png`), Buffer.from(shot.data, 'base64'))
     }
   }
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:agent"]').textContent.includes('Claude Code · terminal-sidebar')`), true)
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:agent"] canvas') === null`), true)
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:agent"] [aria-label="Waiting for approval"]') !== null`), true)
   await cdp.evaluate(`document.querySelector('[aria-label="New terminal or collection"]').click()`)
   await cdp.waitFor(`!!document.querySelector('[role="menu"]')`)
   assert.equal(await cdp.evaluate(`document.activeElement?.getAttribute('role')`), 'menuitem')
@@ -67,6 +70,11 @@ try {
   await cdp.evaluate(`document.querySelector('[aria-label="Next session needing attention"]').click()`)
   await cdp.waitFor(`window.workbenchPreview.sessions.getState().activeSessionId === 'agent'`)
   assert.equal(await cdp.evaluate(`window.workbenchPreview.sessions.getState().agentStates.agent.status`), 'waiting_approval')
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:agent"]').dataset.agentUnread`), 'false')
+  await cdp.evaluate(`window.workbenchPreview.sessions.getState().applyAgentUpdate({ paneId: 'review', revision: 3, agent: { aiType: 'codex', status: 'working' } })`)
+  await cdp.waitFor(`!!document.querySelector('[data-tree-id="session:review"] canvas')`)
+  await cdp.evaluate(`window.workbenchPreview.sessions.getState().setActive('review')`)
+  await cdp.waitFor(`!document.querySelector('[data-tree-id="session:review"] canvas')`)
   assert.deepEqual(errors, [])
   writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'passed', scope: 'Real React components and xterm with fixture transport; no desktop PTY or CLI integration', metrics }, null, 2))
   console.log(`PASS: workbench layout, menu focus and attention navigation; screenshots in ${output}`)

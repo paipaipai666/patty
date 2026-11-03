@@ -14,11 +14,14 @@ vi.mock('../../../store/sessionStore', () => {
   return { useSessionStore, SESSION_COLOR_VARS: {} }
 })
 
+vi.mock('../../ContributionGrid/ContributionGrid', () => ({ ContributionGrid: () => <canvas data-testid="background-activity" /> }))
+
 import { useSessionStore } from '../../../store/sessionStore'
 import { SessionItem } from '../SessionItem'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useSessionStore.getState().agentStates = {}
   document.body.innerHTML = ''
 })
 
@@ -50,6 +53,25 @@ function render(props: Partial<Parameters<typeof SessionItem>[0]> = {}) {
 }
 
 describe('SessionItem', () => {
+  it('shows project context and a named status independently of unread', () => {
+    useSessionStore.getState().agentStates = { s1: { status: 'waiting_approval', unread: false } }
+    const { container } = render({ session: { ...defaultSession, aiType: 'claude', cwd: 'D:\\work\\payments' } })
+    expect(container.textContent).toContain('Claude Code · payments')
+    expect(container.querySelector('[aria-label="Waiting for approval"]')?.textContent).toContain('Approval')
+    expect(container.querySelector('[role="treeitem"]')?.getAttribute('aria-description')).toBe('Claude Code · payments, Waiting for approval')
+    expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
+  })
+
+  it('limits animated activity to a background working session', () => {
+    useSessionStore.getState().agentStates = { s1: { status: 'working', unread: false } }
+    const session = { ...defaultSession, aiType: 'codex' as const }
+    const { container, root } = render({ session })
+    expect(container.querySelector('[data-testid="background-activity"]')).not.toBeNull()
+    act(() => root.render(<SessionItem session={session} isActive onClose={vi.fn()} onSelect={vi.fn()} />))
+    expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Working"]')).not.toBeNull()
+  })
+
   it('renders session title', () => {
     const { container } = render()
     expect(container.textContent).toContain('My Terminal')
