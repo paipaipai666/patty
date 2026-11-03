@@ -1,0 +1,21 @@
+.visual-workbench {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.visual-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.visual-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.visual-panes {
+  flex: 1;
+  min-height: 0;
+  padding: 6px;
+}

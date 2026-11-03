@@ -86,7 +86,7 @@ function render(props: Partial<Parameters<typeof Sidebar>[0]> = {}) {
 describe('Sidebar', () => {
   it('creates a terminal directly from the primary action', () => {
     const { container, props } = render()
-    const button = Array.from(container.querySelectorAll('button')).find((item) => item.textContent?.trim() === 'New terminal')!
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="New terminal"]')!
     act(() => { button.click() })
     expect(props.onNewTerminal).toHaveBeenCalledTimes(1)
   })

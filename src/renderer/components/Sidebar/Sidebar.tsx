@@ -7,6 +7,7 @@ import {
 } from 'react'
 import {
   Add16Regular,
+  ArrowRight16Regular,
   Search16Regular,
   ChevronDown16Regular,
   Folder16Regular,
@@ -167,6 +168,144 @@ export function Sidebar({
   return (
     <div className={styles.sidebar} style={{ width: sidebarWidth }}>
       <div className={styles.header} ref={headerRef}>
+        <div className={styles.headingRow}>
+          <h2 className={styles.heading}>Sessions <span className={styles.sessionCount}>{sessions.length}</span></h2>
+          <div className={styles.createRow}>
+            <button
+              type="button"
+              className={styles.newTerminal}
+              title="New terminal"
+              aria-label="New terminal"
+              onClick={onNewTerminal}
+            >
+              <Add16Regular aria-hidden />
+            </button>
+            <div className={styles.menuContainer}>
+              <button
+                ref={menuButtonRef}
+                type="button"
+                className={styles.newBtn}
+                onClick={() => setMenu(menu ? null : 'create')}
+                aria-label="New terminal or collection"
+                title="More ways to create a terminal"
+                aria-haspopup="menu"
+                aria-expanded={menu !== null}
+                aria-controls={menu ? 'terminal-create-menu' : undefined}
+              >
+                <ChevronDown16Regular aria-hidden />
+              </button>
+              {menu && (
+                <div
+                  id="terminal-create-menu"
+                  ref={menuRef}
+                  className={styles.dropdownMenu}
+                  style={menuPosition}
+                  role="menu"
+                  aria-label={
+                    menu === 'ssh'
+                      ? 'SSH profiles'
+                      : 'Create terminal or collection'
+                  }
+                  onKeyDown={handleMenuKeyDown}
+                >
+                  {menu === 'create' ? (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.menuItem}
+                        onClick={() => {
+                          setMenu(null)
+                          onNewTerminal()
+                        }}
+                      >
+                        <Code16Regular aria-hidden />
+                        <span>New Terminal</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.menuItem}
+                        onClick={() => {
+                          setMenu(null)
+                          onNewTerminalPickFolder()
+                        }}
+                      >
+                        <Folder16Regular aria-hidden />
+                        <span>New Terminal (Choose Folder)…</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.menuItem}
+                        onClick={() => setMenu('ssh')}
+                      >
+                        <Globe16Regular aria-hidden />
+                        <span>New SSH Connection…</span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.menuItem}
+                        onClick={() => {
+                          setMenu(null)
+                          setNewCollectionName('')
+                          setIsCreatingCollection(true)
+                        }}
+                      >
+                        <Folder16Regular aria-hidden />
+                        <span>New Collection</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {sshProfiles.length === 0 && (
+                        <div className={styles.menuItemDisabled}>
+                          No SSH profiles
+                        </div>
+                      )}
+                      {sshProfiles.map((profile) => (
+                        <button
+                          key={profile.id}
+                          type="button"
+                          role="menuitem"
+                          className={styles.menuItem}
+                          onClick={() => {
+                            setMenu(null)
+                            onNewSsh(profile)
+                          }}
+                        >
+                          <Globe16Regular aria-hidden />
+                          <span
+                            className={styles.menuItemText}
+                            title={profile.host}
+                          >
+                            {profile.name}
+                            <span className={styles.menuItemSub}>
+                              {profile.user ? profile.user + '@' : ''}
+                              {profile.host}:{profile.port ?? 22}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className={styles.menuItem}
+                        onClick={() => {
+                          setMenu(null)
+                          openSettings('ssh')
+                        }}
+                      >
+                        Manage SSH Profiles…
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
         <div className={styles.search}>
           <Search16Regular aria-hidden />
           <input
@@ -179,166 +318,33 @@ export function Sidebar({
             onChange={(event) => setSearchQuery(event.target.value)}
           />
         </div>
-        <select
-          className={styles.viewFilter}
-          aria-label="Session view"
-          value={sessionView}
-          onChange={(event) => {
-            const value = event.target.value
-            if (value === 'all' || value === 'attention' || value === 'complete') setSessionView(value)
-          }}
-        >
-          <option value="all">All sessions ({viewCounts.all})</option>
-          <option value="attention">Needs attention ({viewCounts.attention})</option>
-          <option value="complete">Completed ({viewCounts.complete})</option>
-        </select>
-        <button
-          type="button"
-          className={styles.nextAttention}
-          aria-label="Next session needing attention"
-          title={viewCounts.attention > 0 ? 'Go to the next waiting or failed session across all sessions' : 'No sessions need attention'}
-          disabled={viewCounts.attention === 0}
-          onClick={() => {
-            const id = nextAttentionSessionId(useSessionStore.getState())
-            if (id !== null) onSelectSession(id)
-          }}
-        >
-          Next attention
-        </button>
-        <div className={styles.createRow}>
+        <div className={styles.filterRow}>
+          <select
+            className={styles.viewFilter}
+            aria-label="Session view"
+            value={sessionView}
+            onChange={(event) => {
+              const value = event.target.value
+              if (value === 'all' || value === 'attention' || value === 'complete') setSessionView(value)
+            }}
+          >
+            <option value="all">All ({viewCounts.all})</option>
+            <option value="attention">Needs you ({viewCounts.attention})</option>
+            <option value="complete">Completed ({viewCounts.complete})</option>
+          </select>
           <button
             type="button"
-            className={styles.newTerminal}
-            title="New terminal"
-            onClick={onNewTerminal}
+            className={styles.nextAttention}
+            aria-label="Next session needing attention"
+            title={viewCounts.attention > 0 ? 'Go to the next waiting or failed session across all sessions' : 'No sessions need attention'}
+            disabled={viewCounts.attention === 0}
+            onClick={() => {
+              const id = nextAttentionSessionId(useSessionStore.getState())
+              if (id !== null) onSelectSession(id)
+            }}
           >
-            <Add16Regular aria-hidden />
-            <span>New terminal</span>
+            <ArrowRight16Regular aria-hidden />
           </button>
-          <div className={styles.menuContainer}>
-            <button
-              ref={menuButtonRef}
-              type="button"
-              className={styles.newBtn}
-              onClick={() => setMenu(menu ? null : 'create')}
-              aria-label="New terminal or collection"
-              title="More ways to create a terminal"
-              aria-haspopup="menu"
-              aria-expanded={menu !== null}
-              aria-controls={menu ? 'terminal-create-menu' : undefined}
-            >
-              <ChevronDown16Regular aria-hidden />
-            </button>
-            {menu && (
-              <div
-                id="terminal-create-menu"
-                ref={menuRef}
-                className={styles.dropdownMenu}
-                style={menuPosition}
-                role="menu"
-                aria-label={
-                  menu === 'ssh'
-                    ? 'SSH profiles'
-                    : 'Create terminal or collection'
-                }
-                onKeyDown={handleMenuKeyDown}
-              >
-                {menu === 'create' ? (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={styles.menuItem}
-                      onClick={() => {
-                        setMenu(null)
-                        onNewTerminal()
-                      }}
-                    >
-                      <Code16Regular aria-hidden />
-                      <span>New Terminal</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={styles.menuItem}
-                      onClick={() => {
-                        setMenu(null)
-                        onNewTerminalPickFolder()
-                      }}
-                    >
-                      <Folder16Regular aria-hidden />
-                      <span>New Terminal (Choose Folder)…</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={styles.menuItem}
-                      onClick={() => setMenu('ssh')}
-                    >
-                      <Globe16Regular aria-hidden />
-                      <span>New SSH Connection…</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={styles.menuItem}
-                      onClick={() => {
-                        setMenu(null)
-                        setNewCollectionName('')
-                        setIsCreatingCollection(true)
-                      }}
-                    >
-                      <Folder16Regular aria-hidden />
-                      <span>New Collection</span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {sshProfiles.length === 0 && (
-                      <div className={styles.menuItemDisabled}>
-                        No SSH profiles
-                      </div>
-                    )}
-                    {sshProfiles.map((profile) => (
-                      <button
-                        key={profile.id}
-                        type="button"
-                        role="menuitem"
-                        className={styles.menuItem}
-                        onClick={() => {
-                          setMenu(null)
-                          onNewSsh(profile)
-                        }}
-                      >
-                        <Globe16Regular aria-hidden />
-                        <span
-                          className={styles.menuItemText}
-                          title={profile.host}
-                        >
-                          {profile.name}
-                          <span className={styles.menuItemSub}>
-                            {profile.user ? profile.user + '@' : ''}
-                            {profile.host}:{profile.port ?? 22}
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className={styles.menuItem}
-                      onClick={() => {
-                        setMenu(null)
-                        openSettings('ssh')
-                      }}
-                    >
-                      Manage SSH Profiles…
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       </div>
       {isCreatingCollection && (

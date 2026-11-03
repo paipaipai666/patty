@@ -94,15 +94,17 @@ Run supported AI tools inside a local Patty terminal so their hooks can identify
 | Completed | The tool finished responding |
 | Error | The tool reported an error |
 
-Selecting a session or typing in its terminal marks its latest notice as read and stops the attention glow. Its runtime status remains visible. The **Needs attention** view continues to include waiting and failed sessions after they are read. The **Completed** view includes completed responses until the tool reports new work or exits. A new prompt or tool execution replaces the previous completion or error with **Working**. Available state transitions depend on the events each CLI adapter reports.
+Selecting a session or typing in its terminal marks its latest notice as read and stops the attention glow. Its runtime status remains visible. The **Needs you** view continues to include waiting and failed sessions after they are read. The **Completed** view includes completed responses until the tool reports new work or exits. A new prompt or tool execution replaces the previous completion or error with **Working**. Available state transitions depend on the events each CLI adapter reports.
 
-Use **Next attention** in the sidebar to cycle through waiting and failed sessions in session order. It searches all sessions, including collapsed collections and results hidden by the current search or view. It selects the target workspace and pane, preserves the current search and view, and marks the notice as read. When no session needs attention, the button is disabled. You can reach the button with Tab and activate it with Enter or Space.
+Use the **Next session needing attention** arrow beside the sidebar view selector to cycle through waiting and failed sessions in session order. It searches all sessions, including collapsed collections and results hidden by the current search or view. It selects the target workspace and pane, preserves the current search and view, and marks the notice as read. When no session needs attention, the button is disabled. You can reach the button with Tab and activate it with Enter or Space.
 
 Use **Settings → Notifications** to enable or disable each adapter. Enabling an adapter installs Patty's integration in that tool's configuration; disabling it removes Patty's integration. Restart an already-running AI tool after changing its hook configuration. Available events depend on the tool's hooks.
 
 Patty checks that hook events belong to the current local terminal and CLI process. Events from an earlier run or conversation cannot replace the current state. Closing a layout pane keeps its session and status in the sidebar. Closing the session, exiting the tool, or disabling its adapter clears the status. Process exit detection can take up to one watchdog interval of five seconds.
 
 OpenCode and Oh My Pi send periodic heartbeats. If a heartbeat expires while the process remains alive, **Status unavailable** replaces its last reported state until a fresh state event arrives. Claude Code, Codex, Qwen Code, and Copilot CLI use event callbacks; silence alone does not count as exit. Reloading the window reads the backend's current states. Runtime states are not restored after an application restart.
+
+The sidebar heading contains **New terminal** (+) and a menu for other creation options. Search keeps its own row; the view selector and next-attention arrow share a row.
 
 ## Settings
 
@@ -241,3 +243,5 @@ Patty is licensed under the [MIT License](LICENSE). The bundled Microsoft ConPTY
 - [xterm.js](https://xtermjs.org/)
 - [Zustand](https://github.com/pmndrs/zustand)
 - [Microsoft Terminal and ConPTY](https://github.com/microsoft/terminal)
+
+The browser-only workbench check is available with `npm run test:visual:workbench`. It captures real frontend components with a fixed terminal replay transport. See [Frontend polish](docs/frontend-polish.md) for scope and verification.

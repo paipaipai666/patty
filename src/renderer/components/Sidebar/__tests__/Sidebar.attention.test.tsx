@@ -106,7 +106,7 @@ describe('next attention control', () => {
     expect(input.value).toBe('scratch')
     expect(select.value).toBe('complete')
     expect(useSessionStore.getState().collections[0].collapsed).toBe(true)
-    expect(container.querySelector('option[value="attention"]')?.textContent).toBe('Needs attention (2)')
+    expect(container.querySelector('option[value="attention"]')?.textContent).toBe('Needs you (2)')
     expect(useWorkspaceStore.getState().workspaces).toHaveLength(3)
   })
 })

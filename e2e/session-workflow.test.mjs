@@ -97,7 +97,7 @@ try {
     { paneId: 'review', revision: ${++agentRevision}, agent: { aiType: 'claude', status: 'error' } },
     { paneId: 'scratch', revision: ${++agentRevision}, agent: { aiType: 'omp', status: 'complete' } }
   ].map(payload => window.__TAURI_INTERNALS__.invoke('plugin:event|emit', { event: 'pty:agent', payload })))`)
-  await cdp.waitFor(`document.querySelector('option[value="attention"]').textContent === 'Needs attention (2)'`)
+  await cdp.waitFor(`document.querySelector('option[value="attention"]').textContent === 'Needs you (2)'`)
   await selectView('complete', ['scratch'])
   await search('hidden by search', [])
   await cdp.evaluate(`document.querySelector('[aria-label="Next session needing attention"]').click()`)

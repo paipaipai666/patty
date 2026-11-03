@@ -19,6 +19,7 @@
     "test:e2e:graphite": "node e2e/graphite.test.mjs",
     "test:e2e:sessions": "node e2e/session-workflow.test.mjs",
     "test:e2e:isolation": "node e2e/isolation.test.mjs",
+    "test:visual:workbench": "node e2e/workbench-visual.test.mjs",
     "benchmark:startup": "node scripts/benchmark-startup.mjs",
     "typecheck": "tsc -b --noEmit",
     "check:comments": "node scripts/no-comments.mjs --check",

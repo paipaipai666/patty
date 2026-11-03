@@ -134,10 +134,10 @@ describe('sidebar attention controls', () => {
     useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'scratch', agent: { aiType: 'claude', status: 'complete' } }))
     renderSidebar()
     expect(Array.from(container.querySelectorAll('option')).map((option) => option.textContent)).toEqual([
-      'All sessions (3)', 'Needs attention (2)', 'Completed (1)'
+      'All (3)', 'Needs you (2)', 'Completed (1)'
     ])
     act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: null })))
-    expect(container.querySelector('option[value="attention"]')?.textContent).toBe('Needs attention (1)')
+    expect(container.querySelector('option[value="attention"]')?.textContent).toBe('Needs you (1)')
   })
 
   it('combines the view picker with the search field without changing the active workspace', () => {

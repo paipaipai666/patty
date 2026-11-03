@@ -266,7 +266,7 @@ try {
     `!!document.querySelector('[aria-label="Search sessions"]')`
   )
   await screenshot('empty')
-  await clickText('New terminal')
+  await cdp.evaluate(`document.querySelector('[aria-label="New terminal"]').click()`)
   await cdp.waitFor(
     `document.querySelectorAll('.xterm').length === 1 && /PID [0-9]+/.test(document.body.innerText)`
   )
@@ -303,7 +303,7 @@ try {
   const splitRatioBeforeNavigation = await cdp.evaluate(
     `document.querySelector('[aria-label="Resize terminal panes"]').getAttribute('aria-valuenow')`
   )
-  await clickText('New terminal')
+  await cdp.evaluate(`document.querySelector('[aria-label="New terminal"]').click()`)
   await cdp.waitFor(
     `document.querySelectorAll('[data-tree-id^="session:"]').length === 3 && /PID [0-9]+/.test(document.body.innerText)`
   )
@@ -525,7 +525,7 @@ try {
   assert.ok(narrow.closeRight <= narrow.rowRight && narrow.closeWidth >= 28)
   const longName = await cdp.evaluate(`(() => {
     const name = document.querySelector('[role="status"][aria-live="polite"] [title]')
-    const create = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'New terminal')
+    const create = document.querySelector('[aria-label="New terminal"]')
     return { width: name.getBoundingClientRect().width, truncated: name.scrollWidth > name.clientWidth, buttonOverflow: create.scrollHeight > create.clientHeight }
   })()`)
   assert.ok(longName.width <= 180 && longName.truncated)
