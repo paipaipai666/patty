@@ -35,7 +35,7 @@
 }
 
 :global(html[data-window-material='mica']) .app {
-  background: color-mix(in srgb, var(--bg-sidebar) 35%, transparent);
+  background: color-mix(in srgb, var(--bg-sidebar) 70%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

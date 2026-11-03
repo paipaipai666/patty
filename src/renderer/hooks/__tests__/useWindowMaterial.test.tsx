@@ -39,10 +39,10 @@ afterEach(() => {
 
 it('uses an opaque fallback color and selects the native appearance from the actual theme', async () => {
   await mount()
-  expect(apply).toHaveBeenLastCalledWith({ enabled: true, appearance: 'dark', background: [27, 29, 32] })
+  expect(apply).toHaveBeenLastCalledWith({ enabled: true, appearance: 'dark', background: [32, 32, 32] })
   expect(document.documentElement.dataset.windowMaterial).toBe('mica')
   await act(async () => useSettingsStore.setState(state => ({ settings: { ...state.settings, theme: 'light' } })))
-  expect(apply).toHaveBeenLastCalledWith({ enabled: true, appearance: 'light', background: [246, 247, 249] })
+  expect(apply).toHaveBeenLastCalledWith({ enabled: true, appearance: 'light', background: [243, 243, 243] })
 })
 
 it('waits for saved settings before exposing the native background', async () => {

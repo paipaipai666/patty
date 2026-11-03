@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { DARK_UI } from '../themes'
 
 
 
@@ -35,6 +36,12 @@ describe('theme single-source structure (REVIEW P1-7)', () => {
     const rootBlock = /(?:^|\n):root\s*\{([^}]*)\}/.exec(css)
     const bg = rootBlock && /--bg-app:\s*(#[0-9a-fA-F]{6})/.exec(rootBlock[1])
     expect(bg?.[1]).toBe(themes['dark'])
+  })
+
+  it.each(['--bg-sidebar', '--bg-titlebar', '--bg-item-active', '--bg-item-hover', '--text-primary', '--text-secondary', '--text-muted', '--border-subtle'] as const)('keeps the startup %s token consistent with the loaded theme', (key) => {
+    const css = readFileSync(join(ROOT, 'src', 'renderer', 'styles', 'variables.css'), 'utf8')
+    const value = new RegExp(`${key}:\\s*([^;]+);`).exec(css)?.[1]
+    expect(value).toBe(DARK_UI[key])
   })
 
   it('lib.rs embeds every theme JSON via include_str!', () => {

@@ -576,7 +576,7 @@ try {
   await sleep(500)
   await cdp.send('Page.reload')
   await cdp.waitFor(
-    `getComputedStyle(document.documentElement).getPropertyValue('--bg-sidebar').trim() === '#f6f7f9'`
+    `getComputedStyle(document.documentElement).getPropertyValue('--bg-sidebar').trim() === '#f3f3f3'`
   )
   await cdp.waitFor(`document.querySelectorAll('.xterm').length === 2`)
   await screenshot('light-workbench')

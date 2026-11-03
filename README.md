@@ -29,11 +29,11 @@ Patty keeps sessions in a searchable sidebar and displays them in split workspac
 
 ### Dark theme
 
-![Quiet dark workbench with headerless terminals and notification and search buttons](docs/images/terminal-layer-dark.png)
+![Neutral dark workbench with consistent collection and terminal rows](docs/images/sidebar-refinement-dark.png)
 
 ### Light theme
 
-![Quiet light workbench with unified application chrome](docs/images/terminal-layer-light.png)
+![Neutral light workbench with unified application chrome](docs/images/sidebar-refinement-light.png)
 
 These previews were captured on 2026-11-03 from the real React components and xterm.js with fixture transport. They show demonstration sessions and the solid-color fallback, not a live desktop PTY, SSH connection, or native Mica capture.
 

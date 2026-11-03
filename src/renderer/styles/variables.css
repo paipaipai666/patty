@@ -6,7 +6,7 @@
   --accent-alpha: rgba(0, 107, 222, 0.16);
   --accent-glow: rgba(10, 132, 255, 0.25);
 
-  --bg-app: #141517;
+  --bg-app: #202020;
 
   --ai-claude-color: #e09a7e;
   --ai-claude-bg: rgba(224, 154, 126, 0.1);
@@ -95,7 +95,7 @@
   --attention-error-glow: rgba(255, 69, 58, 0.3);
 
   --overlay-bg: rgba(0, 0, 0, 0.55);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb: #666666;
   --neutral: #8e8e93;
   --neutral-4: rgba(255, 255, 255, 0.04);
   --neutral-5: rgba(255, 255, 255, 0.05);
@@ -107,7 +107,7 @@
   --accent-glow-subtle: rgba(10, 132, 255, 0.03);
   --accent-glow-soft: rgba(10, 132, 255, 0.04);
   --accent-glow-light: rgba(10, 132, 255, 0.06);
-  --accent-border: rgba(10, 132, 255, 0.15);
+  --accent-border: #414141;
   --accent-glow-strong: rgba(10, 132, 255, 0.3);
   --accent-hover: #075fc2;
 
@@ -132,30 +132,30 @@
   --indigo: #5e5ce6;
 
   --bg-surface: var(--bg-sidebar);
-  --bg-sidebar: #1b1d20;
+  --bg-sidebar: #202020;
   --bg-chrome: var(--bg-sidebar);
-  --bg-titlebar: #1b1d20;
-  --bg-statusbar: #1b1d20;
+  --bg-titlebar: #202020;
+  --bg-statusbar: #202020;
   --bg-main: #111214;
   --bg-terminal: #111214;
   --bg-secondary: var(--bg-input);
-  --bg-tertiary: #292c31;
-  --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-item-hover: #25282d;
-  --bg-item-active: #27374e;
-  --bg-input: #24262a;
-  --bg-context-menu: #24262a;
-  --bg-dropdown-menu: #24262a;
+  --bg-tertiary: #2b2b2b;
+  --bg-hover: #292929;
+  --bg-item-hover: #292929;
+  --bg-item-active: #353535;
+  --bg-input: #2b2b2b;
+  --bg-context-menu: #282828;
+  --bg-dropdown-menu: #282828;
 
-  --text-primary: #eef0f3;
-  --text-secondary: #a8adb7;
-  --text-tertiary: #9097a3;
-  --text-muted: #9097a3;
+  --text-primary: #ededed;
+  --text-secondary: #aeaeae;
+  --text-tertiary: #a0a0a0;
+  --text-muted: #a0a0a0;
 
-  --border-subtle: #2b2e33;
-  --border-light: #2b2e33;
-  --border-medium: #383c43;
-  --border-strong: #505762;
+  --border-subtle: #303030;
+  --border-light: #303030;
+  --border-medium: #414141;
+  --border-strong: #666666;
 
   --color-blue: #0a84ff;
   --color-green: #30d158;

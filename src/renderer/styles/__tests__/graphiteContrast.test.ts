@@ -24,11 +24,12 @@ describe.each(['dark', 'light'])('Graphite %s contrast', (theme) => {
     for (const foreground of [
       '--text-primary',
       '--text-secondary',
+      '--text-muted',
       '--amber',
       '--green',
       '--red'
     ] as const) {
-      for (const background of ['--bg-sidebar', '--bg-item-active'] as const) {
+      for (const background of ['--bg-sidebar', '--bg-item-active', '--bg-item-hover'] as const) {
         expect(
           contrast(ui[foreground], ui[background]),
           `${foreground} on ${background}`
