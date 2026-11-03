@@ -15,11 +15,12 @@ vi.mock('../../../store/sessionStore', () => {
   return { useSessionStore, SESSION_COLOR_VARS: {} }
 })
 
-vi.mock('../../ContributionGrid/ContributionGrid', () => ({ ContributionGrid: () => <canvas data-testid="background-activity" /> }))
+vi.mock('../../ContributionGrid/ContributionGrid', () => ({ ContributionGrid: ({ aiType }: { aiType: AgentType }) => <canvas data-testid="background-activity" data-agent={aiType} /> }))
 
 import { useSessionStore } from '../../../store/sessionStore'
 import { SessionItem } from '../SessionItem'
 import { SessionPreviewProvider } from '../SessionPreview'
+import type { AgentStatus, AgentType } from '../../../../shared/agentTypes'
 
 const roots: ReturnType<typeof createRoot>[] = []
 afterEach(() => { act(() => { for (const root of roots.splice(0)) root.unmount() }) })
@@ -69,13 +70,13 @@ describe('SessionItem', () => {
     expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
   })
 
-  it('keeps both background and foreground work free of animated indicators', () => {
+  it.each<AgentType>(['claude', 'opencode', 'codex', 'omp', 'qwen', 'copilot'])('shows the %s working animation for both background and selected sessions', (aiType) => {
     useSessionStore.getState().agentStates = { s1: { status: 'working', unread: false } }
-    const session = { ...defaultSession, aiType: 'codex' as const }
+    const session = { ...defaultSession, aiType }
     const { container, root } = render({ session })
-    expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
+    expect(container.querySelector('[data-testid="background-activity"]')?.getAttribute('data-agent')).toBe(aiType)
     act(() => root.render(<SessionPreviewProvider><SessionItem session={session} isActive onClose={vi.fn()} onSelect={vi.fn()} /></SessionPreviewProvider>))
-    expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
+    expect(container.querySelector('[data-testid="background-activity"]')?.getAttribute('data-agent')).toBe(aiType)
     expect(container.querySelector('[aria-label="Working"]')).toBeNull()
     expect(container.querySelector('[role="treeitem"]')?.getAttribute('aria-description')).toContain('Working')
   })
@@ -83,6 +84,12 @@ describe('SessionItem', () => {
   it('renders session title', () => {
     const { container } = render()
     expect(container.textContent).toContain('My Terminal')
+  })
+
+  it.each<AgentStatus>(['idle', 'waiting_approval', 'waiting_input', 'complete', 'error', 'unknown'])('keeps %s sessions static', (status) => {
+    useSessionStore.getState().agentStates = { s1: { status, unread: false } }
+    const { container } = render({ session: { ...defaultSession, aiType: 'claude' } })
+    expect(container.querySelector('[data-testid="background-activity"]')).toBeNull()
   })
 
   it('shows active state when isActive is true', () => {

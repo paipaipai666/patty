@@ -1,12 +1,13 @@
 import { useRef, useEffect } from 'react'
+import type { AgentType } from '../../../shared/agentTypes'
 import { registerGrid, unregisterGrid } from '../../utils/gridScheduler'
 import styles from './ContributionGrid.module.css'
 
 interface Props {
-  aiType: 'claude' | 'opencode' | 'codex' | 'omp' | 'qwen' | 'copilot' | null
+  aiType: AgentType | null
 }
 
-const FIRE_VARS: Record<string, string> = {
+const FIRE_VARS: Record<AgentType, string> = {
   claude: '--fire-claude',
   opencode: '--fire-opencode',
   codex: '--fire-codex',
@@ -14,7 +15,7 @@ const FIRE_VARS: Record<string, string> = {
   qwen: '--fire-qwen',
   copilot: '--fire-copilot',
 }
-const GLOW3_VARS: Record<string, string> = {
+const GLOW3_VARS: Record<AgentType, string> = {
   claude: '--fire-glow-claude-3',
   opencode: '--fire-glow-opencode-3',
   codex: '--fire-glow-codex-3',
@@ -22,7 +23,7 @@ const GLOW3_VARS: Record<string, string> = {
   qwen: '--fire-glow-qwen-3',
   copilot: '--fire-glow-copilot-3',
 }
-const GLOW4_VARS: Record<string, string> = {
+const GLOW4_VARS: Record<AgentType, string> = {
   claude: '--fire-glow-claude-4',
   opencode: '--fire-glow-opencode-4',
   codex: '--fire-glow-codex-4',
@@ -58,7 +59,7 @@ function buildPalette(varName: string): string[] {
   ]
 }
 
-function getGlowColors(aiType: string): [string, string] {
+function getGlowColors(aiType: AgentType): [string, string] {
   const s = getComputedStyle(document.documentElement)
   return [
     s.getPropertyValue(GLOW3_VARS[aiType]).trim() || 'rgba(255,255,255,0.25)',
@@ -158,35 +159,45 @@ export function ContributionGrid({ aiType }: Props) {
 
     container.dataset.type = aiType
 
-    const palette = buildPalette(FIRE_VARS[aiType])
-    const [glowColor3, glowColor4] = getGlowColors(aiType)
+    let palette = buildPalette(FIRE_VARS[aiType])
+    let [glowColor3, glowColor4] = getGlowColors(aiType)
+    const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    let visible = true
 
     let heat: number[][]
     let currentGrid: { tick(): void } | null = null
     let resizeTimer: ReturnType<typeof setTimeout>
 
+    const syncAnimation = () => {
+      if (!currentGrid) return
+      if (visible && !motion?.matches) registerGrid(currentGrid)
+      else unregisterGrid(currentGrid)
+    }
+
     function init(parentEl: HTMLElement) {
+      if (currentGrid) unregisterGrid(currentGrid)
+      currentGrid = null
       const dpr = window.devicePixelRatio || 1
       const parentW = parentEl.offsetWidth
       const parentH = parentEl.offsetHeight
+      if (parentW <= 0 || parentH <= 0) return
 
       canvas.width = parentW * dpr
       canvas.height = parentH * dpr
       canvas.style.width = parentW + 'px'
       canvas.style.height = parentH + 'px'
 
-      const ctx = canvas.getContext('2d')!
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
       ctx.scale(dpr, dpr)
 
-      const cellSize = Math.floor((parentH - PAD * 2 - (ROWS - 1) * GAP) / ROWS)
+      const cellSize = Math.max(1, Math.floor((parentH - PAD * 2 - (ROWS - 1) * GAP) / ROWS))
       const usableW = parentW - PAD * 2 - 20
       const COLS = Math.max(16, Math.floor((usableW + GAP) / (cellSize + GAP)))
 
       heat = Array.from({ length: ROWS }, () => new Array(COLS).fill(0))
 
       let tick = 0
-
-      if (currentGrid) unregisterGrid(currentGrid)
 
       currentGrid = {
         tick() {
@@ -195,7 +206,7 @@ export function ContributionGrid({ aiType }: Props) {
           renderCanvas(ctx, parentW, parentH, heat, palette, glowColor3, glowColor4, cellSize, COLS)
         }
       }
-      registerGrid(currentGrid)
+      syncAnimation()
     }
 
     init(parent)
@@ -210,19 +221,24 @@ export function ContributionGrid({ aiType }: Props) {
 
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
-        if (entry.isIntersecting) {
-          if (currentGrid) registerGrid(currentGrid)
-        } else {
-          if (currentGrid) unregisterGrid(currentGrid)
-        }
+        visible = entry.isIntersecting
+        syncAnimation()
       }
     })
     observer.observe(container)
+    motion?.addEventListener('change', syncAnimation)
+    const themeObserver = new MutationObserver(() => {
+      palette = buildPalette(FIRE_VARS[aiType])
+      ;[glowColor3, glowColor4] = getGlowColors(aiType)
+    })
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
 
     return () => {
       clearTimeout(resizeTimer)
       observer.disconnect()
       ro.disconnect()
+      themeObserver.disconnect()
+      motion?.removeEventListener('change', syncAnimation)
       if (currentGrid) unregisterGrid(currentGrid)
     }
   }, [aiType])

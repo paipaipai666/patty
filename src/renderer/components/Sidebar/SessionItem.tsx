@@ -7,6 +7,7 @@ import {
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import { AGENT_STATUS_LABELS, sessionContext, sessionLocation } from '../../utils/sessionPresentation'
 import { useSessionPreview } from './SessionPreview'
+import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
 
 interface SessionItemProps {
@@ -126,8 +127,6 @@ export const SessionItem = memo(function SessionItem({
     useSessionStore.getState().setDraggingSession(null)
   }
 
-  const isAi = !!session.aiType
-
   const AI_ICONS: Record<string, JSX.Element> = {
     claude: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -205,14 +204,16 @@ export const SessionItem = memo(function SessionItem({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      {session.aiType && activity?.status === 'working' && <div className={styles.activityTrace} aria-hidden><ContributionGrid aiType={session.aiType} /></div>}
       <div className={styles.itemContent}>
-        {isAi ? (
+        {session.aiType ? (
           <span
             className={styles.aiIcon}
+            style={{ color: `var(--ai-${session.aiType}-color)` }}
             data-testid="agent-icon"
             aria-hidden
           >
-            {AI_ICONS[session.aiType!]}
+            {AI_ICONS[session.aiType]}
           </span>
         ) : (
           <span
