@@ -16,6 +16,7 @@ import { CommandPalette } from '../../src/renderer/components/CommandPalette/Com
 import { DEFAULT_SETTINGS } from '../../src/shared/defaultSettings'
 import { applyTheme, getThemeColors } from '../../src/renderer/styles/themes'
 import '../../src/renderer/styles/global.css'
+import appStyles from '../../src/renderer/App.module.css'
 import './workbench.css'
 
 const sessions: TerminalSession[] = [
@@ -89,7 +90,7 @@ function Workbench() {
     <TitleBar sidebarVisible={visible} onToggleSidebar={() => useSessionStore.getState().toggleSidebar()} onOpenCommands={() => setPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
     <main className="visual-stage" style={{ flexDirection: position === 'right' ? 'row-reverse' : undefined }}>
       {visible && <Sidebar onNewTerminal={() => useSessionStore.getState().addSession()} onNewTerminalPickFolder={() => {}} onNewSsh={() => {}} onSelectSession={selectSession} onCloseSession={closeSession} onOpenCommands={() => setPaletteOpen(true)} blocked={paletteOpen || infoId !== null} />}
-      <div className="visual-content">
+      <div className={appStyles.content} data-terminal-surface>
         <div className="visual-panes"><PaneTreeRoot /></div>
       </div>
     </main>

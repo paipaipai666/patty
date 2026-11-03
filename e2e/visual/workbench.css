@@ -9,12 +9,6 @@
   flex: 1;
   min-height: 0;
 }
-.visual-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
 .visual-panes {
   flex: 1;
   min-height: 0;

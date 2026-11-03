@@ -5,7 +5,7 @@
   width: 100vw;
   overflow: hidden;
   position: relative;
-  background: var(--bg-app);
+  background: var(--bg-sidebar);
 }
 
 .main {
@@ -25,10 +25,24 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  margin: 4px 8px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-terminal);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sidebarWrapper {
     transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .content {
+    border-color: CanvasText;
+    box-shadow: none;
   }
 }
