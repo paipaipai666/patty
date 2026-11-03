@@ -123,6 +123,8 @@ The sidebar heading contains **New terminal** (+) and a menu for other creation 
 | Notifications | Enable or disable individual AI adapters |
 | SSH | Create and edit connection profiles, select identity files, import SSH config |
 
+In **Settings → Appearance**, compare theme thumbnails grouped into dark, light and custom themes. The selected theme is marked **Current**. Click a thumbnail or use the arrow keys to select a theme; Tab moves to the next control. Hovering leaves your theme unchanged. Custom themes still support editing, import and export.
+
 Scrollback changes apply to newly created terminals. The sidebar width can be adjusted by dragging its divider.
 
 ## Keyboard shortcuts

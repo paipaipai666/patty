@@ -2,6 +2,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore, type TerminalSession } from '../../../store/sessionStore'
+import { useSettingsStore } from '../../../store/settingsStore'
 import { SessionItem } from '../SessionItem'
 import { SessionPreviewProvider } from '../SessionPreview'
 
@@ -17,6 +18,7 @@ let onSelect = vi.fn<(id: string) => void>()
 beforeEach(() => {
   vi.useFakeTimers()
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  useSettingsStore.setState({ settingsOpen: false })
   useSessionStore.setState({ sessions, activeSessionId: 'two', sidebarVisible: true, agentStates: { one: { status: 'waiting_approval', unread: true } }, agentRevisions: {}, agentRevisionFloor: 0, draggingSessionId: null })
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -129,6 +131,16 @@ describe('session previews', () => {
     advance(400)
     expect(document.querySelector('[role="tooltip"]')).not.toBeNull()
     act(() => useSessionStore.setState({ sidebarVisible: false }))
+    expect(document.querySelector('[role="tooltip"]')).toBeNull()
+  })
+
+  it('blocks background previews while settings owns the interaction', () => {
+    enter(row())
+    advance(400)
+    act(() => useSettingsStore.getState().openSettings())
+    expect(document.querySelector('[role="tooltip"]')).toBeNull()
+    act(() => row('two').focus())
+    advance(400)
     expect(document.querySelector('[role="tooltip"]')).toBeNull()
   })
 

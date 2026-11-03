@@ -3,12 +3,13 @@ import { Sidebar } from '../../src/renderer/components/Sidebar/Sidebar'
 import { PaneTreeRoot } from '../../src/renderer/components/Pane/PaneTree'
 import { TitleBar } from '../../src/renderer/components/TitleBar/TitleBar'
 import { StatusBar } from '../../src/renderer/components/StatusBar/StatusBar'
+import { SettingsModal } from '../../src/renderer/components/Settings/SettingsModal'
 import { useSessionStore, type TerminalSession } from '../../src/renderer/store/sessionStore'
 import { useWorkspaceStore } from '../../src/renderer/store/workspaceStore'
 import { useSettingsStore } from '../../src/renderer/store/settingsStore'
 import { selectSession, closeSession } from '../../src/renderer/store/sessionLifecycle'
 import { DEFAULT_SETTINGS } from '../../src/shared/defaultSettings'
-import { applyTheme } from '../../src/renderer/styles/themes'
+import { applyTheme, getThemeColors } from '../../src/renderer/styles/themes'
 import '../../src/renderer/styles/global.css'
 import './workbench.css'
 
@@ -26,7 +27,7 @@ Object.defineProperty(window, 'terminalAPI', { value: {
     ? '\x1b[38;2;224;154;126mClaude Code\x1b[0m\r\n\r\nI found the callback validation issue.\r\n\r\n  npm test -- login-callback\r\n\r\nWaiting for your approval to run the tests.\r\n'
     : id === 'remote' ? 'deploy@prod-01:/srv/payments$ tail -f service.log\r\n09:00:01 INFO  Service ready\r\n09:00:02 INFO  Health check passed\r\n'
     : 'PS D:\\code\\terminal\\terminal-sidebar> git status --short\r\n M src/renderer/components/Sidebar/Sidebar.tsx\r\n M src/renderer/components/Sidebar/Sidebar.module.css\r\n\r\nPS D:\\code\\terminal\\terminal-sidebar> ' }),
-  resize: () => {}, write: () => {}, kill: () => {}, stateSave: async () => {},
+  resize: () => {}, write: () => {}, kill: () => {}, stateSave: async () => {}, settingsSet: async () => ({}),
   windowMinimize: () => {}, windowMaximize: () => {}, windowClose: () => {}
 } })
 
@@ -43,7 +44,15 @@ function setTheme(theme: 'dark' | 'light') {
   applyTheme(theme, [])
 }
 setTheme('dark')
-Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, sessions: useSessionStore, workspaces: useWorkspaceStore, settings: useSettingsStore } })
+function addCustomTheme() {
+  const base = getThemeColors('dark')
+  return useSettingsStore.getState().updateSetting('customThemes', [{
+    id: 'visual-harbor', name: 'Harbor',
+    ui: { ...base.ui, '--bg-app': '#102a33', '--bg-sidebar': '#173c47', '--bg-titlebar': '#13333d', '--accent': '#83c5c1' },
+    terminal: { ...base.terminal, background: '#102a33', foreground: '#e1f0f0' }
+  }])
+}
+Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, addCustomTheme, sessions: useSessionStore, workspaces: useWorkspaceStore, settings: useSettingsStore } })
 
 function Workbench() {
   const visible = useSessionStore((state) => state.sidebarVisible)
@@ -57,6 +66,7 @@ function Workbench() {
         <StatusBar metricsOpen={false} onToggleMetrics={() => {}} />
       </div>
     </main>
+    <SettingsModal />
   </div>
 }
 

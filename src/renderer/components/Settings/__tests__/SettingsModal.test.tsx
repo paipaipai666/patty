@@ -53,18 +53,6 @@ vi.mock('../../../hooks/useAnimatedMount', () => ({
   useAnimatedMount: (open: boolean) => ({ mounted: open, exiting: false })
 }))
 
-vi.mock('../../utils/themeRipple', () => ({
-  themeRipple: vi.fn()
-}))
-
-vi.mock('../../../styles/themes', () => ({
-  getThemeColors: () => ({ ui: { '--bg-app': '#0a0a0c' } }),
-  createDefaultCustomTheme: (name: string) => ({ id: 'custom-1', name, ui: {}, terminal: {} }),
-  UI_COLOR_LABELS: { '--bg-app': 'App Background' },
-  XTERM_COLOR_LABELS: { '--black': 'Black' },
-  BUILTIN_THEMES: { dark: { name: 'Dark' } }
-}))
-
 vi.mock('../../../store/toastStore', () => ({
   toast: vi.fn()
 }))

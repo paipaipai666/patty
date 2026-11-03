@@ -63,6 +63,7 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
   }, [dismiss])
 
   const enter = useCallback((next: Target, source: Source) => {
+    if (settingsOpen || sidebarVisible === false) return
     sources.current[source] = next.id
     clearTimeout(closeTimer.current)
     clearTimeout(openTimer.current)
@@ -77,7 +78,7 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
         setTarget(next)
       }
     }, 400)
-  }, [])
+  }, [settingsOpen, sidebarVisible])
 
   const leave = useCallback((id: string, source: Source) => {
     if (sources.current[source] === id) sources.current[source] = null
@@ -162,6 +163,6 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
         <dt>Folder</dt><dd className={styles.path}>{session.cwd || 'Not reported'}</dd>
         {session.shell === 'ssh' && <><dt>Connection</dt><dd className={styles.path}>{sessionLocation(session)}</dd></>}
       </dl>
-    </div>, document.body)}
+    </div>, document.getElementById('root') ?? document.body)}
   </PreviewContext.Provider>
 }

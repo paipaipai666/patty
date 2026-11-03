@@ -63,3 +63,17 @@ The card shows reported title, tool, status, unread state, folder and SSH connec
 Seven focused behavior tests pass. Real-browser captures cover dark/left and light/right sidebars at 160px, including viewport bounds and unchanged unread state. Existing desktop CDP limitations still apply.
 
 The preview unit passes all 736 frontend tests, TypeScript and comment checks. Its browser fixture also checks the existing workbench layout, navigation, focus and reduced-motion behavior.
+
+The preview commit is `8ac8c0c`.
+
+## Theme thumbnails
+
+The theme sketches compared small swatches in the existing dropdown with an inline gallery. The gallery shows the sidebar, selection, terminal background, foreground and ANSI success color together, using the actual theme palette. Built-in themes are grouped by dark and light appearance; custom themes have their own group and use the same card size. Theme IDs, saved settings and custom-theme formats are unchanged.
+
+The picker uses one native radio group with a visible current marker and keyboard focus ring. Clicking or using the arrow keys selects a theme; hovering does not change the workbench. Tab leaves the group for the next control. Decorative miniatures are hidden from assistive technology. The old full-window ripple and its now-unused source and tests were removed.
+
+Four theme behavior tests cover the six built-ins, grouping, selected state, exact custom colors and IDs, and selection without hover effects. An eighth preview test covers settings opening and blocking subsequent background focus. Preview portals share the application stacking context so settings remain above them.
+
+All 737 frontend tests, TypeScript and comment checks pass. Real-browser verification covers mouse selection, native arrow-key selection, Tab navigation, unchanged theme on hover, custom palette rendering, equal card widths and a 540px window without horizontal overflow. It also checks that background focus cannot open a preview while settings are visible. Dark, light and narrow-window captures are in `output/workbench-visual`.
+
+The ordinary desktop release build succeeds with the final source. Its isolation smoke test rejects test-only configuration overrides before browser or CLI integration startup, then removes its temporary data. Desktop WebView2 interaction remains unverified because of the recorded CDP blocker; the browser fixture covers the frontend behavior described above.

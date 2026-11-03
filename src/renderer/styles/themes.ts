@@ -13,13 +13,13 @@ export const DARK_XTERM: XtermTheme = darkJson.terminal as XtermTheme
 export const LIGHT_XTERM: XtermTheme = lightJson.terminal as XtermTheme
 
 
-export const BUILTIN_THEMES: Record<string, { name: string; ui: UITheme; terminal: XtermTheme }> = {
-  dark: { name: darkJson.name, ui: DARK_UI, terminal: DARK_XTERM },
-  light: { name: lightJson.name, ui: LIGHT_UI, terminal: LIGHT_XTERM },
-  dracula: { name: draculaJson.name, ui: draculaJson.ui as UITheme, terminal: draculaJson.terminal as XtermTheme },
-  nord: { name: nordJson.name, ui: nordJson.ui as UITheme, terminal: nordJson.terminal as XtermTheme },
-  'tokyo-night': { name: tokyoNightJson.name, ui: tokyoNightJson.ui as UITheme, terminal: tokyoNightJson.terminal as XtermTheme },
-  'solarized-light': { name: solarizedLightJson.name, ui: solarizedLightJson.ui as UITheme, terminal: solarizedLightJson.terminal as XtermTheme }
+export const BUILTIN_THEMES: Record<string, { name: string; appearance: 'dark' | 'light'; ui: UITheme; terminal: XtermTheme }> = {
+  dark: { name: darkJson.name, appearance: 'dark', ui: DARK_UI, terminal: DARK_XTERM },
+  light: { name: lightJson.name, appearance: 'light', ui: LIGHT_UI, terminal: LIGHT_XTERM },
+  dracula: { name: draculaJson.name, appearance: 'dark', ui: draculaJson.ui as UITheme, terminal: draculaJson.terminal as XtermTheme },
+  nord: { name: nordJson.name, appearance: 'dark', ui: nordJson.ui as UITheme, terminal: nordJson.terminal as XtermTheme },
+  'tokyo-night': { name: tokyoNightJson.name, appearance: 'dark', ui: tokyoNightJson.ui as UITheme, terminal: tokyoNightJson.terminal as XtermTheme },
+  'solarized-light': { name: solarizedLightJson.name, appearance: 'light', ui: solarizedLightJson.ui as UITheme, terminal: solarizedLightJson.terminal as XtermTheme }
 }
 
 

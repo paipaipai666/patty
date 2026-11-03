@@ -1,6 +1,4 @@
 import { useState } from 'react'
-import { themeRipple } from '../../../utils/themeRipple'
-import { getThemeColors } from '../../../styles/themes'
 import { toast } from '../../../store/toastStore'
 import type { AppSettings, CustomTheme } from '../../../../shared/settingsTypes'
 import {
@@ -9,47 +7,13 @@ import {
   XTERM_COLOR_LABELS,
   BUILTIN_THEMES
 } from '../../../styles/themes'
-import { Dropdown, type DropdownOption } from '../../App/Dropdown'
+import { Dropdown } from '../../App/Dropdown'
+import { ThemePicker } from '../ThemePicker'
 import styles from '../SettingsModal.module.css'
 
 export interface SectionProps {
   settings: AppSettings
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
-}
-
-function ThemePicker({
-  value,
-  customThemes,
-  onChange
-}: {
-  value: string
-  customThemes: CustomTheme[]
-  onChange: (id: string) => void
-}) {
-  const options: DropdownOption<string>[] = [
-    ...Object.entries(BUILTIN_THEMES).map(([id, theme]) => ({
-      value: id,
-      label: theme.name,
-      group: 'Built-in'
-    })),
-    ...customThemes.map((t) => ({ value: t.id, label: t.name, group: 'Custom' }))
-  ]
-
-  return (
-    <Dropdown
-      value={value}
-      options={options}
-      ariaLabel="Color theme"
-      onSelect={(id, mouse) => {
-        if (id !== value) {
-
-          const theme = getThemeColors(id, customThemes)
-          themeRipple(mouse?.x ?? window.innerWidth / 2, mouse?.y ?? window.innerHeight / 2, theme.ui['--bg-app'])
-        }
-        onChange(id)
-      }}
-    />
-  )
 }
 
 const FALLBACK_FONTS = [
@@ -299,15 +263,11 @@ export function AppearanceSection({ settings, updateSetting }: SectionProps) {
 
   return (
     <div className={styles.section}>
-      <div className={styles.sectionTitle}>Theme</div>
-      <div className={styles.settingRow}>
-        <span className={styles.settingLabel}>Color Theme</span>
         <ThemePicker
           value={settings.theme}
           customThemes={settings.customThemes}
           onChange={(id) => updateSetting('theme', id)}
         />
-      </div>
       <div className={styles.themeActions}>
         <button type="button" className={styles.themeBtn} onClick={handleImport}>Import</button>
         <button type="button" className={styles.themeBtn} onClick={handleNew}>New</button>
