@@ -2,7 +2,7 @@
   display: flex;
   align-items: center;
   height: var(--titlebar-height);
-  background: var(--bg-sidebar);
+  background: var(--bg-chrome);
   flex-shrink: 0;
   position: relative;
   z-index: 5;

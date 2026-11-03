@@ -40,6 +40,15 @@ beforeEach(() => {
 })
 
 describe('agent state IPC', () => {
+  it('validates native material results at the IPC boundary', async () => {
+    const request = { enabled: true, appearance: 'dark', background: [27, 29, 32] } satisfies import('../../shared/windowMaterial').WindowMaterialRequest
+    invokeMock.mockResolvedValueOnce('mica')
+    await expect(terminalAPI.windowSetMaterial(request)).resolves.toBe('mica')
+    expect(invokeMock).toHaveBeenCalledWith('window_set_material', { request })
+    invokeMock.mockResolvedValueOnce({ effect: 'blur' })
+    await expect(terminalAPI.windowSetMaterial(request)).rejects.toThrow('Invalid window material response')
+  })
+
   it('loads and validates the authoritative agent snapshot', async () => {
     const snapshot = { revision: 4, agents: [{ paneId: 'p1', revision: 3, agent: { aiType: 'codex', status: 'working' } }] }
     invokeMock.mockResolvedValueOnce(snapshot)

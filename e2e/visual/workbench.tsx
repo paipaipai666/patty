@@ -13,6 +13,8 @@ import { createShortcutCommands } from '../../src/renderer/commands/applicationC
 import { useApplicationKeyboard, useCommandExecution } from '../../src/renderer/commands/useApplicationKeyboard'
 import { usePaletteCommands } from '../../src/renderer/commands/usePaletteCommands'
 import { CommandPalette } from '../../src/renderer/components/CommandPalette/CommandPalette'
+import { useWindowMaterial } from '../../src/renderer/hooks/useWindowMaterial'
+import type { WindowMaterial, WindowMaterialRequest } from '../../src/shared/windowMaterial'
 import { DEFAULT_SETTINGS } from '../../src/shared/defaultSettings'
 import { applyTheme, getThemeColors } from '../../src/renderer/styles/themes'
 import '../../src/renderer/styles/global.css'
@@ -28,6 +30,8 @@ const sessions: TerminalSession[] = [
 
 const listener = () => ({ ready: Promise.resolve(), unsubscribe: () => {} })
 const writes: { id: string; data: string }[] = []
+let materialResult: WindowMaterial = 'solid'
+const materialRequests: WindowMaterialRequest[] = []
 Object.defineProperty(window, 'terminalAPI', { value: {
   onData: listener, onExit: listener, onMaximizeChange: () => () => {},
   createSession: async (id: string) => ({ success: true, pid: 100, replay: id === 'agent'
@@ -35,7 +39,8 @@ Object.defineProperty(window, 'terminalAPI', { value: {
     : id === 'remote' ? 'deploy@prod-01:/srv/payments$ tail -f service.log\r\n09:00:01 INFO  Service ready\r\n09:00:02 INFO  Health check passed\r\n'
     : 'PS D:\\code\\terminal\\terminal-sidebar> git status --short\r\n M src/renderer/components/Sidebar/Sidebar.tsx\r\n M src/renderer/components/Sidebar/Sidebar.module.css\r\n\r\nPS D:\\code\\terminal\\terminal-sidebar> ' }),
   resize: () => {}, write: (id: string, data: string) => { writes.push({ id, data }) }, kill: () => {}, stateSave: async () => {}, settingsSet: async () => ({}),
-  windowMinimize: () => {}, windowMaximize: () => {}, windowClose: () => {}
+  windowMinimize: () => {}, windowMaximize: () => {}, windowClose: () => {},
+  windowSetMaterial: async (request: WindowMaterialRequest): Promise<WindowMaterial> => { materialRequests.push(request); return request.enabled ? materialResult : 'solid' }
 } })
 
 useSessionStore.setState({ sessions, collections: [{ id: 'project', name: 'Terminal sidebar', parentId: null, collapsed: false, createdAt: 1 }], activeSessionId: 'shell', sidebarWidth: 264, loaded: true })
@@ -59,9 +64,10 @@ function addCustomTheme() {
     terminal: { ...base.terminal, background: '#102a33', foreground: '#e1f0f0' }
   }])
 }
-Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, addCustomTheme, writes, sessions: useSessionStore, workspaces: useWorkspaceStore, settings: useSettingsStore } })
+Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, addCustomTheme, writes, materialRequests, setMaterialResult: (value: WindowMaterial) => { materialResult = value; window.dispatchEvent(new Event('focus')) }, sessions: useSessionStore, workspaces: useWorkspaceStore, settings: useSettingsStore } })
 
 function Workbench() {
+  useWindowMaterial()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [infoId, setInfoId] = useState<string | null>(null)
   const closeInfo = useCallback(() => setInfoId(null), [])
@@ -86,7 +92,7 @@ function Workbench() {
     commands: [...commands, ...shortcutCommands.filter(command => command.id === 'commandPalette')],
     blocked: paletteOpen, execute, navigateToIndex: index => useSessionStore.getState().navigateToIndex(index)
   })
-  return <div className="visual-workbench">
+  return <div className={appStyles.app}>
     <TitleBar sidebarVisible={visible} onToggleSidebar={() => useSessionStore.getState().toggleSidebar()} onOpenCommands={() => setPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
     <main className="visual-stage" style={{ flexDirection: position === 'right' ? 'row-reverse' : undefined }}>
       {visible && <Sidebar onNewTerminal={() => useSessionStore.getState().addSession()} onNewTerminalPickFolder={() => {}} onNewSsh={() => {}} onSelectSession={selectSession} onCloseSession={closeSession} onOpenCommands={() => setPaletteOpen(true)} blocked={paletteOpen || infoId !== null} />}

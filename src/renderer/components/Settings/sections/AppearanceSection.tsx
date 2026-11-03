@@ -282,6 +282,14 @@ export function AppearanceSection({ settings, updateSetting }: SectionProps) {
         />
       )}
 
+      <div className={styles.sectionTitle}>Window</div>
+      <div className={styles.settingRow}>
+        <label className={styles.settingLabel} htmlFor="window-material">Background material</label>
+        <select id="window-material" className={styles.materialSelect} value={settings.windowMaterial ?? 'auto'} onChange={event => {
+          const value = event.target.value
+          if (value === 'auto' || value === 'solid') updateSetting('windowMaterial', value)
+        }}><option value="auto">System material when available</option><option value="solid">Solid color</option></select>
+      </div>
       <div className={styles.sectionTitle}>Font</div>
       <div className={styles.settingRow}>
         <span className={styles.settingLabel}>Font Family</span>

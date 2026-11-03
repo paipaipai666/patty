@@ -29,13 +29,13 @@ Patty keeps sessions in a searchable sidebar and displays them in split workspac
 
 ### Dark theme
 
-![Quiet dark workbench with headerless terminals and notification and search buttons](docs/images/quiet-workbench-dark.png)
+![Quiet dark workbench with headerless terminals and notification and search buttons](docs/images/terminal-layer-dark.png)
 
 ### Light theme
 
-![Quiet light workbench with unified application chrome](docs/images/quiet-workbench-light.png)
+![Quiet light workbench with unified application chrome](docs/images/terminal-layer-light.png)
 
-These previews were captured on 2026-11-03 from the real React components and xterm.js with fixture transport. They show demonstration sessions, not a live desktop PTY or SSH connection.
+These previews were captured on 2026-11-03 from the real React components and xterm.js with fixture transport. They show demonstration sessions and the solid-color fallback, not a live desktop PTY, SSH connection, or native Mica capture.
 
 ## Install
 
@@ -116,7 +116,7 @@ The sidebar toolbar contains New terminal (+), its creation menu, Notifications,
 
 | Category | Options |
 | --- | --- |
-| Appearance | Built-in and custom themes, theme import and export, system font picker, font size from 8 to 32 |
+| Appearance | Built-in and custom themes, theme import and export, system material or solid background, system font picker, font size from 8 to 32 |
 | Terminal | Default shell, cursor shape and blinking, opacity from 40% to 100%, scrollback of 1,000, 2,000, 5,000, or 10,000 lines |
 | Shortcuts | Remap application shortcuts by recording a key combination |
 | Layout | Place the sidebar on the left or right |
@@ -258,3 +258,7 @@ Patty is licensed under the [MIT License](LICENSE). The bundled Microsoft ConPTY
 - [Microsoft Terminal and ConPTY](https://github.com/microsoft/terminal)
 
 The browser-only workbench check is available with `npm run test:visual:workbench`. It captures real frontend components with a fixed terminal replay transport. See [Frontend polish](docs/frontend-polish.md) for scope and verification.
+
+## Windows materials
+
+The terminal content is an opaque rounded surface above the unified app background. On Windows 11 build 22621 or later, Background material in Settings → Appearance uses native Mica when supported and allowed by system settings. Other environments, high contrast, Battery Saver, disabled transparency, or a failed native request use solid color. Theme changes update the native appearance and fallback color. See [implementation and validation](docs/windows-materials.md).

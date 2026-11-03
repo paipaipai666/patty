@@ -32,6 +32,7 @@ static TEST_DATA_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 pub fn default_settings() -> Value {
     json!({
         "theme": "dark",
+        "windowMaterial": "auto",
         "fontFamily": "Cascadia Code",
         "fontSize": 14,
         "cursorStyle": "bar",

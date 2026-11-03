@@ -28,6 +28,15 @@ body {
   position: relative;
 }
 
+html[data-window-material='mica'] {
+  --bg-chrome: transparent;
+  background: transparent;
+}
+html[data-window-material='mica'] body,
+html[data-window-material='mica'] #root {
+  background: transparent;
+}
+
 #root {
   position: relative;
   z-index: 1;

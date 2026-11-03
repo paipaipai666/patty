@@ -230,6 +230,7 @@ export interface NotificationSettings {
 
 export interface AppSettings {
   theme: string
+  windowMaterial: 'auto' | 'solid'
   fontFamily: string
   fontSize: number
   cursorStyle: 'block' | 'underline' | 'bar'

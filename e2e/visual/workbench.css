@@ -1,9 +1,3 @@
-.visual-workbench {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--bg-sidebar);
-}
 .visual-stage {
   display: flex;
   flex: 1;

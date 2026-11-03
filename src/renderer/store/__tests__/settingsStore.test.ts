@@ -32,6 +32,7 @@ vi.stubGlobal('document', {
 
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
+  windowMaterial: 'auto',
   fontFamily: 'Cascadia Code',
   fontSize: 14,
   cursorStyle: 'bar',

@@ -9,6 +9,7 @@ pub mod store;
 mod conpty;
 mod hook_identity;
 mod hook_state;
+mod window_material;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -33,6 +34,15 @@ pub fn boot_background_color() -> tauri::window::Color {
 #[tauri::command]
 fn settings_get_all() -> Value {
     store::load_settings()
+}
+
+#[tauri::command]
+fn window_set_material(
+    window: tauri::WebviewWindow,
+    cache: tauri::State<'_, window_material::MaterialCache>,
+    request: window_material::MaterialRequest,
+) -> Result<window_material::MaterialMode, String> {
+    window_material::set(&window, &cache, request)
 }
 
 #[tauri::command]
@@ -273,6 +283,7 @@ pub fn run() {
         std::process::exit(1);
     }
     tauri::Builder::default()
+        .manage(window_material::MaterialCache::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
@@ -289,6 +300,7 @@ pub fn run() {
                 .resizable(true)
                 .disable_drag_drop_handler()
                 .background_color(boot_background_color())
+                .transparent(cfg!(target_os = "windows"))
                 .build()?;
 
             pty::init_resource_dir(app.handle());
@@ -308,6 +320,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             settings_get_all,
+            window_set_material,
             settings_set,
             state_load,
             state_save,

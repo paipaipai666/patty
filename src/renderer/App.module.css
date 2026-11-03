@@ -5,7 +5,7 @@
   width: 100vw;
   overflow: hidden;
   position: relative;
-  background: var(--bg-sidebar);
+  background: var(--bg-chrome);
 }
 
 .main {
@@ -32,6 +32,10 @@
   background: var(--bg-terminal);
   box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
   overflow: hidden;
+}
+
+:global(html[data-window-material='mica']) .app {
+  background: color-mix(in srgb, var(--bg-sidebar) 35%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

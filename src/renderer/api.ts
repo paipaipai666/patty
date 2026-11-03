@@ -7,6 +7,7 @@ import type { MetricSample, FirstTerminalEntry, MetricsSnapshot } from '../share
 import type { PersistedState } from '../shared/stateTypes'
 import type { IWindowsPty } from '@xterm/xterm'
 import { parseAgentSnapshot, parseAgentUpdate, type AgentUpdate } from '../shared/agentTypes'
+import { parseWindowMaterial, type WindowMaterialRequest } from '../shared/windowMaterial'
 
 const appWindow = getCurrentWindow()
 
@@ -72,6 +73,7 @@ export const terminalAPI = {
 
 
   windowMinimize: () => void appWindow.minimize(),
+  windowSetMaterial: async (request: WindowMaterialRequest) => parseWindowMaterial(await invoke<unknown>('window_set_material', { request })),
   windowMaximize: () => void appWindow.toggleMaximize(),
   windowClose: async () => {
     try {

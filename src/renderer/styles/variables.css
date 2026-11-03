@@ -133,6 +133,7 @@
 
   --bg-surface: var(--bg-sidebar);
   --bg-sidebar: #1b1d20;
+  --bg-chrome: var(--bg-sidebar);
   --bg-titlebar: #1b1d20;
   --bg-statusbar: #1b1d20;
   --bg-main: #111214;

@@ -205,6 +205,18 @@
   gap: 8px;
   flex-shrink: 0;
 }
+.materialSelect {
+  flex: 1;
+  width: 0;
+  max-width: 240px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-medium);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+}
 
 .numberInput {
   background: var(--bg-input);

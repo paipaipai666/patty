@@ -32,6 +32,7 @@ import { createShortcutCommands, type AppCommand } from './commands/applicationC
 import { focusActiveTerminal, useApplicationKeyboard, useCommandExecution } from './commands/useApplicationKeyboard'
 import { usePaletteCommands } from './commands/usePaletteCommands'
 import { CommandPalette } from './components/CommandPalette/CommandPalette'
+import { useWindowMaterial } from './hooks/useWindowMaterial'
 
 interface ContextMenuState {
   x: number
@@ -48,6 +49,7 @@ interface CollectionContextMenuState {
 const LAST_CWD_KEY = 'patty-last-cwd'
 
 export default function App() {
+  useWindowMaterial()
   const setActive = useSessionStore((s) => s.setActive)
   const renameSession = useSessionStore((s) => s.renameSession)
   const setColor = useSessionStore((s) => s.setColor)
