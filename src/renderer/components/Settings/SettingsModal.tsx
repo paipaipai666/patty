@@ -9,6 +9,7 @@ import { ShortcutsSection } from './sections/ShortcutsSection'
 import { LayoutSection } from './sections/LayoutSection'
 import { NotificationsSection } from './sections/NotificationsSection'
 import styles from './SettingsModal.module.css'
+import { formatShortcut, isComposingKey, normalizeShortcut, SHORTCUT_DEFINITIONS } from '../../commands/shortcuts'
 
 type Category = 'appearance' | 'terminal' | 'shortcuts' | 'layout' | 'notifications' | 'ssh'
 
@@ -21,19 +22,6 @@ const CATEGORIES: { key: Category; label: string }[] = [
   { key: 'ssh', label: 'SSH' }
 ]
 
-export function formatShortcut(e: KeyboardEvent): string {
-  const parts: string[] = []
-  if (e.ctrlKey) parts.push('Ctrl')
-  if (e.altKey) parts.push('Alt')
-  if (e.shiftKey) parts.push('Shift')
-  if (e.metaKey) parts.push('Meta')
-  const key = e.key
-  if (!['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
-    parts.push(key.length === 1 ? key.toUpperCase() : key)
-  }
-  return parts.join('+')
-}
-
 export function SettingsModal() {
   const settings = useSettingsStore((s) => s.settings)
   const settingsOpen = useSettingsStore((s) => s.settingsOpen)
@@ -43,6 +31,7 @@ export function SettingsModal() {
   const { mounted, exiting } = useAnimatedMount(settingsOpen, 200)
   const [activeCategory, setActiveCategory] = useState<Category>('appearance')
   const [capturingShortcut, setCapturingShortcut] = useState<keyof ShortcutMap | null>(null)
+  const [captureError, setCaptureError] = useState<string | null>(null)
   const captureRef = useRef<keyof ShortcutMap | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const navRef = useRef<HTMLElement>(null)
@@ -52,6 +41,8 @@ export function SettingsModal() {
   useEffect(() => {
     if (!settingsOpen) {
       setCapturingShortcut(null)
+      captureRef.current = null
+      setCaptureError(null)
       return
     }
     setActiveCategory(settingsCategory === 'ssh' ? 'ssh' : 'appearance')
@@ -59,10 +50,14 @@ export function SettingsModal() {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      if (isComposingKey(e) || e.repeat) return
       if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
         if (captureRef.current) {
           setCapturingShortcut(null)
           captureRef.current = null
+          setCaptureError(null)
         } else {
           closeSettings()
         }
@@ -73,10 +68,26 @@ export function SettingsModal() {
         e.preventDefault()
         e.stopPropagation()
         const combo = formatShortcut(e)
-        if (combo && !['Ctrl', 'Alt', 'Shift', 'Meta'].includes(combo)) {
+        if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
+        if (!e.ctrlKey && !e.altKey && !e.metaKey && !/^F(?:[1-9]|1[0-9]|2[0-4])$/.test(e.key)) {
+          setCaptureError('Use Ctrl, Alt, Meta or a function key. Escape cancels.')
+          return
+        }
+        const normalized = normalizeShortcut(combo)
+        if (['ctrl+c', 'ctrl+v', 'ctrl+shift+c', 'ctrl+shift+v'].includes(normalized) || /^ctrl\+[1-9]$/.test(normalized)) {
+          setCaptureError('Reserved for terminal copy, paste, interrupt or session navigation.')
+          return
+        }
+        const conflict = SHORTCUT_DEFINITIONS.find(({ key }) => key !== captureRef.current && normalizeShortcut(settings.shortcuts[key]) === normalized)
+        if (conflict) {
+          setCaptureError(`Already used by ${conflict.label.toLowerCase()}. Choose another shortcut.`)
+          return
+        }
+        if (combo) {
           updateSetting('shortcuts', { ...settings.shortcuts, [captureRef.current]: combo })
           setCapturingShortcut(null)
           captureRef.current = null
+          setCaptureError(null)
         }
       }
     },
@@ -126,8 +137,10 @@ export function SettingsModal() {
   }, [settingsOpen])
 
   const startCapture = (key: keyof ShortcutMap) => {
-    setCapturingShortcut(key)
-    captureRef.current = key
+    const next = captureRef.current === key ? null : key
+    setCapturingShortcut(next)
+    captureRef.current = next
+    setCaptureError(null)
   }
 
   if (!mounted) return null
@@ -171,6 +184,7 @@ export function SettingsModal() {
               <ShortcutsSection
                 shortcuts={settings.shortcuts}
                 capturing={capturingShortcut}
+                error={captureError}
                 onStartCapture={startCapture}
               />
             )}

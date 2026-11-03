@@ -28,6 +28,8 @@ import { Toasts } from './components/App/Toasts'
 import { toast } from './store/toastStore'
 import type { SshProfile, SshAuthRequest, SshHostkeyRequest } from '../shared/settingsTypes'
 import styles from './App.module.css'
+import { createShortcutCommands } from './commands/applicationCommands'
+import { useApplicationKeyboard, useCommandExecution } from './commands/useApplicationKeyboard'
 
 interface ContextMenuState {
   x: number
@@ -65,6 +67,7 @@ export default function App() {
   const shortcuts = useSettingsStore((s) => s.settings.shortcuts)
   const sidebarPosition = useSettingsStore((s) => s.settings.sidebarPosition)
   const openSettings = useSettingsStore((s) => s.openSettings)
+  const settingsOpen = useSettingsStore((s) => s.settingsOpen)
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [collectionContextMenu, setCollectionContextMenu] = useState<CollectionContextMenuState | null>(null)
@@ -242,58 +245,27 @@ export default function App() {
   }, [])
 
 
-  useEffect(() => {
-    const sc = shortcuts
-
-    const shortcutActions: Record<string, () => void> = {
-      [sc.newTerminal.toLowerCase()]: handleNewTerminal,
-      [sc.closeTerminal.toLowerCase()]: () => {
+  const shortcutCommands = createShortcutCommands(shortcuts, {
+      newTerminal: handleNewTerminal,
+      closeTerminal: () => {
         const activeId = useSessionStore.getState().activeSessionId
         if (activeId) handleCloseSession(activeId)
       },
-      [sc.nextTab.toLowerCase()]: navigateNext,
-      [sc.prevTab.toLowerCase()]: navigatePrev,
-      [sc.toggleSidebar.toLowerCase()]: toggleSidebar,
-      [sc.settings.toLowerCase()]: openSettings,
-      [sc.splitHorizontal.toLowerCase()]: () => handleSplit('horizontal'),
-      [sc.splitVertical.toLowerCase()]: () => handleSplit('vertical'),
-      [sc.closePane.toLowerCase()]: handleClosePane
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-
-      const activeEl = document.activeElement
-      if (activeEl?.closest('.xterm')) return
-      if (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement) return
-
-      const parts: string[] = []
-      if (e.ctrlKey) parts.push('ctrl')
-      if (e.altKey) parts.push('alt')
-      if (e.shiftKey) parts.push('shift')
-      if (e.metaKey) parts.push('meta')
-      const key = e.key.toLowerCase()
-      if (!['control', 'alt', 'shift', 'meta'].includes(key)) {
-        parts.push(key)
-      }
-      const combo = parts.join('+')
-
-      const action = shortcutActions[combo]
-      if (action) {
-        e.preventDefault()
-        action()
-        return
-      }
-
-
-      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
-        e.preventDefault()
-        navigateToIndex(parseInt(e.key) - 1)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleNewTerminal, handleCloseSession, handleSplit, handleClosePane, navigateNext, navigatePrev, toggleSidebar, navigateToIndex, shortcuts, openSettings])
+      nextTab: navigateNext,
+      prevTab: navigatePrev,
+      toggleSidebar,
+      settings: openSettings,
+      splitHorizontal: () => handleSplit('horizontal'),
+      splitVertical: () => handleSplit('vertical'),
+      closePane: handleClosePane
+  })
+  const executeCommand = useCommandExecution()
+  useApplicationKeyboard({
+    commands: shortcutCommands,
+    blocked: settingsOpen || Boolean(promptOptions || contextMenu || collectionContextMenu || sshAuthQueue.length || sshHostkeyQueue.length),
+    navigateToIndex,
+    execute: executeCommand
+  })
 
   const getContextMenuItems = (): MenuItem[] => {
     if (!contextMenu) return []

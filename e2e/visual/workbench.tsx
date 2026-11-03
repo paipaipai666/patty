@@ -7,7 +7,9 @@ import { SettingsModal } from '../../src/renderer/components/Settings/SettingsMo
 import { useSessionStore, type TerminalSession } from '../../src/renderer/store/sessionStore'
 import { useWorkspaceStore } from '../../src/renderer/store/workspaceStore'
 import { useSettingsStore } from '../../src/renderer/store/settingsStore'
-import { selectSession, closeSession } from '../../src/renderer/store/sessionLifecycle'
+import { selectSession, closeSession, createTerminal, createTerminalSplit } from '../../src/renderer/store/sessionLifecycle'
+import { createShortcutCommands } from '../../src/renderer/commands/applicationCommands'
+import { useApplicationKeyboard, useCommandExecution } from '../../src/renderer/commands/useApplicationKeyboard'
 import { DEFAULT_SETTINGS } from '../../src/shared/defaultSettings'
 import { applyTheme, getThemeColors } from '../../src/renderer/styles/themes'
 import '../../src/renderer/styles/global.css'
@@ -21,13 +23,14 @@ const sessions: TerminalSession[] = [
 ]
 
 const listener = () => ({ ready: Promise.resolve(), unsubscribe: () => {} })
+const writes: { id: string; data: string }[] = []
 Object.defineProperty(window, 'terminalAPI', { value: {
   onData: listener, onExit: listener, onMaximizeChange: () => () => {},
   createSession: async (id: string) => ({ success: true, pid: 100, replay: id === 'agent'
     ? '\x1b[38;2;224;154;126mClaude Code\x1b[0m\r\n\r\nI found the callback validation issue.\r\n\r\n  npm test -- login-callback\r\n\r\nWaiting for your approval to run the tests.\r\n'
     : id === 'remote' ? 'deploy@prod-01:/srv/payments$ tail -f service.log\r\n09:00:01 INFO  Service ready\r\n09:00:02 INFO  Health check passed\r\n'
     : 'PS D:\\code\\terminal\\terminal-sidebar> git status --short\r\n M src/renderer/components/Sidebar/Sidebar.tsx\r\n M src/renderer/components/Sidebar/Sidebar.module.css\r\n\r\nPS D:\\code\\terminal\\terminal-sidebar> ' }),
-  resize: () => {}, write: () => {}, kill: () => {}, stateSave: async () => {}, settingsSet: async () => ({}),
+  resize: () => {}, write: (id: string, data: string) => { writes.push({ id, data }) }, kill: () => {}, stateSave: async () => {}, settingsSet: async () => ({}),
   windowMinimize: () => {}, windowMaximize: () => {}, windowClose: () => {}
 } })
 
@@ -52,11 +55,24 @@ function addCustomTheme() {
     terminal: { ...base.terminal, background: '#102a33', foreground: '#e1f0f0' }
   }])
 }
-Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, addCustomTheme, sessions: useSessionStore, workspaces: useWorkspaceStore, settings: useSettingsStore } })
+Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, addCustomTheme, writes, sessions: useSessionStore, workspaces: useWorkspaceStore, settings: useSettingsStore } })
 
 function Workbench() {
   const visible = useSessionStore((state) => state.sidebarVisible)
   const position = useSettingsStore((state) => state.settings.sidebarPosition)
+  const shortcuts = useSettingsStore(state => state.settings.shortcuts)
+  const execute = useCommandExecution()
+  useApplicationKeyboard({
+    commands: createShortcutCommands(shortcuts, {
+      newTerminal: () => { createTerminal() },
+      closeTerminal: () => { const id = useSessionStore.getState().activeSessionId; if (id) closeSession(id) },
+      nextTab: () => useSessionStore.getState().navigateNext(), prevTab: () => useSessionStore.getState().navigatePrev(),
+      toggleSidebar: () => useSessionStore.getState().toggleSidebar(), settings: () => useSettingsStore.getState().openSettings(),
+      splitHorizontal: () => { createTerminalSplit('horizontal') }, splitVertical: () => { createTerminalSplit('vertical') },
+      closePane: () => useWorkspaceStore.getState().closeFocused()
+    }),
+    execute, navigateToIndex: index => useSessionStore.getState().navigateToIndex(index)
+  })
   return <div className="visual-workbench">
     <TitleBar sidebarVisible={visible} onToggleSidebar={() => useSessionStore.getState().toggleSidebar()} />
     <main className="visual-stage" style={{ flexDirection: position === 'right' ? 'row-reverse' : undefined }}>

@@ -57,7 +57,8 @@ vi.mock('../../../store/toastStore', () => ({
   toast: vi.fn()
 }))
 
-import { SettingsModal, formatShortcut } from '../SettingsModal'
+import { SettingsModal } from '../SettingsModal'
+import { formatShortcut } from '../../../commands/shortcuts'
 
 describe('formatShortcut', () => {
   it('Ctrl+letter', () => {
@@ -219,6 +220,63 @@ describe('SettingsModal', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true }))
     })
     expect(mockUpdateSetting).toHaveBeenCalledWith('shortcuts', expect.objectContaining({ newTerminal: 'Ctrl+Y' }))
+  })
+
+  it('lists every application shortcut, including split and pane operations', () => {
+    const { container } = render()
+    act(() => container.querySelectorAll<HTMLButtonElement>('nav button')[2].click())
+    expect(container.querySelectorAll('button').length).toBeGreaterThan(9)
+    expect(container.textContent).toContain('Split horizontally')
+    expect(container.textContent).toContain('Split vertically')
+    expect(container.textContent).toContain('Close pane')
+    expect(container.textContent).toContain('Ctrl+Shift+D')
+  })
+
+  it('rejects conflicting keys and leaves capture active until a valid choice', () => {
+    const { container } = render()
+    act(() => container.querySelectorAll<HTMLButtonElement>('nav button')[2].click())
+    const edit = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Edit')
+    act(() => edit?.click())
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', ctrlKey: true, bubbles: true })))
+    expect(mockUpdateSetting).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe('Already used by close terminal. Choose another shortcut.')
+    expect(container.textContent).toContain('Press keys...')
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true })))
+    expect(mockUpdateSetting).toHaveBeenCalledWith('shortcuts', expect.objectContaining({ newTerminal: 'Ctrl+Y' }))
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+  })
+
+  it.each([
+    { key: 'x', message: 'Use Ctrl, Alt, Meta or a function key. Escape cancels.' },
+    { key: 'c', ctrlKey: true, message: 'Reserved for terminal copy, paste, interrupt or session navigation.' },
+    { key: '1', ctrlKey: true, message: 'Reserved for terminal copy, paste, interrupt or session navigation.' }
+  ])('does not capture reserved or plain-text input: $key', ({ message, ...event }) => {
+    const { container } = render()
+    act(() => container.querySelectorAll<HTMLButtonElement>('nav button')[2].click())
+    const edit = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Edit')
+    act(() => edit?.click())
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { ...event, bubbles: true })))
+    expect(mockUpdateSetting).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(message)
+  })
+
+  it('ignores input-method confirmation and modifier-only keys, and supports the Cancel button', () => {
+    const { container } = render()
+    act(() => container.querySelectorAll<HTMLButtonElement>('nav button')[2].click())
+    const edit = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Edit')
+    act(() => edit?.click())
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control', ctrlKey: true, shiftKey: true, bubbles: true }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }))
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true }))
+    })
+    expect(mockUpdateSetting).not.toHaveBeenCalled()
+    expect(mockCloseSettings).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Press keys...')
+    act(() => edit?.click())
+    expect(container.textContent).not.toContain('Press keys...')
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true })))
+    expect(mockUpdateSetting).not.toHaveBeenCalled()
   })
 
   it('terminal section cursor style buttons work', () => {
