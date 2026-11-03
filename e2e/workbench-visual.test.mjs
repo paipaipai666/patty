@@ -48,11 +48,16 @@ try {
         const sidebar = document.querySelector('[data-sidebar]')
         const bounds = sidebar.getBoundingClientRect()
         const controls = [...header.querySelectorAll('input, select, button')]
+        const rows = [...sidebar.querySelectorAll('[role="treeitem"]')].filter(row => row.getBoundingClientRect().height > 0)
         return { width: bounds.width, headerHeight: header.getBoundingClientRect().height, overflow: sidebar.scrollWidth > sidebar.clientWidth,
+          rowHeights: rows.map(row => row.getBoundingClientRect().height),
+          rowTextFits: rows.every(row => [...row.querySelectorAll('span')].filter(span => span.textContent.trim()).every(span => { const box = span.getBoundingClientRect(); const rowBox = row.getBoundingClientRect(); return box.top >= rowBox.top && box.bottom <= rowBox.bottom })),
           controlsFit: controls.every(element => { const rect = element.getBoundingClientRect(); return rect.left >= bounds.left && rect.right <= bounds.right && rect.width >= 24 }) }
       })()`)
       assert.equal(measured.overflow, false, `${theme} ${width}: sidebar overflow`)
       assert.equal(measured.controlsFit, true, `${theme} ${width}: clipped control`)
+      assert.ok(measured.rowHeights.length >= 5 && measured.rowHeights.every(height => height === 48), `${theme} ${width}: inconsistent collection and terminal row heights`)
+      assert.equal(measured.rowTextFits, true, `${theme} ${width}: vertically clipped row text`)
       assert.ok(measured.headerHeight <= 56, `${theme} ${width}: header too tall`)
       assert.equal(await cdp.evaluate(`document.querySelector('[data-testid="pane-header"]') === null && document.querySelector('[aria-label="Search sessions"]') === null`), true)
       assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-sidebar]')).backgroundColor === getComputedStyle(document.querySelector('[data-tauri-drag-region]').parentElement).backgroundColor`), true)
@@ -89,6 +94,16 @@ try {
     await cdp.waitFor(`!document.querySelector('[role="dialog"]') && document.activeElement?.getAttribute('aria-label') === 'Notifications'`)
   }
   await cdp.evaluate(`window.workbenchPreview.settings.setState(state => ({settings: {...state.settings, sidebarPosition: 'left'}}))`)
+  await cdp.evaluate(`document.querySelector('[data-tree-id="collection:project"]').focus()`)
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'F2', code: 'F2', windowsVirtualKeyCode: 113 })
+  await cdp.waitFor(`!!document.querySelector('[data-tree-id="collection:project"] input')`)
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="collection:project"]').getBoundingClientRect().height`), 48)
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  await cdp.evaluate(`document.querySelector('[data-tree-id="session:shell"]').focus()`)
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'F2', code: 'F2', windowsVirtualKeyCode: 113 })
+  await cdp.waitFor(`!!document.querySelector('[data-tree-id="session:shell"] input')`)
+  assert.equal(await cdp.evaluate(`document.querySelector('[data-tree-id="session:shell"]').getBoundingClientRect().height`), 48)
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await cdp.evaluate(`document.querySelector('[data-pane-id="pane-agent"] .xterm-helper-textarea').focus()`)
   await cdp.waitFor(`document.querySelector('[data-pane-id="pane-agent"]').dataset.focused === 'true'`)
   assert.equal(await cdp.evaluate(`window.workbenchPreview.sessions.getState().activeSessionId`), 'agent')

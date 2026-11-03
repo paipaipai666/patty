@@ -142,13 +142,18 @@
   padding: 8px 8px 12px;
   scrollbar-gutter: stable;
 }
-.item {
+.item,
+.collectionItem {
   display: flex;
   align-items: center;
-  min-height: 40px;
+  box-sizing: border-box;
+  height: 48px;
+  min-height: 48px;
   padding: 6px 8px;
   margin: 2px 0;
   border-radius: var(--radius-sm);
+}
+.item {
   cursor: pointer;
   position: relative;
 }
@@ -200,7 +205,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  line-height: 18px;
+  line-height: 16px;
   color: var(--text-secondary);
 }
 .itemActive .itemTitle {
@@ -298,12 +303,7 @@
   margin-top: 8px;
 }
 .collectionItem {
-  display: flex;
-  align-items: center;
   gap: 6px;
-  min-height: 34px;
-  padding-right: 6px;
-  border-radius: 4px;
 }
 .collectionName {
   flex: 1;
