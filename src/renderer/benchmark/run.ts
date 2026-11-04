@@ -119,10 +119,13 @@ async function measure(count: number) {
   phases.push(await phase('idle', () => delay(7_000)))
   phases.push(await phase('input', inputSamples))
   if (background.length) {
-    phases.push(await phase('background-output', async () => {
-      const [input] = await Promise.all([inputSamples(), Promise.all(background.map((pane) => command(pane, paced)))])
+    let backgroundCommandMs: number[] = []
+    const backgroundPhase = await phase('background-output', async () => {
+      const [input, completed] = await Promise.all([inputSamples(), Promise.all(background.map((pane) => command(pane, paced)))])
+      backgroundCommandMs = completed.map((sample) => sample.inputToBufferMs)
       return input
-    }))
+    })
+    phases.push({ ...backgroundPhase, backgroundCommandMs })
   }
   phases.push(await phase('burst', () => Promise.all([...panes.values()].map((pane) => command(pane, burst)))))
   if (background.length) {
@@ -140,6 +143,28 @@ async function measure(count: number) {
         await frame()
       }
       return samples
+    }))
+    phases.push(await phase('switch-under-output', async () => {
+      const running = Promise.all(background.map((pane) => command(pane, paced)))
+      await delay(20)
+      const switches = []
+      for (let index = 1; index <= 20; index++) {
+        const id = ids[index % count]
+        const pane = panes.get(id)
+        if (!pane) throw new Error('Missing switch target')
+        const start = performance.now()
+        const targetBytes = pane.receivedBytes
+        const queuedBytes = pane.queuedBytes
+        selectSession(id)
+        const caughtUpAt = await until('received output parsed after selection', () =>
+          pane.parsedBytes >= targetBytes ? performance.now() : undefined)
+        const renderedAt = await until('render while background output continues', () =>
+          pane.renderedAt > start ? pane.renderedAt : undefined)
+        switches.push({ queuedBytes, catchUpMs: caughtUpAt - start, firstRenderMs: renderedAt - start })
+        await frame()
+      }
+      const completed = await running
+      return { switches, backgroundCommandMs: completed.map((sample) => sample.inputToBufferMs) }
     }))
   }
   phases.push(await phase('settled', () => delay(7_000)))

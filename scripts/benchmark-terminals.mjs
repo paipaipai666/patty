@@ -144,6 +144,13 @@ function summarize(report, samples, appStartedAt) {
         ptyDispatchToReceiptMs: joined ? quantiles(joined.map(({ sentAt, probeId, inputToReceiptMs }) =>
           sentAt + inputToReceiptMs - markerAt(probeId))) : null,
         firstRenderMs: phase.name === 'switch' ? quantiles(data) : null,
+        backgroundCommandMs: phase.backgroundCommandMs ? quantiles(phase.backgroundCommandMs) : null,
+        switchUnderOutput: phase.name === 'switch-under-output' ? {
+          firstRenderMs: quantiles(data.switches.map((sample) => sample.firstRenderMs)),
+          catchUpMs: quantiles(data.switches.map((sample) => sample.catchUpMs)),
+          queuedBytesAtSwitch: quantiles(data.switches.map((sample) => sample.queuedBytes)),
+          backgroundCommandMs: quantiles(data.backgroundCommandMs),
+        } : null,
         transport: transportSummary(timeline, phase),
         resources: resourceSummary(samples.filter(({ at }) => at >= phase.startedAt && at <= phase.endedAt)),
       }
@@ -191,6 +198,19 @@ async function benchmark(count) {
     const summary = summarize(report, samples, app.startedAt)
     const path = join(output, `${count}-sessions.json`)
     writeFileSync(path, JSON.stringify({ environment, report, samples, summary }, null, 2) + '\n')
+    const balance = summary.outputBalance
+    if (balance.dispatchedBytes !== balance.receivedBytes || balance.dispatchedEvents !== balance.receivedEvents) {
+      throw new Error(`Terminal output did not balance; report saved at ${path}`)
+    }
+    if (summary.phases.find((phase) => phase.name === 'settled')?.queuedBytes !== 0) {
+      throw new Error(`Terminal output did not drain; report saved at ${path}`)
+    }
+    if (summary.phases.some(({ latencyBreakdown: latency }) => latency && (latency.missing || latency.outOfOrder))) {
+      throw new Error(`Terminal probes could not be paired; report saved at ${path}`)
+    }
+    if (summary.phases.some((phase) => phase.peakQueuedBytes > 1024 * 1024 || phase.peakPaneQueuedBytes > 128 * 1024)) {
+      throw new Error(`Terminal output exceeded its byte budget; report saved at ${path}`)
+    }
     console.log(`[benchmark] ${count} sessions: ${path}`)
   } finally {
     sampler.kill()
