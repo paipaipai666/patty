@@ -8,6 +8,7 @@ import type { PersistedState } from '../shared/stateTypes'
 import type { IWindowsPty } from '@xterm/xterm'
 import { parseAgentSnapshot, parseAgentUpdate, type AgentUpdate } from '../shared/agentTypes'
 import { parseWindowMaterial, type WindowMaterialRequest } from '../shared/windowMaterial'
+import { parseDesktopActivation, type NoticeKind } from '../shared/desktopNotifications'
 
 const appWindow = getCurrentWindow()
 
@@ -94,6 +95,12 @@ function openLocalSession(request: LocalPtyRequest, receive: (message: LocalPtyM
 }
 
 export const terminalAPI = {
+  notifyAttention: (notice: { paneId: string; title: string; kind: NoticeKind; revision: number }) =>
+    invoke<boolean>('notify_attention', notice),
+  dismissDesktopNotification: (paneId: string) => invoke<void>('dismiss_desktop_notification', { paneId }),
+  testDesktopNotification: (paneId: string | null) => invoke<boolean>('test_desktop_notification', { paneId }),
+  onDesktopActivation: (callback: () => void): ListenerHandle => listenHandle(listen('desktop:activation', callback)),
+  takeDesktopActivation: async () => parseDesktopActivation(await invoke<unknown>('take_desktop_activation')),
   openLocalSession,
 
   createSshSession: (id: string, cols: number, rows: number, ssh: SshTarget) =>

@@ -33,6 +33,7 @@ pub fn default_settings() -> Value {
     json!({
         "theme": "dark",
         "windowMaterial": "auto",
+        "desktopNotifications": true,
         "fontFamily": "Cascadia Code",
         "fontSize": 14,
         "cursorStyle": "bar",

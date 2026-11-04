@@ -1,6 +1,9 @@
 import type { NotificationSettings } from '../../../../shared/settingsTypes'
 import type { SectionProps } from './AppearanceSection'
 import styles from '../SettingsModal.module.css'
+import { useState } from 'react'
+import { useSessionStore } from '../../../store/sessionStore'
+import { toast } from '../../../store/toastStore'
 
 const NOTIFICATION_TOGGLES: Array<{
   key: keyof NotificationSettings
@@ -16,8 +19,33 @@ const NOTIFICATION_TOGGLES: Array<{
 ]
 
 export function NotificationsSection({ settings, updateSetting }: SectionProps) {
+  const [testing, setTesting] = useState(false)
+  const testNotification = async () => {
+    setTesting(true)
+    try {
+      const sent = await window.terminalAPI.testDesktopNotification(useSessionStore.getState().activeSessionId)
+      toast(sent ? 'Test notification sent. Check Windows notifications.' : 'Notifications are disabled or unavailable. Check Windows settings.')
+    } catch {
+      toast('Could not send notification. Check Windows notification settings.')
+    } finally { setTesting(false) }
+  }
   return (
     <div className={styles.section}>
+      <div className={styles.sectionTitle}>Windows Notifications</div>
+      <div className={styles.settingRow}>
+        <div>
+          <span id="desktop-notifications-label" className={styles.settingLabel}>Notify while Patty is in the background</span>
+          <div className={styles.settingDesc}>Approval requests, questions, and errors. Click a notification to return to its terminal.</div>
+        </div>
+        <button type="button" role="switch" aria-labelledby="desktop-notifications-label" aria-checked={settings.desktopNotifications}
+          className={`${styles.toggle} ${settings.desktopNotifications ? styles.toggleOn : ''}`}
+          onClick={() => { void updateSetting('desktopNotifications', !settings.desktopNotifications) }}>
+          <div className={styles.toggleKnob} />
+        </button>
+      </div>
+      <button type="button" className={styles.themeBtn} disabled={testing || !settings.desktopNotifications} onClick={() => { void testNotification() }}>
+        {testing ? 'Sending…' : 'Send test notification'}
+      </button>
       <div className={styles.sectionTitle}>Attention Notifications</div>
       <div className={styles.settingDesc}>
         Show attention indicators when AI tools need your input.

@@ -35,7 +35,7 @@ function rustEmittedEvents(): string[] {
     for (const re of patterns) {
       for (const m of src.matchAll(re)) {
 
-        if (/^(pty|ssh|metrics|hooks):[a-z0-9_:{}*-]*$/i.test(m[1])) {
+        if (/^(pty|ssh|metrics|hooks|desktop):[a-z0-9_:{}*-]*$/i.test(m[1])) {
           events.add(m[1])
         }
       }

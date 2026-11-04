@@ -62,6 +62,10 @@ pub fn agent_snapshot() -> Value {
     REGISTRY.lock().unwrap().snapshot()
 }
 
+pub(crate) fn agent_update(pane_id: &str) -> Option<crate::hook_state::AgentUpdate> {
+    REGISTRY.lock().unwrap().current_update(pane_id)
+}
+
 pub fn start_heartbeat_watchdog(app: AppHandle) {
     thread::spawn(move || loop {
         thread::sleep(Duration::from_secs(5));

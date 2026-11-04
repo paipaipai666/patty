@@ -33,6 +33,7 @@ import { focusActiveTerminal, useApplicationKeyboard, useCommandExecution } from
 import { usePaletteCommands } from './commands/usePaletteCommands'
 import { CommandPalette } from './components/CommandPalette/CommandPalette'
 import { useWindowMaterial } from './hooks/useWindowMaterial'
+import { useDesktopNotifications } from './hooks/useDesktopNotifications'
 
 interface ContextMenuState {
   x: number
@@ -82,6 +83,16 @@ export default function App() {
   const [sessionInfoId, setSessionInfoId] = useState<string | null>(null)
   const closeSessionInfo = useCallback(() => setSessionInfoId(null), [])
   const [commandBarOpen, setCommandBarOpen] = useState(false)
+  const activateNotification = useCallback(() => {
+    useSettingsStore.getState().closeSettings()
+    setCommandPaletteOpen(false)
+    setSessionInfoId(null)
+    setContextMenu(null)
+    setCollectionContextMenu(null)
+    setMetricsOpen(false)
+    setSshMonitorOpen(false)
+  }, [])
+  useDesktopNotifications(activateNotification)
   useEffect(() => { if (commandBarOpen) document.querySelector<HTMLInputElement>('[aria-label="SSH command input"]')?.focus() }, [commandBarOpen])
 
   const [sshAuthQueue, setSshAuthQueue] = useState<Array<{ id: string; info: SshAuthRequest }>>([])

@@ -24,6 +24,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     closePane: 'Ctrl+Shift+W'
   },
   customThemes: [],
+  desktopNotifications: true,
   notifications: {
     claudeCode: true,
     openCode: true,

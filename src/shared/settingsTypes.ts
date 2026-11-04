@@ -229,6 +229,7 @@ export interface NotificationSettings {
 }
 
 export interface AppSettings {
+  desktopNotifications: boolean
   theme: string
   windowMaterial: 'auto' | 'solid'
   fontFamily: string

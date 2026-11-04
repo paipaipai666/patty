@@ -12,6 +12,7 @@ mod hook_state;
 mod window_material;
 mod pty_output;
 mod output_wake;
+mod desktop_notifications;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -321,7 +322,8 @@ pub fn run() {
     }
     tauri::Builder::default()
         .manage(window_material::MaterialCache::default())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            desktop_notifications::receive_activation(app, args);
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.show();
@@ -330,7 +332,7 @@ pub fn run() {
         }))
         .setup(|app| {
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
-                .title("Patty")
+                .title(app.config().product_name.as_deref().unwrap_or("Patty"))
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(600.0, 400.0)
                 .decorations(false)
@@ -341,6 +343,7 @@ pub fn run() {
                 .build()?;
 
             pty::init_resource_dir(app.handle());
+            desktop_notifications::receive_activation(app.handle(), std::env::args());
             if let Err(e) = hooks::start_hook_server(app.handle().clone()) {
                 eprintln!("[main] hook server failed to start: {e}");
             }
@@ -376,6 +379,10 @@ pub fn run() {
             get_fonts,
             hook_server_status,
             agent_state_snapshot,
+            desktop_notifications::notify_attention,
+            desktop_notifications::dismiss_desktop_notification,
+            desktop_notifications::test_desktop_notification,
+            desktop_notifications::take_desktop_activation,
             select_directory,
             theme_export,
             theme_import,

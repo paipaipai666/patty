@@ -46,6 +46,18 @@ pub(crate) struct AgentRegistry {
 }
 
 impl AgentRegistry {
+    pub fn current_update(&self, pane_id: &str) -> Option<AgentUpdate> {
+        let lease = self.panes.get(pane_id)?;
+        Some(AgentUpdate {
+            pane_id: pane_id.into(),
+            revision: lease.revision,
+            agent: lease.status.map(|status| AgentState {
+                ai_type: map_source_to_ai_type(&lease.source).unwrap(),
+                status,
+            }),
+        })
+    }
+
     #[cfg(test)]
     pub fn current_actor(&self, pane_id: &str) -> Option<ProcessKey> {
         self.panes.get(pane_id).map(|lease| lease.actor)

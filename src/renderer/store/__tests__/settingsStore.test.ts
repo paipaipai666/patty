@@ -31,6 +31,7 @@ vi.stubGlobal('document', {
 })
 
 const DEFAULT_SETTINGS: AppSettings = {
+  desktopNotifications: true,
   theme: 'dark',
   windowMaterial: 'auto',
   fontFamily: 'Cascadia Code',
