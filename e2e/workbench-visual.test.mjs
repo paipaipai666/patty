@@ -14,7 +14,8 @@ const executable = process.env.PATTY_VISUAL_BROWSER || [
 ].find(existsSync)
 assert.ok(executable && existsSync(executable), 'Set PATTY_VISUAL_BROWSER to a Chromium browser executable')
 const profile = mkdtempSync(join(tmpdir(), 'patty-visual-'))
-const output = resolve('output/workbench-visual')
+const forceCanvas = process.env.PATTY_VISUAL_DISABLE_WEBGL === '1'
+const output = resolve(forceCanvas ? 'output/workbench-visual-canvas' : 'output/workbench-visual')
 mkdirSync(output, { recursive: true })
 writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'running' }))
 const server = await createServer({ configFile: false, root: resolve('.'), plugins: [react()], server: { host: '127.0.0.1', port: 0, watch: { ignored: ['**/output/**', '**/out/**'] } } })
@@ -62,7 +63,7 @@ try {
   await server.listen()
   const address = server.httpServer.address()
   assert.ok(address && typeof address === 'object')
-  browser = spawn(executable, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--window-size=1440,900', `http://127.0.0.1:${address.port}/e2e/visual/index.html`], { windowsHide: true, stdio: 'ignore' })
+  browser = spawn(executable, [...(forceCanvas ? ['--disable-webgl'] : []), '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--window-size=1440,900', `http://127.0.0.1:${address.port}/e2e/visual/index.html`], { windowsHide: true, stdio: 'ignore' })
   const portFile = join(profile, 'DevToolsActivePort')
   const deadline = Date.now() + 20000
   while (!existsSync(portFile) && Date.now() < deadline) await sleep(100)
@@ -81,6 +82,9 @@ try {
     throw error
   }
   await sleep(600)
+  if (forceCanvas) {
+    assert.equal(await cdp.evaluate(`document.createElement('canvas').getContext('webgl2') === null && document.querySelectorAll('.xterm-text-layer').length === 2`), true, 'Canvas fallback must render both visible terminals')
+  }
   const metrics = []
   const flames = []
   for (const theme of ['dark', 'light']) {
@@ -412,7 +416,7 @@ try {
   await cdp.waitFor(`document.documentElement.dataset.windowMaterial === 'solid'`)
   assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-sidebar]')).backgroundColor`), 'rgb(32, 32, 32)')
   assert.deepEqual(errors, [])
-  writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'passed', scope: 'Real React components and xterm with fixture transport; simulated material responses validate CSS gating only, not native desktop appearance; no desktop PTY or CLI integration', metrics, flames }, null, 2))
+  writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'passed', renderer: forceCanvas ? 'canvas' : 'automatic', scope: 'Real React components and xterm with fixture transport; simulated material responses validate CSS gating only, not native desktop appearance; no desktop PTY or CLI integration', metrics, flames }, null, 2))
   console.log(`PASS: workbench, previews, themes, command execution, remapping and keyboard focus; screenshots in ${output}`)
 } catch (error) {
   writeFileSync(join(output, 'verification.json'), JSON.stringify({ result: 'failed', message: String(error) }, null, 2))
