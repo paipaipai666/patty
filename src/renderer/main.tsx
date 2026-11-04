@@ -30,3 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </React.StrictMode>
 )
+
+if (import.meta.env.MODE === 'benchmark') {
+  void import('./benchmark/run').then(({ run }) => run())
+}

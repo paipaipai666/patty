@@ -234,7 +234,7 @@ pub fn shell_spawn_args(shell_path: &str) -> Vec<String> {
 
     if stem.starts_with("pwsh") || stem.starts_with("powershell") {
         let script = script_path("pwsh.ps1");
-        return vec![
+        let args = vec![
             "-NoLogo".into(),
             "-NoExit".into(),
             "-ExecutionPolicy".into(),
@@ -242,6 +242,11 @@ pub fn shell_spawn_args(shell_path: &str) -> Vec<String> {
             "-Command".into(),
             format!(". {}", quote_ps_literal(&script.display().to_string())),
         ];
+        #[cfg(feature = "e2e")]
+        if crate::benchmark::load_count(&crate::store::data_dir()).is_ok() {
+            return std::iter::once("-NoProfile".into()).chain(args).collect();
+        }
+        return args;
     }
     if stem == "cmd" {
         return vec!["/k".into(), script_path("cmd-prompt.cmd").to_string_lossy().into_owned()];

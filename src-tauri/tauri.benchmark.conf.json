@@ -1,0 +1,8 @@
+{
+  "identifier": "com.patty.benchmark",
+  "mainBinaryName": "patty-benchmark",
+  "build": {
+    "frontendDist": "../out/benchmark",
+    "beforeBuildCommand": "node scripts/prepare-conpty.mjs && npx vite build --mode benchmark --outDir ../../out/benchmark"
+  }
+}

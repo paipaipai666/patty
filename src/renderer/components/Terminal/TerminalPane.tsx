@@ -27,6 +27,7 @@ import {
 } from './iipAnchor'
 import { IipOverlay } from './IipOverlay'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
+import { PaneProbe, panes as benchmarkPanes } from '../../benchmark/probe'
 import { markTerminalOpen } from '../../utils/shellReadiness'
 import { createPtyResizeQueue } from './ptyResizeQueue'
 
@@ -618,7 +619,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     container.addEventListener('webglcontextrestored', onContextRestored, true)
 
 
+    const probe = import.meta.env.MODE === 'benchmark' ? new PaneProbe(term) : null
+    if (probe) benchmarkPanes.set(session.id, probe)
     const osc7Disposable = registerOsc7Handler(term, session.id, (id, cwd) => {
+      if (probe && !probe.readyAt) probe.readyAt = performance.now()
       updateCwd(id, cwd)
 
     })
@@ -650,6 +654,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       let replayWritten = false
       const liveQueue: string[] = []
       const writeLive = (data: string) => {
+        const parsed = probe?.receive(data)
         if (!firstDataReceivedRef.current) {
           firstDataReceivedRef.current = true
           setHasData(true)
@@ -657,6 +662,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         }
         const extracted = iipExtractRef.current!(data)
         const placeAll = () => {
+          parsed?.()
           for (const image of extracted.images) placeIipImage(term, image)
         }
         if (extracted.out) term.write(extracted.out, placeAll)
@@ -767,6 +773,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       textarea?.removeEventListener('compositionend', onCompositionEnd)
       cleanupDataRef.current?.()
       cleanupExitRef.current?.()
+      if (probe) {
+        probe.dispose()
+        benchmarkPanes.delete(session.id)
+      }
       webglAddonRef.current?.dispose()
       canvasAddonRef.current?.dispose()
       ptyResizeRef.current?.dispose()

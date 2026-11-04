@@ -22,7 +22,7 @@ export async function waitForProcessDeath(pid, timeoutMs) {
   throw new Error(`pid ${pid} still alive after ${timeoutMs}ms`)
 }
 
-export function resolveExe() {  if (process.env.PATTY_EXE) return process.env.PATTY_EXE
+export function resolveExe(binary = 'patty.exe') {  if (process.env.PATTY_EXE) return process.env.PATTY_EXE
   const targetDir = JSON.parse(
     execFileSync('cargo', ['metadata', '--format-version', '1', '--no-deps'], {
       cwd: resolve('src-tauri'),
@@ -30,7 +30,7 @@ export function resolveExe() {  if (process.env.PATTY_EXE) return process.env.PA
     })
   ).target_directory
 
-  const exe = join(targetDir, 'release', 'patty.exe')
+  const exe = join(targetDir, 'release', binary)
   if (!existsSync(exe)) {
     throw new Error(`no release exe at ${exe} — run \`npm run build:e2e\` first`)
   }
@@ -48,17 +48,18 @@ async function freePort() {
 
 
    
-export async function launchApp({ state, settings, connectDebugger = true } = {}) {
-  if (!existsSync(resolve('out/renderer/index.html'))) {
+export async function launchApp({ state, settings, connectDebugger = true, benchmarkSessions } = {}) {
+  if (connectDebugger && !existsSync(resolve('out/renderer/index.html'))) {
     throw new Error('out/renderer missing — run `npm run build` first')
   }
-  const exe = resolveExe()
+  const exe = resolveExe(benchmarkSessions === undefined ? 'patty.exe' : 'patty-benchmark.exe')
   const appData = mkdtempSync(join(tmpdir(), 'patty-e2e-'))
   const dataDirectory = join(appData, 'Patty')
   mkdirSync(dataDirectory, { recursive: true })
   if (state) writeFileSync(join(dataDirectory, 'state.json'), JSON.stringify(state))
   if (settings) writeFileSync(join(dataDirectory, 'settings.json'), JSON.stringify(settings))
-  const debugPort = await freePort()
+  if (benchmarkSessions !== undefined) writeFileSync(join(dataDirectory, 'benchmark-request'), String(benchmarkSessions))
+  const debugPort = connectDebugger ? await freePort() : undefined
   const startedAt = Date.now()
 
   console.log(`[harness] exe: ${exe}`)
@@ -70,7 +71,7 @@ export async function launchApp({ state, settings, connectDebugger = true } = {}
       APPDATA: appData,
       PATTY_E2E_INTEGRATION_HOME: join(appData, 'integrations'),
       WEBVIEW2_USER_DATA_FOLDER: join(appData, 'webview'),
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}`
+      ...(debugPort === undefined ? {} : { WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debugPort}` })
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -79,7 +80,11 @@ export async function launchApp({ state, settings, connectDebugger = true } = {}
   const captureOutput = (chunk) => { processOutput = (processOutput + chunk.toString()).slice(-8000) }
   app.stdout.on('data', captureOutput)
   app.stderr.on('data', captureOutput)
-  app.on('exit', (code) => { appExited = code })
+  app.on('exit', (code, signal) => { appExited = code ?? signal })
+  app.on('error', (error) => {
+    captureOutput(String(error))
+    appExited = 'spawn-error'
+  })
 
 
   const killApp = async () => {
@@ -102,7 +107,11 @@ export async function launchApp({ state, settings, connectDebugger = true } = {}
     rmSync(appData, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   }
   if (!connectDebugger) {
-    return { appData, startedAt, close, get appExited() { return appExited } }
+    return {
+      appData, startedAt, close, pid: app.pid,
+      get appExited() { return appExited },
+      get processOutput() { return processOutput },
+    }
   }
   try {
     page = await waitForPageTarget(debugPort)

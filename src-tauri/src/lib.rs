@@ -277,10 +277,21 @@ fn boot_bg_from_settings(settings: &Value) -> tauri::window::Color {
     parse_hex_color(&hex).unwrap_or(tauri::window::Color(10, 10, 12, 255))
 }
 
+#[cfg(feature = "e2e")]
+mod benchmark;
+
 pub fn run() {
     if let Err(error) = installer::validate_integration_environment() {
         eprintln!("[main] {error}");
         std::process::exit(1);
+    }
+    let context = tauri::generate_context!();
+    #[cfg(feature = "e2e")]
+    if context.config().identifier == "com.patty.benchmark" {
+        if let Err(error) = benchmark::load_count(&store::data_dir()) {
+            eprintln!("[main] {error}");
+            std::process::exit(1);
+        }
     }
     tauri::Builder::default()
         .manage(window_material::MaterialCache::default())
@@ -342,14 +353,28 @@ pub fn run() {
             metrics_history,
             metrics_set_sampling,
             metrics_record_first_terminal,
+            #[cfg(feature = "e2e")]
+            benchmark::benchmark_exchange,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running tauri application");
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "e2e")]
+    #[test]
+    fn benchmark_request_requires_isolated_app_data_and_supported_session_count() {
+        let root = std::env::temp_dir().join("patty-e2e-fixture");
+        let data = root.join("Patty");
+        let integrations = root.join("integrations");
+        assert_eq!(benchmark::request_count(&data, Some(&integrations), "10"), Ok(10));
+        assert!(benchmark::request_count(&data, Some(&integrations), "31").is_err());
+        assert!(benchmark::request_count(&data, Some(&root), "10").is_err());
+        assert!(benchmark::request_count(&data, None, "10").is_err());
+    }
 
     #[test]
     fn resize_command_rejects_zero_dimensions() {
