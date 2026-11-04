@@ -45,7 +45,11 @@ function counters() {
     receivedBytes: sum.receivedBytes + pane.receivedBytes,
     parsedBytes: sum.parsedBytes + pane.parsedBytes,
     chunks: sum.chunks + pane.chunks,
-  }), { receivedBytes: 0, parsedBytes: 0, chunks: 0 })
+    visibleParseCalls: sum.visibleParseCalls + pane.parsing.visible.calls,
+    visibleParseMs: sum.visibleParseMs + pane.parsing.visible.elapsedMs,
+    hiddenParseCalls: sum.hiddenParseCalls + pane.parsing.hidden.calls,
+    hiddenParseMs: sum.hiddenParseMs + pane.parsing.hidden.elapsedMs,
+  }), { receivedBytes: 0, parsedBytes: 0, chunks: 0, visibleParseCalls: 0, visibleParseMs: 0, hiddenParseCalls: 0, hiddenParseMs: 0 })
 }
 
 async function phase<T>(name: string, action: () => Promise<T>) {
@@ -61,6 +65,10 @@ async function phase<T>(name: string, action: () => Promise<T>) {
     receivedBytes: after.receivedBytes - before.receivedBytes,
     parsedBytes: after.parsedBytes - before.parsedBytes,
     chunks: after.chunks - before.chunks,
+    visibleParseCalls: after.visibleParseCalls - before.visibleParseCalls,
+    visibleParseMs: after.visibleParseMs - before.visibleParseMs,
+    hiddenParseCalls: after.hiddenParseCalls - before.hiddenParseCalls,
+    hiddenParseMs: after.hiddenParseMs - before.hiddenParseMs,
     peakPaneQueuedBytes: Math.max(...[...panes.values()].map((pane) => pane.peakQueuedBytes)),
     ...queueSnapshot(),
   }

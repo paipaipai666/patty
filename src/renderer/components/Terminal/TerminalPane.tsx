@@ -95,6 +95,8 @@ function startAtlasGuard(addonRef: RefObject<WebglAddon | null>): IntervalHandle
 }
 
 export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
+  const visibleRef = useRef(visible)
+  visibleRef.current = visible
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -620,7 +622,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     container.addEventListener('webglcontextrestored', onContextRestored, true)
 
 
-    const probe = import.meta.env.MODE === 'benchmark' ? new PaneProbe(term) : null
+    const probe = import.meta.env.MODE === 'benchmark' ? new PaneProbe(term, () => visibleRef.current) : null
     if (probe) benchmarkPanes.set(session.id, probe)
     const osc7Disposable = registerOsc7Handler(term, session.id, (id, cwd) => {
       if (probe && !probe.readyAt) probe.readyAt = performance.now()

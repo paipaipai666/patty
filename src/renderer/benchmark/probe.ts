@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { observeParsing } from './parseTiming'
 
 const encoder = new TextEncoder()
 const receipts = new Map<number, { bytes: number; events: number }>()
@@ -20,6 +21,10 @@ export function queueSnapshot() {
 }
 
 export class PaneProbe {
+  readonly parsing = {
+    visible: { calls: 0, elapsedMs: 0 },
+    hidden: { calls: 0, elapsedMs: 0 }
+  }
   readyAt = 0
   renderedAt = 0
   receivedBytes = 0
@@ -30,8 +35,14 @@ export class PaneProbe {
   marker: { text: string; tail: string; receivedAt: number; parsedAt: number } | null = null
   private disposed = false
   private readonly subscription
+  private readonly restoreParsing
 
-  constructor(readonly terminal: Terminal) {
+  constructor(readonly terminal: Terminal, isVisible: () => boolean = () => true) {
+    this.restoreParsing = observeParsing(terminal, (elapsedMs) => {
+      const group = isVisible() ? this.parsing.visible : this.parsing.hidden
+      group.calls++
+      group.elapsedMs += elapsedMs
+    })
     this.subscription = terminal.onRender(() => {
       if (terminal.element?.getClientRects().length) this.renderedAt = performance.now()
     })
@@ -85,6 +96,7 @@ export class PaneProbe {
     if (this.disposed) return
     this.disposed = true
     this.subscription.dispose()
+    this.restoreParsing()
     queuedBytes -= this.queuedBytes
     this.queuedBytes = 0
   }
