@@ -77,6 +77,7 @@ async function phase<T>(name: string, action: () => Promise<T>) {
 const outputLine = "(('x'*68)+\"`r`n\")"
 const paced = `for($i=0;$i -lt 25;$i++){[Console]::Write(${outputLine}*64);Start-Sleep -Milliseconds 150};`
 const burst = `[Console]::Write(${outputLine}*2048);`
+const echoControl = String.raw`[Console]::WriteLine('PATTY_ECHO_READY');while($true){$line=[Console]::ReadLine();if($null -eq $line -or $line -eq '__PATTY_ECHO_STOP__'){break};$m=[regex]::Match($line,'PATTY_''\+''([0-9]+)_DONE');if($m.Success){[Console]::WriteLine('PATTY_'+$m.Groups[1].Value+'_DONE')};}`
 
 async function measure(count: number) {
   await until('session and settings restored', () =>
@@ -115,17 +116,21 @@ async function measure(count: number) {
     return samples
   }
 
-  const phases = []
-  phases.push(await phase('idle', () => delay(7_000)))
-  phases.push(await phase('input', inputSamples))
-  if (background.length) {
+  const backgroundSamples = async (name: string) => {
     let backgroundCommandMs: number[] = []
-    const backgroundPhase = await phase('background-output', async () => {
+    const result = await phase(name, async () => {
       const [input, completed] = await Promise.all([inputSamples(), Promise.all(background.map((pane) => command(pane, paced)))])
       backgroundCommandMs = completed.map((sample) => sample.inputToBufferMs)
       return input
     })
-    phases.push({ ...backgroundPhase, backgroundCommandMs })
+    return { ...result, backgroundCommandMs }
+  }
+
+  const phases = []
+  phases.push(await phase('idle', () => delay(7_000)))
+  phases.push(await phase('input', inputSamples))
+  if (background.length) {
+    phases.push(await backgroundSamples('background-output'))
   }
   phases.push(await phase('burst', () => Promise.all([...panes.values()].map((pane) => command(pane, burst)))))
   if (background.length) {
@@ -166,6 +171,36 @@ async function measure(count: number) {
       const completed = await running
       return { switches, backgroundCommandMs: completed.map((sample) => sample.inputToBufferMs) }
     }))
+    selectSession(foregroundId)
+    await frame()
+    await frame()
+    await delay(200)
+    phases.push(await backgroundSamples('prompt-repair-enabled'))
+    await command(foreground, '$global:__PattyBenchmarkRepair=(Get-Item -LiteralPath Function:\\__PattyRepairImageCursor).ScriptBlock; function global:__PattyRepairImageCursor {};')
+    try {
+      await delay(200)
+      phases.push(await backgroundSamples('prompt-repair-disabled'))
+    } finally {
+      await command(foreground, 'Set-Item -LiteralPath Function:\\global:__PattyRepairImageCursor -Value $global:__PattyBenchmarkRepair; Remove-Variable -Scope Global -Name __PattyBenchmarkRepair;')
+    }
+    await delay(200)
+    phases.push(await backgroundSamples('prompt-repair-restored'))
+    const echoReady = { text: 'PATTY_ECHO_READY', tail: '', receivedAt: 0, parsedAt: 0 }
+    foreground.marker = echoReady
+    foreground.terminal.input(`${echoControl}\r`, true)
+    try {
+      await until('console echo control ready', () => echoReady.parsedAt || undefined)
+      foreground.marker = null
+      await delay(200)
+      phases.push(await phase('console-readline-input', inputSamples))
+      phases.push(await backgroundSamples('console-readline-background'))
+    } finally {
+      foreground.marker = null
+      foreground.terminal.input('__PATTY_ECHO_STOP__\r', true)
+      await command(foreground)
+    }
+    await delay(200)
+    phases.push(await backgroundSamples('shell-restored-after-console'))
   }
   phases.push(await phase('settled', () => delay(7_000)))
   return {
