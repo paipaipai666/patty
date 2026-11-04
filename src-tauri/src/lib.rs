@@ -13,6 +13,7 @@ mod window_material;
 mod pty_output;
 mod output_wake;
 mod desktop_notifications;
+mod command_state;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -379,6 +380,7 @@ pub fn run() {
             get_fonts,
             hook_server_status,
             agent_state_snapshot,
+            command_state::command_state_snapshot,
             desktop_notifications::notify_attention,
             desktop_notifications::dismiss_desktop_notification,
             desktop_notifications::test_desktop_notification,

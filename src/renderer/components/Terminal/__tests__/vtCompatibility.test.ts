@@ -30,6 +30,14 @@ describe('terminal protocol compatibility with real xterm', () => {
 
   afterEach(() => terminal.dispose())
 
+  it('keeps command markers invisible and preserves the prompt and command output', async () => {
+    await write(`${osc}133;A\x07PS> ${osc}133;B${st}`)
+    await write(`${osc}133;C\x07hello\r\n${osc}133;D;7${esc}`)
+    await write(`\\${osc}133;A\x07PS> ${osc}133;B\x07`)
+    expect([line(0), line(1)]).toEqual(['PS> hello', 'PS> '])
+    expect(terminal.buffer.active.cursorX).toBe(4)
+  })
+
   it('preserves UTF-8 split at every byte and aligns wide glyphs', async () => {
     for (const byte of new TextEncoder().encode('中🙂!')) await write(Uint8Array.of(byte))
     expect(line(0)).toBe('中🙂!')

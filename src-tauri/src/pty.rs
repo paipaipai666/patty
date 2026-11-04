@@ -19,6 +19,7 @@ pub fn resource_dir() -> PathBuf {
 
 
 struct Shared {
+    command: Arc<Mutex<crate::command_state::Tracker>>,
     output: Output,
     app: Option<AppHandle>,
 
@@ -527,6 +528,7 @@ fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Vec<u8>>, mut reader: B
                 if text.is_empty() {
                     continue;
                 }
+                shared.command.lock().unwrap().feed(&text, crate::command_state::now_ms());
                 let credited = image_tracker.feed(&text);
                 if credited > 0 {
                     shared.image_rows.fetch_add(credited, Ordering::Relaxed);
@@ -552,6 +554,7 @@ fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Vec<u8>>, mut reader: B
     if !carry.is_empty() {
         shared.output.push(String::from_utf8_lossy(&carry).into_owned());
     }
+    shared.command.lock().unwrap().eof(crate::command_state::now_ms());
     shared.output.eof();
 }
 
@@ -699,6 +702,7 @@ fn spawn_inner(
         }
     }
     let shared = Arc::new(Shared {
+        command: crate::command_state::start(id),
         output,
         app: app.cloned(),
         image_rows: AtomicU32::new(0),
@@ -879,6 +883,7 @@ pub fn resize(id: &str, cols: u16, rows: u16) -> Result<(), String> {
 }
 
 pub fn kill(id: &str) -> Value {
+    crate::command_state::forget(id);
     let victim = SESSIONS.write().unwrap().remove(id);
     if let Some(session) = victim {
         if let Some(root) = session.hook_root { crate::hooks::remove_pane(session.shared.app.as_ref(), id, root); }
@@ -1409,6 +1414,69 @@ mod tests {
         assert_eq!(unchanged["pid"], first["pid"]);
         let size = native.master.lock().unwrap().get_size().unwrap();
         assert_eq!((size.cols, size.rows), (132, 43));
+    }
+
+    #[test]
+    fn powershell_command_lifecycle_reports_native_codes_and_preserves_shell_state() {
+        use std::time::Instant;
+        for shell in ["powershell", "pwsh"] {
+            let session = EnsureTestSession::new(&format!("command-semantics-{shell}"));
+            let result = create(None, &session.id, session.cwd.to_str(), Some(shell), Some(120), Some(30));
+            assert_eq!(result["success"], true);
+            let wait = |check: &dyn Fn(&Value) -> bool| {
+                let deadline = Instant::now() + Duration::from_secs(20);
+                loop {
+                    let state = serde_json::to_value(crate::command_state::snapshot(&session.id)).unwrap();
+                    if check(&state) { break state; }
+                    assert!(Instant::now() < deadline, "{shell}: command state did not converge: {state}");
+                    thread::sleep(Duration::from_millis(20));
+                }
+            };
+            wait(&|state| state["status"] == "ready");
+            write(&session.id, "cmd.exe /c exit 7\r");
+            let failed = wait(&|state| state["status"] == "finished");
+            assert_eq!(failed["exitCode"], 7, "{shell}: {failed}");
+            write(&session.id, "Get-Location\r");
+            let success = wait(&|state| state["revision"].as_u64() > failed["revision"].as_u64() && state["status"] == "finished");
+            assert_eq!(success["exitCode"], 0, "{shell}: stale native code leaked into a cmdlet result");
+            struct ScriptFile(PathBuf);
+            impl Drop for ScriptFile {
+                fn drop(&mut self) { let _ = std::fs::remove_file(&self.0); }
+            }
+            let script_file = ScriptFile(session.marker.with_extension("ps1"));
+            std::fs::write(&script_file.0, "Write-Output 'script succeeded'").unwrap();
+            write(&session.id, &format!("& '{}'\r", script_file.0.to_string_lossy().replace('\'', "''")));
+            let script_result = wait(&|state| state["revision"].as_u64() > success["revision"].as_u64() && state["status"] == "finished");
+            assert_eq!(script_result["exitCode"], 0, "{shell}: a script reused an earlier native exit code");
+            write(&session.id, "if ($LASTEXITCODE -ne 7) { throw 'native exit code changed' }\r");
+            let preserved = wait(&|state| state["revision"].as_u64() > script_result["revision"].as_u64() && state["status"] == "finished");
+            assert_eq!(preserved["exitCode"], 0, "{shell}: LASTEXITCODE was modified");
+            write(&session.id, "cmd.exe /c exit 7\r");
+            let repeated = wait(&|state| state["revision"].as_u64() > preserved["revision"].as_u64() && state["status"] == "finished");
+            assert_eq!(repeated["exitCode"], 7, "{shell}: repeated native failure lost its code");
+            write(&session.id, "Start-Sleep -Milliseconds 300\r");
+            let running = wait(&|state| state["revision"].as_u64() > repeated["revision"].as_u64() && state["status"] == "running");
+            let reattached = create(None, &session.id, None, Some(shell), Some(120), Some(30));
+            assert_eq!(reattached["pid"], result["pid"]);
+            assert_eq!(serde_json::to_value(crate::command_state::snapshot(&session.id)).unwrap()["runId"], running["runId"]);
+            let ended = wait(&|state| state["revision"].as_u64() > repeated["revision"].as_u64() && state["status"] == "finished");
+            assert!(ended["durationMs"].as_u64().unwrap() >= 250, "{shell}: {ended}");
+            write(&session.id, "Write-Error 'expected command failure'\r");
+            let error = wait(&|state| state["revision"].as_u64() > ended["revision"].as_u64() && state["status"] == "finished");
+            assert_eq!(error["exitCode"], 1, "{shell}: cmdlet failure was reported as success");
+            write(&session.id, "Start-Sleep -Seconds 10\r");
+            wait(&|state| state["revision"].as_u64() > error["revision"].as_u64() && state["status"] == "running");
+            write(&session.id, "\x03");
+            let stopped = wait(&|state| state["revision"].as_u64() > error["revision"].as_u64() && state["status"] != "running");
+            assert_eq!(stopped["status"], "interrupted", "{shell}: {stopped}");
+            let script = script_path("pwsh.ps1").to_string_lossy().replace('\'', "''");
+            write(&session.id, &format!(". '{script}'; Get-Location\r"));
+            let reloaded = wait(&|state| state["revision"].as_u64() > stopped["revision"].as_u64() && state["status"] == "finished");
+            assert_eq!(reloaded["exitCode"], 0);
+            write(&session.id, "Get-Location\r");
+            let after_reload = wait(&|state| state["revision"].as_u64() > reloaded["revision"].as_u64() && state["status"] == "finished");
+            assert_eq!(after_reload["exitCode"], 0, "{shell}: repeated integration broke command execution");
+        }
     }
 
     #[test]

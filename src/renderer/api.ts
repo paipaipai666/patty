@@ -9,6 +9,7 @@ import type { IWindowsPty } from '@xterm/xterm'
 import { parseAgentSnapshot, parseAgentUpdate, type AgentUpdate } from '../shared/agentTypes'
 import { parseWindowMaterial, type WindowMaterialRequest } from '../shared/windowMaterial'
 import { parseDesktopActivation, type NoticeKind } from '../shared/desktopNotifications'
+import { parseCommandSnapshot } from '../shared/commandTypes'
 
 const appWindow = getCurrentWindow()
 
@@ -95,6 +96,13 @@ function openLocalSession(request: LocalPtyRequest, receive: (message: LocalPtyM
 }
 
 export const terminalAPI = {
+  commandStateSnapshot: async (id: string) => {
+    const value = await invoke<unknown>('command_state_snapshot', { id })
+    if (value === null) return null
+    const result = parseCommandSnapshot(value)
+    if (!result) throw new Error('Invalid command state snapshot')
+    return result
+  },
   notifyAttention: (notice: { paneId: string; title: string; kind: NoticeKind; revision: number }) =>
     invoke<boolean>('notify_attention', notice),
   dismissDesktopNotification: (paneId: string) => invoke<void>('dismiss_desktop_notification', { paneId }),
