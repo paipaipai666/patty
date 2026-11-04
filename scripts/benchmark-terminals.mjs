@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { launchApp, resolveExe } from '../e2e/harness.mjs'
 
-const output = resolve('output/terminal-benchmark')
+const output = resolve('output/terminal-benchmark/transport')
 const counts = process.argv.slice(2).length ? process.argv.slice(2).map(Number) : [1, 10, 30]
 if (process.platform !== 'win32' || counts.some((count) => ![1, 10, 30].includes(count))) {
   throw new Error('Run on Windows with no arguments or a list of session counts: 1, 10, 30')
@@ -52,19 +52,68 @@ function resourceSummary(samples) {
   }
 }
 
+function transportTimeline({ ptyOutput, receiptBuckets }) {
+  const timeline = new Map()
+  const bucket = (at) => {
+    if (!timeline.has(at)) timeline.set(at, {
+      at, readBytes: 0, dispatchedBytes: 0, dispatchedEvents: 0, dispatchNs: 0, receivedBytes: 0, receivedEvents: 0,
+    })
+    return timeline.get(at)
+  }
+  for (const [at, readBytes, dispatchedBytes, dispatchedEvents, dispatchNs] of ptyOutput.buckets) {
+    Object.assign(bucket(at), { readBytes, dispatchedBytes, dispatchedEvents, dispatchNs })
+  }
+  for (const [at, receivedBytes, receivedEvents] of receiptBuckets) {
+    Object.assign(bucket(at), { receivedBytes, receivedEvents })
+  }
+  let balance = 0
+  return [...timeline.values()].sort((a, b) => a.at - b.at).map((item) => {
+    balance += item.dispatchedBytes - item.receivedBytes
+    return { ...item, dispatchedMinusReceivedBytes: balance }
+  })
+}
+
+function transportSummary(timeline, phase) {
+  const buckets = timeline.filter(({ at }) => at < phase.endedAt && at + 20 > phase.startedAt)
+  return {
+    readBytes: buckets.reduce((sum, item) => sum + item.readBytes, 0),
+    dispatchedBytes: buckets.reduce((sum, item) => sum + item.dispatchedBytes, 0),
+    dispatchedEvents: buckets.reduce((sum, item) => sum + item.dispatchedEvents, 0),
+    dispatchElapsedMs: buckets.reduce((sum, item) => sum + item.dispatchNs, 0) / 1_000_000,
+    dispatchedMinusReceivedPeakBytes: Math.max(0, ...buckets.map((item) => item.dispatchedMinusReceivedBytes)),
+  }
+}
+
 function summarize(report, samples, appStartedAt) {
+  const timeline = transportTimeline(report)
+  const markerAt = (probeId) => report.ptyOutput.markers[probeId]
   return {
     startupMs: quantiles(report.startupMs),
     firstPromptAfterLaunchMs: report.createStartedAt - appStartedAt + report.startupMs[0],
-    phases: report.phases.map(({ data, ...phase }) => ({
-      ...phase,
-      elapsedMs: phase.endedAt - phase.startedAt,
-      bytesPerSecond: phase.parsedBytes * 1000 / (phase.endedAt - phase.startedAt),
-      inputToReceiptMs: Array.isArray(data) && typeof data[0] === 'object' ? quantiles(data.map((sample) => sample.inputToReceiptMs)) : null,
-      inputToBufferMs: Array.isArray(data) && typeof data[0] === 'object' ? quantiles(data.map((sample) => sample.inputToBufferMs)) : null,
-      firstRenderMs: phase.name === 'switch' ? quantiles(data) : null,
-      resources: resourceSummary(samples.filter(({ at }) => at >= phase.startedAt && at <= phase.endedAt)),
-    })),
+    outputBalance: {
+      dispatchedBytes: timeline.reduce((sum, item) => sum + item.dispatchedBytes, 0),
+      receivedBytes: timeline.reduce((sum, item) => sum + item.receivedBytes, 0),
+      dispatchedEvents: timeline.reduce((sum, item) => sum + item.dispatchedEvents, 0),
+      receivedEvents: timeline.reduce((sum, item) => sum + item.receivedEvents, 0),
+    },
+    phases: report.phases.map(({ data, ...phase }) => {
+      const commands = Array.isArray(data) && typeof data[0] === 'object' ? data : null
+      const joined = commands?.filter(({ probeId, inputToReceiptMs }) =>
+        Number.isFinite(markerAt(probeId)) && Number.isFinite(inputToReceiptMs))
+      return {
+        ...phase,
+        elapsedMs: phase.endedAt - phase.startedAt,
+        bytesPerSecond: phase.parsedBytes * 1000 / (phase.endedAt - phase.startedAt),
+        inputToReceiptMs: commands && quantiles(commands.map((sample) => sample.inputToReceiptMs)),
+        inputToBufferMs: commands && quantiles(commands.map((sample) => sample.inputToBufferMs)),
+        inputToPtyDispatchMs: joined ? quantiles(joined.map(({ sentAt, probeId }) => markerAt(probeId) - sentAt)) : null,
+        ptyDispatchToReceiptMs: joined ? quantiles(joined.map(({ sentAt, probeId, inputToReceiptMs }) =>
+          sentAt + inputToReceiptMs - markerAt(probeId))) : null,
+        firstRenderMs: phase.name === 'switch' ? quantiles(data) : null,
+        transport: transportSummary(timeline, phase),
+        resources: resourceSummary(samples.filter(({ at }) => at >= phase.startedAt && at <= phase.endedAt)),
+      }
+    }),
   }
 }
 

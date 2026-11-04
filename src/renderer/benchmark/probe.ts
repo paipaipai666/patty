@@ -1,10 +1,15 @@
 import type { Terminal } from '@xterm/xterm'
 
 const encoder = new TextEncoder()
+const receipts = new Map<number, { bytes: number; events: number }>()
 let queuedBytes = 0
 let peakQueuedBytes = 0
 
 export const panes = new Map<string, PaneProbe>()
+
+export function receiptBuckets() {
+  return [...receipts].map(([at, { bytes, events }]) => [at, bytes, events])
+}
 
 export function resetPeak(): void {
   peakQueuedBytes = queuedBytes
@@ -33,7 +38,16 @@ export class PaneProbe {
   }
 
   receive(data: string): () => void {
+    const now = performance.now()
     const bytes = encoder.encode(data).byteLength
+    const bucketStart = Math.floor((performance.timeOrigin + now) / 20) * 20
+    let bucket = receipts.get(bucketStart)
+    if (!bucket) {
+      bucket = { bytes: 0, events: 0 }
+      receipts.set(bucketStart, bucket)
+    }
+    bucket.bytes += bytes
+    bucket.events++
     this.receivedBytes += bytes
     this.chunks++
     this.queuedBytes += bytes
@@ -41,7 +55,7 @@ export class PaneProbe {
     this.peakQueuedBytes = Math.max(this.peakQueuedBytes, this.queuedBytes)
     peakQueuedBytes = Math.max(peakQueuedBytes, queuedBytes)
     const marker = this.marker
-    if (marker && marker.receivedAt === 0 && data.includes(marker.text)) marker.receivedAt = performance.now()
+    if (marker && marker.receivedAt === 0 && data.includes(marker.text)) marker.receivedAt = now
     return () => {
       if (this.disposed) return
       this.parsedBytes += bytes

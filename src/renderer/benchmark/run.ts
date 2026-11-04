@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { createTerminal, selectSession } from '../store/sessionLifecycle'
 import { useSessionStore } from '../store/sessionStore'
 import { useSettingsStore } from '../store/settingsStore'
-import { panes, queueSnapshot, resetPeak, type PaneProbe } from './probe'
+import { panes, queueSnapshot, receiptBuckets, resetPeak, type PaneProbe } from './probe'
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 const clock = () => performance.timeOrigin + performance.now()
@@ -21,7 +21,8 @@ async function until<T>(label: string, sample: () => T | undefined, timeout = 20
 let sequence = 0
 
 async function command(pane: PaneProbe, prefix = '') {
-  const suffix = `${++sequence}_DONE`
+  const probeId = ++sequence
+  const suffix = `${probeId}_DONE`
   const marker = { text: `PATTY_${suffix}`, receivedAt: 0, parsedAt: 0 }
   pane.marker = marker
   const start = performance.now()
@@ -29,6 +30,8 @@ async function command(pane: PaneProbe, prefix = '') {
     pane.terminal.input(`${prefix}Write-Output ('PATTY_'+'${suffix}')\r`, true)
     await until(marker.text, () => marker.parsedAt || undefined, 45_000)
     return {
+      probeId,
+      sentAt: performance.timeOrigin + start,
       inputToReceiptMs: marker.receivedAt ? marker.receivedAt - start : null,
       inputToBufferMs: marker.parsedAt - start,
     }
@@ -134,6 +137,7 @@ async function measure(count: number) {
   phases.push(await phase('settled', () => delay(7_000)))
   return {
     status: 'ok', count, createStartedAt, startupMs: startup, phases,
+    receiptBuckets: receiptBuckets(),
     webview: navigator.userAgent, devicePixelRatio: window.devicePixelRatio,
     viewport: { width: window.innerWidth, height: window.innerHeight },
   }

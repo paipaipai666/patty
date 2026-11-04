@@ -520,6 +520,8 @@ fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Sen
         match reader.read(&mut buf) {
             Ok(0) => break,
             Ok(n) => {
+                #[cfg(feature = "e2e")]
+                crate::benchmark::record_read(n);
                 let text = decode(&mut carry, &buf[..n]);
                 if text.is_empty() {
                     continue;
@@ -538,7 +540,13 @@ fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Sen
                     continue;
                 }
                 if shared.attached.load(Ordering::Relaxed) {
-                    emit(&shared.app, &format!("pty:data:{id}"), text);
+                    #[cfg(feature = "e2e")]
+                    let probe = crate::benchmark::dispatch_probe();
+                    emit(&shared.app, &format!("pty:data:{id}"), &text);
+                    #[cfg(feature = "e2e")]
+                    if let Some(probe) = probe {
+                        crate::benchmark::record_dispatch(probe, &text);
+                    }
                 } else {
                     buffer_push(&shared, text);
                 }
