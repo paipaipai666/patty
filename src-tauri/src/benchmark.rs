@@ -10,11 +10,15 @@ struct OutputTrace {
     buckets: BTreeMap<u64, OutputBucket>,
     reads: MarkerTrace,
     dispatches: MarkerTrace,
+    input_received: MarkerTrace<String>,
+    input_queued: MarkerTrace,
+    input_writes: MarkerTrace,
+    input_written: MarkerTrace,
 }
 
 #[derive(Default)]
-struct MarkerTrace {
-    partial: BTreeMap<u64, MarkerScan>,
+struct MarkerTrace<K = u64> {
+    partial: BTreeMap<K, MarkerScan>,
     times: BTreeMap<u32, f64>,
 }
 
@@ -28,13 +32,12 @@ enum MarkerScan {
 }
 
 impl MarkerScan {
-    fn consume(&mut self, byte: u8) -> Option<u32> {
-        const PREFIX: &[u8] = b"PATTY_";
+    fn consume(&mut self, byte: u8, prefix: &[u8]) -> Option<u32> {
         const SUFFIX: &[u8] = b"_DONE";
-        let restart = || if byte == PREFIX[0] { Self::Prefix(1) } else { Self::Seeking };
+        let restart = || if byte == prefix[0] { Self::Prefix(1) } else { Self::Seeking };
         *self = match *self {
-            Self::Prefix(matched) if byte == PREFIX[matched] => {
-                if matched + 1 == PREFIX.len() { Self::Number(None) } else { Self::Prefix(matched + 1) }
+            Self::Prefix(matched) if byte == prefix[matched] => {
+                if matched + 1 == prefix.len() { Self::Number(None) } else { Self::Prefix(matched + 1) }
             }
             Self::Number(value) if byte.is_ascii_digit() => {
                 let digit = u32::from(byte - b'0');
@@ -57,11 +60,19 @@ impl MarkerScan {
     }
 }
 
-impl MarkerTrace {
-    fn record(&mut self, stream: u64, at: f64, bytes: &[u8]) {
+impl<K: Ord> MarkerTrace<K> {
+    fn record(&mut self, stream: K, at: f64, bytes: &[u8]) {
+        self.pattern(stream, at, bytes, b"PATTY_");
+    }
+
+    fn input(&mut self, stream: K, at: f64, bytes: &[u8]) {
+        self.pattern(stream, at, bytes, b"PATTY_'+'");
+    }
+
+    fn pattern(&mut self, stream: K, at: f64, bytes: &[u8], prefix: &[u8]) {
         let mut scan = self.partial.remove(&stream).unwrap_or_default();
         for &byte in bytes {
-            if let Some(id) = scan.consume(byte) {
+            if let Some(id) = scan.consume(byte, prefix) {
                 let first = self.times.entry(id).or_insert(at);
                 *first = first.min(at);
             }
@@ -70,6 +81,12 @@ impl MarkerTrace {
             self.partial.insert(stream, scan);
         }
     }
+}
+
+pub(crate) enum InputStage {
+    Queued,
+    WriteStarted,
+    Written,
 }
 
 #[derive(Default)]
@@ -81,6 +98,19 @@ struct OutputBucket {
 }
 
 impl OutputTrace {
+    fn received(&mut self, pane: &str, at: f64, bytes: &[u8]) {
+        self.input_received.input(pane.to_owned(), at, bytes);
+    }
+
+    fn input(&mut self, stage: InputStage, stream: u64, at: f64, bytes: &[u8]) {
+        let trace = match stage {
+            InputStage::Queued => &mut self.input_queued,
+            InputStage::WriteStarted => &mut self.input_writes,
+            InputStage::Written => &mut self.input_written,
+        };
+        trace.input(stream, at, bytes);
+    }
+
     fn bucket(&mut self, at: u64) -> &mut OutputBucket {
         self.buckets.entry(at / 20 * 20).or_default()
     }
@@ -107,6 +137,10 @@ impl Serialize for OutputTrace {
             buckets: Vec<(u64, usize, usize, usize, u64)>,
             markers: &'a BTreeMap<u32, f64>,
             read_markers: &'a BTreeMap<u32, f64>,
+            input_received_markers: &'a BTreeMap<u32, f64>,
+            input_queued_markers: &'a BTreeMap<u32, f64>,
+            input_write_markers: &'a BTreeMap<u32, f64>,
+            input_written_markers: &'a BTreeMap<u32, f64>,
         }
         Snapshot {
             buckets: self.buckets.iter().map(|(&at, bucket)| (
@@ -114,6 +148,10 @@ impl Serialize for OutputTrace {
             )).collect(),
             markers: &self.dispatches.times,
             read_markers: &self.reads.times,
+            input_received_markers: &self.input_received.times,
+            input_queued_markers: &self.input_queued.times,
+            input_write_markers: &self.input_writes.times,
+            input_written_markers: &self.input_written.times,
         }.serialize(serializer)
     }
 }
@@ -122,6 +160,20 @@ static OUTPUT: OnceLock<Mutex<OutputTrace>> = OnceLock::new();
 
 fn epoch_ms() -> f64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs_f64() * 1000.0
+}
+
+pub(crate) fn record_input_received(pane: &str, text: &str) {
+    if let Some(trace) = OUTPUT.get() {
+        let at = epoch_ms();
+        trace.lock().unwrap().received(pane, at, text.as_bytes());
+    }
+}
+
+pub(crate) fn record_input(stage: InputStage, stream: u64, bytes: &[u8]) {
+    if let Some(trace) = OUTPUT.get() {
+        let at = epoch_ms();
+        trace.lock().unwrap().input(stage, stream, at, bytes);
+    }
 }
 
 pub(crate) fn record_read(stream: u64, bytes: &[u8]) {
@@ -199,7 +251,11 @@ mod tests {
         assert_eq!(serde_json::to_value(trace).unwrap(), serde_json::json!({
             "buckets": [[0, 5, 0, 0, 0], [20, 8, 30, 2, 90], [40, 0, 14, 1, 23]],
             "markers": { "7": 39.0 },
-            "readMarkers": { "7": 20.0 }
+            "readMarkers": { "7": 20.0 },
+            "inputReceivedMarkers": {},
+            "inputQueuedMarkers": {},
+            "inputWriteMarkers": {},
+            "inputWrittenMarkers": {}
         }));
     }
 
@@ -211,5 +267,22 @@ mod tests {
         trace.dispatched(1, 23.0, 10, "_DO");
         trace.dispatched(1, 24.0, 10, "NE\r");
         assert_eq!(serde_json::to_value(trace).unwrap()["markers"], serde_json::json!({ "9": 24.0 }));
+    }
+
+    #[test]
+    fn input_probe_boundaries_remain_paired_across_chunks_and_sessions() {
+        let mut trace = OutputTrace::default();
+        trace.received("pane-a", 10.0, b"PATTY_'+'");
+        trace.received("pane-b", 11.0, b"7_DONE");
+        trace.received("pane-a", 12.0, b"7_DONE");
+        trace.input(InputStage::Queued, 1, 13.0, b"PATTY_'+'7_DONE");
+        trace.input(InputStage::WriteStarted, 1, 15.0, b"PATTY_'+'7_DONE");
+        trace.input(InputStage::Written, 1, 16.0, b"PATTY_'+'7_DONE");
+        let report = serde_json::to_value(trace).unwrap();
+        assert_eq!(report["inputReceivedMarkers"], serde_json::json!({ "7": 12.0 }));
+        assert_eq!(report["inputQueuedMarkers"], serde_json::json!({ "7": 13.0 }));
+        assert_eq!(report["inputWriteMarkers"], serde_json::json!({ "7": 15.0 }));
+        assert_eq!(report["inputWrittenMarkers"], serde_json::json!({ "7": 16.0 }));
+        assert_eq!(report["markers"], serde_json::json!({}));
     }
 }

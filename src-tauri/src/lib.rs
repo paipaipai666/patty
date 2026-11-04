@@ -109,6 +109,8 @@ fn disconnect_local_pty(connection: &str) {
 
 #[tauri::command]
 fn write_pty(id: &str, data: &str) {
+    #[cfg(feature = "e2e")]
+    benchmark::record_input_received(id, data);
     if sshconn::exists(id) || sshconn::is_creating(id) {
         sshconn::write(id, data)
     } else {

@@ -257,6 +257,11 @@ pub(crate) struct Output(u64);
 
 impl Output {
     #[cfg(feature = "e2e")]
+    pub(crate) fn trace_input(self, stage: crate::benchmark::InputStage, bytes: &[u8]) {
+        crate::benchmark::record_input(stage, self.0, bytes);
+    }
+
+    #[cfg(feature = "e2e")]
     pub(crate) fn trace_read(self, bytes: &[u8]) {
         crate::benchmark::record_read(self.0, bytes);
     }

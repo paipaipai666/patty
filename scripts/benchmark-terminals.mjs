@@ -84,7 +84,9 @@ function transportSummary(timeline, phase) {
   }
 }
 
-function latencyBreakdown(commands, { readMarkers, markers }) {
+function latencyBreakdown(commands, {
+  readMarkers, markers, inputReceivedMarkers, inputQueuedMarkers, inputWriteMarkers, inputWrittenMarkers,
+}) {
   if (!readMarkers) return null
   const measurements = []
   let missing = 0
@@ -102,6 +104,23 @@ function latencyBreakdown(commands, { readMarkers, markers }) {
       dispatchToReceiptMs: sentAt + inputToReceiptMs - dispatchAt,
       receiptToBufferMs: inputToBufferMs - inputToReceiptMs,
     }
+    if (inputReceivedMarkers) {
+      const received = inputReceivedMarkers[probeId]
+      const queued = inputQueuedMarkers[probeId]
+      const started = inputWriteMarkers[probeId]
+      const written = inputWrittenMarkers[probeId]
+      if (![received, queued, started, written].every(Number.isFinite)) {
+        missing++
+        continue
+      }
+      Object.assign(durations, {
+        inputToRustMs: received - sentAt,
+        rustToQueueMs: queued - received,
+        queueToWriteMs: started - queued,
+        writeMs: written - started,
+        writtenToReadMs: readAt - written,
+      })
+    }
     if (Object.values(durations).some((duration) => duration < -1)) {
       outOfOrder++
       continue
@@ -114,6 +133,13 @@ function latencyBreakdown(commands, { readMarkers, markers }) {
     readToDispatchMs: quantiles(measurements.map((sample) => sample.readToDispatchMs)),
     dispatchToReceiptMs: quantiles(measurements.map((sample) => sample.dispatchToReceiptMs)),
     receiptToBufferMs: quantiles(measurements.map((sample) => sample.receiptToBufferMs)),
+    nativeInput: inputReceivedMarkers ? {
+      inputToRustMs: quantiles(measurements.map((sample) => sample.inputToRustMs)),
+      rustToQueueMs: quantiles(measurements.map((sample) => sample.rustToQueueMs)),
+      queueToWriteMs: quantiles(measurements.map((sample) => sample.queueToWriteMs)),
+      writeMs: quantiles(measurements.map((sample) => sample.writeMs)),
+      writtenToReadMs: quantiles(measurements.map((sample) => sample.writtenToReadMs)),
+    } : null,
   }
 }
 

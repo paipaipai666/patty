@@ -496,11 +496,19 @@ pub fn take_image_rows(id: &str) -> Option<(u32, bool)> {
 
 
 
-fn writer_loop(mut writer: Box<dyn Write + Send>, receiver: mpsc::Receiver<Vec<u8>>) {
+fn writer_loop(
+    mut writer: Box<dyn Write + Send>,
+    receiver: mpsc::Receiver<Vec<u8>>,
+    #[cfg(feature = "e2e")] output: Output,
+) {
     for data in receiver {
+        #[cfg(feature = "e2e")]
+        output.trace_input(crate::benchmark::InputStage::WriteStarted, &data);
         if writer.write_all(&data).and_then(|_| writer.flush()).is_err() {
             break;
         }
+        #[cfg(feature = "e2e")]
+        output.trace_input(crate::benchmark::InputStage::Written, &data);
     }
 }
 
@@ -709,7 +717,7 @@ fn spawn_inner(
         activated: AtomicBool::new(activated),
     });
     SESSIONS.write().unwrap().insert(id.to_string(), session.clone());
-    thread::spawn(move || writer_loop(writer, writer_rx));
+    thread::spawn(move || writer_loop(writer, writer_rx, #[cfg(feature = "e2e")] output));
 
     let reply = session.writer.clone();
     thread::spawn(move || reader_loop(shared, reply, reader));
@@ -854,6 +862,8 @@ pub fn leaf_session_ids(tree: &Value) -> Vec<String> {
 pub fn write(id: &str, data: &str) {
     let session = SESSIONS.read().unwrap().get(id).cloned();
     if let Some(session) = session {
+        #[cfg(feature = "e2e")]
+        session.shared.output.trace_input(crate::benchmark::InputStage::Queued, data.as_bytes());
         let _ = session.writer.send(data.as_bytes().to_vec());
     }
 }
