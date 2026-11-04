@@ -2,7 +2,7 @@ import { useId, useLayoutEffect, useRef, useState, useEffect, type KeyboardEvent
 import { createPortal } from 'react-dom'
 import { Search20Regular, Dismiss16Regular } from '@fluentui/react-icons'
 import type { AppCommand } from '../../commands/applicationCommands'
-import { focusActiveTerminal } from '../../commands/useApplicationKeyboard'
+import { restoreWorkbenchFocus } from '../../commands/useApplicationKeyboard'
 import { formatShortcut, isComposingKey, normalizeShortcut } from '../../commands/shortcuts'
 import { filterCommands } from './commandSearch'
 import styles from './CommandPalette.module.css'
@@ -35,8 +35,7 @@ export function CommandPalette({ commands, shortcut, onClose, onExecute }: {
     return () => {
       document.removeEventListener('focusin', contain)
       if (!closing.current) {
-        if (origin.current instanceof HTMLElement && origin.current.isConnected) origin.current.focus()
-        if (document.activeElement !== origin.current || origin.current === document.body) focusActiveTerminal()
+        restoreWorkbenchFocus(origin.current)
       }
     }
   }, [])

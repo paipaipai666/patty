@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, type ReactNode, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Dismiss16Regular } from '@fluentui/react-icons'
-import { focusActiveTerminal } from '../../commands/useApplicationKeyboard'
+import { restoreWorkbenchFocus } from '../../commands/useApplicationKeyboard'
 import { isComposingKey } from '../../commands/shortcuts'
 import styles from './TransientPanel.module.css'
 
@@ -31,8 +31,7 @@ export function TransientPanel({ title, anchor, onClose, children }: {
       document.removeEventListener('pointerdown', outside)
       document.removeEventListener('focusin', contain)
       window.removeEventListener('resize', resize)
-      if (origin.current instanceof HTMLElement && origin.current.isConnected && origin.current !== document.body) origin.current.focus()
-      else focusActiveTerminal()
+      restoreWorkbenchFocus(origin.current)
     }
   }, [onClose, anchor])
   const keydown = (event: KeyboardEvent) => {

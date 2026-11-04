@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSettingsStore } from '../../store/settingsStore'
+import { restoreWorkbenchFocus } from '../../commands/useApplicationKeyboard'
 import { useAnimatedMount } from '../../hooks/useAnimatedMount'
 import type { ShortcutMap } from '../../../shared/settingsTypes'
 import { SshSettingsPanel } from './SshSettingsPanel'
@@ -103,8 +104,8 @@ export function SettingsModal() {
 
 
   useEffect(() => {
-    if (!settingsOpen) return
-    previouslyFocused.current = document.activeElement as HTMLElement | null
+    if (!settingsOpen || !mounted) return
+    previouslyFocused.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const modal = modalRef.current
     if (modal) {
       const focusable = modal.querySelector<HTMLElement>(
@@ -132,9 +133,9 @@ export function SettingsModal() {
     window.addEventListener('keydown', trap)
     return () => {
       window.removeEventListener('keydown', trap)
-      previouslyFocused.current?.focus?.()
+      restoreWorkbenchFocus(previouslyFocused.current)
     }
-  }, [settingsOpen])
+  }, [settingsOpen, mounted])
 
   const startCapture = (key: keyof ShortcutMap) => {
     const next = captureRef.current === key ? null : key

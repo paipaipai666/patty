@@ -18,13 +18,24 @@ export function focusActiveTerminal(): boolean {
   return false
 }
 
+export function restoreWorkbenchFocus(origin: Element | null) {
+  const state = useWorkspaceStore.getState()
+  const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId) ?? state.workspaces[0]
+  const pane = origin?.closest('[data-pane-id]')
+  if (origin instanceof HTMLElement && origin.isConnected && origin !== document.body
+    && (!pane || pane.getAttribute('data-pane-id') === workspace?.focusedPaneId)) {
+    origin.focus()
+    if (document.activeElement === origin) return
+  }
+  focusActiveTerminal()
+}
+
 export function useCommandExecution() {
   const [request, setRequest] = useState<{ focus: CommandFocus; origin: Element | null } | null>(null)
   useEffect(() => {
     if (!request || request.focus === 'dialog' || document.querySelector('[aria-modal="true"]')) return
-    if (request.focus === 'previous' && request.origin instanceof HTMLElement && request.origin.isConnected && request.origin !== document.body) {
-      request.origin.focus()
-      if (document.activeElement !== request.origin) focusActiveTerminal()
+    if (request.focus === 'previous') {
+      restoreWorkbenchFocus(request.origin)
     } else {
       focusActiveTerminal()
     }

@@ -416,6 +416,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
 
     term.attachCustomKeyEventHandler((e) => {
+      if (e.type === 'keydown' && !['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) {
+        useSessionStore.getState().markAgentRead(session.id)
+        onUsedRef.current?.(session.id)
+      }
       if (!e.ctrlKey || e.altKey || e.metaKey) return true
 
       const isDown = e.type === 'keydown'
@@ -635,8 +639,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
     term.onData((data) => {
       window.terminalAPI.write(session.id, data)
-      useSessionStore.getState().markAgentRead(session.id)
-      onUsedRef.current?.(session.id)
     })
 
 

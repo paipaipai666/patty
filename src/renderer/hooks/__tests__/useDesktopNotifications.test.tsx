@@ -8,8 +8,12 @@ import { useWorkspaceStore } from '../../store/workspaceStore'
 import { DEFAULT_SETTINGS } from '../../../shared/defaultSettings'
 import type { DesktopActivation } from '../../../shared/desktopNotifications'
 import { focusActiveTerminal } from '../../commands/useApplicationKeyboard'
+import { SettingsModal } from '../../components/Settings/SettingsModal'
 
-vi.mock('../../commands/useApplicationKeyboard', () => ({ focusActiveTerminal: vi.fn() }))
+vi.mock('../../commands/useApplicationKeyboard', async importOriginal => ({
+  ...await importOriginal<typeof import('../../commands/useApplicationKeyboard')>(),
+  focusActiveTerminal: vi.fn()
+}))
 
 let root: ReturnType<typeof createRoot>
 let container: HTMLDivElement
@@ -31,7 +35,7 @@ beforeEach(() => {
     notifyAttention: notify, dismissDesktopNotification: dismiss, takeDesktopActivation: take,
     onDesktopActivation: (callback: () => void) => { signal = callback; return { ready: Promise.resolve(), unsubscribe } }
   } })
-  useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS }, loaded: true })
+  useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS }, loaded: true, settingsOpen: false })
   useSessionStore.setState({ loaded: false, sessions: [
     { id: 'p1', title: 'First', shell: 'powershell', cwd: '', color: 'blue', collectionId: null, pid: 1, createdAt: 1 },
     { id: 'p2', title: 'Second', shell: 'powershell', cwd: '', color: 'blue', collectionId: null, pid: 2, createdAt: 2 }
@@ -50,7 +54,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('waits for session loading then activates the correct workspace and focuses its terminal', async () => {
+it('waits for session loading and activates the correct workspace without focusing a fallback control', async () => {
   pending = { kind: 'session', sessionId: 'p1' }
   await act(async () => root.render(<Harness />))
   expect(take).not.toHaveBeenCalled()
@@ -59,7 +63,7 @@ it('waits for session loading then activates the correct workspace and focuses i
   const state = useWorkspaceStore.getState()
   expect(state.workspaces.find(workspace => workspace.id === state.activeWorkspaceId)?.paneTree).toMatchObject({ sessionId: 'p1' })
   expect(activate).toHaveBeenCalledTimes(1)
-  expect(focusActiveTerminal).toHaveBeenCalledTimes(1)
+  expect(focusActiveTerminal).not.toHaveBeenCalled()
   await act(async () => signal())
   expect(activate).toHaveBeenCalledTimes(1)
 })
@@ -74,4 +78,62 @@ it('delivers only new states and dismisses notices when work resumes', async () 
   useSettingsStore.setState(state => ({ settings: { ...state.settings, desktopNotifications: false } }))
   await act(async () => useSessionStore.getState().applyAgentUpdate({ paneId: 'p1', revision: 3, agent: { aiType: 'codex', status: 'error' } }))
   expect(notify).toHaveBeenCalledTimes(1)
+})
+
+it('focuses the target after its terminal input mounts during cold startup', async () => {
+  pending = { kind: 'session', sessionId: 'p1' }
+  await act(async () => root.render(<Harness />))
+  await act(async () => useSessionStore.setState({ loaded: true }))
+  const state = useWorkspaceStore.getState()
+  const pane = document.createElement('div')
+  pane.dataset.paneId = state.workspaces.find(workspace => workspace.id === state.activeWorkspaceId)?.focusedPaneId ?? ''
+  const input = document.createElement('textarea')
+  input.className = 'xterm-helper-textarea'
+  pane.appendChild(input)
+  try {
+    await act(async () => document.body.appendChild(pane))
+    expect(document.activeElement).toBe(input)
+  } finally { pane.remove() }
+})
+
+it('cancels delayed focus if the user switches to another session', async () => {
+  pending = { kind: 'session', sessionId: 'p1' }
+  await act(async () => root.render(<Harness />))
+  await act(async () => useSessionStore.setState({ loaded: true }))
+  const state = useWorkspaceStore.getState()
+  const pane = document.createElement('div')
+  pane.dataset.paneId = state.workspaces.find(workspace => workspace.id === state.activeWorkspaceId)?.focusedPaneId ?? ''
+  const input = document.createElement('textarea')
+  input.className = 'xterm-helper-textarea'
+  pane.appendChild(input)
+  await act(async () => useSessionStore.getState().setActive('p2'))
+  try {
+    await act(async () => document.body.appendChild(pane))
+    expect(document.activeElement).not.toBe(input)
+  } finally { pane.remove() }
+})
+
+it('closing settings for an activation does not restore focus to the previous terminal', async () => {
+  const elements = useWorkspaceStore.getState().workspaces.map(workspace => {
+    const pane = document.createElement('div')
+    pane.dataset.paneId = workspace.focusedPaneId ?? ''
+    const input = document.createElement('textarea')
+    input.className = 'xterm-helper-textarea'
+    const id = workspace.paneTree.type === 'leaf' ? workspace.paneTree.sessionId : ''
+    input.addEventListener('focus', () => useSessionStore.getState().setActive(id))
+    pane.appendChild(input)
+    document.body.appendChild(pane)
+    return { pane, input, id }
+  })
+  try {
+    useSessionStore.setState({ loaded: true })
+    await act(async () => root.render(<><Harness /><SettingsModal /></>))
+    act(() => elements.find(item => item.id === 'p2')?.input.focus())
+    await act(async () => useSettingsStore.getState().openSettings())
+    act(() => document.querySelector<HTMLButtonElement>('[aria-label="Close settings"]')?.focus())
+    activate.mockImplementationOnce(() => useSettingsStore.getState().closeSettings())
+    pending = { kind: 'session', sessionId: 'p1' }
+    await act(async () => signal())
+    expect(useSessionStore.getState().activeSessionId).toBe('p1')
+  } finally { for (const { pane } of elements) pane.remove() }
 })

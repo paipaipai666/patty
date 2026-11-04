@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 
-const terminalInput = vi.hoisted(() => ({ deliver: (_data: string) => {} }))
+const terminalInput = vi.hoisted(() => ({ deliver: (_data: string) => {}, key: (_event: KeyboardEvent): boolean => true }))
 
 
 vi.mock('@xterm/xterm', () => {
@@ -24,7 +24,7 @@ vi.mock('@xterm/xterm', () => {
       return { dispose() {} }
     }
     onKey() { return { dispose() {} } }
-    attachCustomKeyEventHandler() { return { dispose() {} } }
+    attachCustomKeyEventHandler(callback: (event: KeyboardEvent) => boolean) { terminalInput.key = callback; return { dispose() {} } }
     registerOscHandler() { return { dispose() {} } }
     fit() {}
     write(data: string) {
@@ -133,9 +133,25 @@ describe('TerminalPane PTY lifecycle (C5)', () => {
   it('typing forwards the bytes and marks the notice read without clearing agent state', () => {
     const { root } = render()
     vi.mocked(useSessionStore.getState().markAgentRead).mockClear()
-    act(() => terminalInput.deliver('answer'))
+    act(() => { terminalInput.key(new KeyboardEvent('keydown', { key: 'a' })); terminalInput.deliver('answer') })
     expect(terminalAPI.write).toHaveBeenCalledWith('sess-c5', 'answer')
     expect(useSessionStore.getState().markAgentRead).toHaveBeenCalledWith('sess-c5')
+    act(() => root.unmount())
+  })
+
+  it('terminal protocol replies reach the backend without marking a notice read or selecting the pane', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const used = vi.fn()
+    act(() => root.render(<TerminalPane session={session} visible={false} onUsed={used} />))
+    vi.mocked(useSessionStore.getState().markAgentRead).mockClear()
+    for (const reply of ['\x1b[1;1R', '\x1b[?62;4;9;22c', '\x1b[I', '\x1b[O']) {
+      act(() => terminalInput.deliver(reply))
+      expect(terminalAPI.write).toHaveBeenLastCalledWith('sess-c5', reply)
+    }
+    expect(used).not.toHaveBeenCalled()
+    expect(useSessionStore.getState().markAgentRead).not.toHaveBeenCalled()
     act(() => root.unmount())
   })
 
