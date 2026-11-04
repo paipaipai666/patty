@@ -1,13 +1,14 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
-import type { TerminalAPI } from '../../../api'
+import type { LocalPtyMessage, TerminalAPI } from '../../../api'
 import type { TerminalSession } from '../../../store/sessionStore'
 
 
 
 interface MockTerm {
   writes: string[]
+  consume: Array<() => void>
   disposed: boolean
 }
 
@@ -20,6 +21,7 @@ vi.mock('@xterm/xterm', () => {
     unicode = { activeVersion: '11' }
     disposed = false
     writes: string[] = []
+    consume: Array<() => void> = []
     constructor() {
       MockTerminal.instances.push(this)
     }
@@ -30,9 +32,10 @@ vi.mock('@xterm/xterm', () => {
     attachCustomKeyEventHandler(): { dispose(): void } { return { dispose() {} } }
     registerOscHandler(): { dispose(): void } { return { dispose() {} } }
     fit(): void {}
-    write(data: string): void {
+    write(data: string, callback?: () => void): void {
       if (this.disposed) throw new Error('write to disposed terminal')
       this.writes.push(data)
+      if (callback) this.consume.push(callback)
     }
     hasSelection(): boolean { return false }
     getSelection(): string { return '' }
@@ -102,22 +105,8 @@ declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined
 }
 
-interface MockTerminalAPI {
-  write: Mock
-  createSession: Mock
-  onData: Mock
-  onExit: Mock
-  kill: Mock
-  resize: Mock
-}
-
-let dataListeners: Record<string, ((data: string) => void) | undefined>
-let droppedData: string[]
-let terminalAPI: MockTerminalAPI
-
-function terminalWrites(): string {
-  return TerminalMock.instances.map((t) => t.writes.join('')).join('')
-}
+let receive: (message: LocalPtyMessage) => void
+const acknowledge = vi.fn()
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -129,31 +118,21 @@ beforeEach(() => {
     disconnect(): void {}
   }
   globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver
-  dataListeners = {}
-  droppedData = []
+  acknowledge.mockClear()
 
-  terminalAPI = {
+  const terminalAPI = {
     write: vi.fn(),
 
-    createSession: vi.fn((id: string) => {
-      const cb = dataListeners[id]
-      if (cb) {
-        cb('ATTACH-WINDOW-OUTPUT\r\n')
-      } else {
-        droppedData.push('ATTACH-WINDOW-OUTPUT')
-      }
-      return Promise.resolve({ success: true, pid: 4321, replay: 'PREHEAT-BANNER\r\n' })
-    }),
-    onData: vi.fn((id: string, cb: (data: string) => void) => {
-      dataListeners[id] = cb
+    openLocalSession: vi.fn((_options, onMessage: (message: LocalPtyMessage) => void) => {
+      receive = onMessage
+      receive({ kind: 'data', sequence: 1, text: 'PREHEAT-BANNER\r\n' })
+      receive({ kind: 'data', sequence: 2, text: 'ATTACH-WINDOW-OUTPUT\r\n' })
       return {
-        ready: Promise.resolve(),
-        unsubscribe: () => {
-          dataListeners[id] = undefined
-        }
+        ready: Promise.resolve({ success: true, pid: 4321 }),
+        acknowledge,
+        dispose: vi.fn()
       }
     }),
-    onExit: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: () => {} })),
     kill: vi.fn(),
     resize: vi.fn()
   }
@@ -166,8 +145,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('TerminalPane preheat attach race (REVIEW P0-1)', () => {
-  it('delivers output produced between backend attach and renderer subscribe', async () => {
+describe('TerminalPane local output', () => {
+  it('keeps early output in order and acknowledges it only after xterm consumes it', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -179,14 +158,18 @@ describe('TerminalPane preheat attach race (REVIEW P0-1)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(50)
     })
-    expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
-
-
-    expect(terminalWrites()).toContain('PREHEAT-BANNER')
-
-
-    expect(droppedData).toEqual([])
-    expect(terminalWrites()).toContain('ATTACH-WINDOW-OUTPUT')
+    const term = TerminalMock.instances.at(-1)!
+    expect(term.writes.join('')).toBe('PREHEAT-BANNER\r\nATTACH-WINDOW-OUTPUT\r\n')
+    act(() => receive({ kind: 'data', sequence: 3, text: '\x1b]1337;File=' }))
+    expect(acknowledge).not.toHaveBeenCalled()
+    act(() => term.consume.shift()?.())
+    expect(acknowledge.mock.calls).toEqual([[1]])
+    act(() => term.consume.shift()?.())
+    expect(acknowledge.mock.calls).toEqual([[1], [2]])
+    act(() => term.consume.shift()?.())
+    expect(acknowledge.mock.calls).toEqual([[1], [2], [3]])
+    act(() => receive({ kind: 'exit', code: 7 }))
+    expect(term.writes.at(-1)).toContain('[Process exited]')
 
     act(() => root.unmount())
   })

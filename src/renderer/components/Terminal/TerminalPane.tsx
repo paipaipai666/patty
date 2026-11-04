@@ -28,6 +28,7 @@ import {
 import { IipOverlay } from './IipOverlay'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
 import { PaneProbe, panes as benchmarkPanes } from '../../benchmark/probe'
+import type { PtyResult } from '../../api'
 import { markTerminalOpen } from '../../utils/shellReadiness'
 import { createPtyResizeQueue } from './ptyResizeQueue'
 
@@ -651,9 +652,17 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       setIipItems([])
 
 
-      let replayWritten = false
-      const liveQueue: string[] = []
-      const writeLive = (data: string) => {
+      const current = () => !effectDisposed && generation === ptyGenerationRef.current
+      const live = useSessionStore.getState().sessions?.find((s) => s.id === session.id) ?? sessionRef.current
+      const createdSize = { cols: term.cols, rows: term.rows }
+      let started = false
+      const pending: (() => void)[] = []
+      const deliver = (action: () => void) => {
+        if (!current()) return
+        if (started) action()
+        else pending.push(action)
+      }
+      const writeLive = (data: string, consumed?: () => void) => {
         const parsed = probe?.receive(data)
         if (!firstDataReceivedRef.current) {
           firstDataReceivedRef.current = true
@@ -662,27 +671,15 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         }
         const extracted = iipExtractRef.current!(data)
         const placeAll = () => {
+          if (!current()) return
           parsed?.()
           for (const image of extracted.images) placeIipImage(term, image)
+          consumed?.()
         }
-        if (extracted.out) term.write(extracted.out, placeAll)
+        if (extracted.out || consumed) term.write(extracted.out, placeAll)
         else placeAll()
       }
-      const flushQueue = () => {
-        replayWritten = true
-        for (const data of liveQueue) writeLive(data)
-        liveQueue.length = 0
-      }
-      const dataSub = window.terminalAPI.onData(sessionRef.current.id, (data) => {
-        if (effectDisposed || generation !== ptyGenerationRef.current) return
-        if (!replayWritten) {
-          liveQueue.push(data)
-          return
-        }
-        writeLive(data)
-      })
-      const exitSub = window.terminalAPI.onExit(sessionRef.current.id, () => {
-        if (effectDisposed || generation !== ptyGenerationRef.current) return
+      const finish = () => {
         ptyCreatedRef.current = false
         ptyResizeRef.current?.reset(null)
         term.write('\r\n\x1b[90m[Process exited]\x1b[0m\r\n')
@@ -693,56 +690,46 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         } else {
           term.write('\x1b[90m[Auto-restart limit reached]\x1b[0m\r\n')
         }
-      })
-      cleanupDataRef.current = dataSub.unsubscribe
-      cleanupExitRef.current = exitSub.unsubscribe
-
-      void Promise.all([dataSub.ready, exitSub.ready]).then(() => {
-        if (effectDisposed || generation !== ptyGenerationRef.current) return
-        const live = useSessionStore
-          .getState()
-          .sessions?.find((s) => s.id === sessionRef.current.id)
-        const createdSize = { cols: term.cols, rows: term.rows }
-        window.terminalAPI
-          .createSession(
-            sessionRef.current.id,
-            live?.cwd ?? sessionRef.current.cwd,
-            live?.shell ?? sessionRef.current.shell,
-            createdSize.cols,
-            createdSize.rows,
-            live?.ssh ?? sessionRef.current.ssh ?? null
-          )
-          .then((result) => {
-            if (effectDisposed || generation !== ptyGenerationRef.current) return
-            if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
-            if (!result.success || !result.pid) {
-              const message = result.error ?? 'unknown error'
-              toast(`Failed to start terminal: ${message}`)
-
-              flushQueue()
-              term.write(`\r\n\x1b[31m[Connection failed: ${message}]\x1b[0m\r\n`)
-              setHasData(true)
-              return
-            }
-            updatePid(sessionRef.current.id, result.pid)
-            if (result.windowsPty) term.options.windowsPty = result.windowsPty
-            ptyResizeRef.current?.reset(createdSize)
-            ptyResizeRef.current?.request({ cols: term.cols, rows: term.rows })
-            ptyCreatedRef.current = true
-            ptyRetryCountRef.current = 0
-            if (result.replay) {
-
-              const extractedReplay = iipExtractRef.current!(result.replay)
-              const placeReplay = () => {
-                for (const image of extractedReplay.images) placeIipImage(term, image)
-              }
-              if (extractedReplay.out) term.write(extractedReplay.out, placeReplay)
-              else placeReplay()
-              setHasData(true)
-            }
-            flushQueue()
-          })
-      })
+      }
+      const ready = (result: PtyResult) => {
+        if (!current()) return
+        if (perfEnabled) perfMeasure('terminal:create-session-ipc', 'terminal:create-session-ipc-start')
+        if (result.success && result.pid) {
+          updatePid(session.id, result.pid)
+          if (result.windowsPty) term.options.windowsPty = result.windowsPty
+          ptyResizeRef.current?.reset(createdSize)
+          ptyResizeRef.current?.request({ cols: term.cols, rows: term.rows })
+          ptyCreatedRef.current = true
+          ptyRetryCountRef.current = 0
+        }
+        started = true
+        for (const action of pending.splice(0)) action()
+        if (!result.success || !result.pid) {
+          const message = result.error ?? 'unknown error'
+          toast(`Failed to start terminal: ${message}`)
+          term.write(`\r\n\x1b[31m[Connection failed: ${message}]\x1b[0m\r\n`)
+          setHasData(true)
+        }
+      }
+      const failed = (error: unknown) => ready({ success: false, pid: 0, error: String(error) })
+      if (live.ssh) {
+        const target = live.ssh
+        const dataSub = window.terminalAPI.onData(session.id, (data) => deliver(() => writeLive(data)))
+        const exitSub = window.terminalAPI.onExit(session.id, () => deliver(finish))
+        cleanupDataRef.current = dataSub.unsubscribe
+        cleanupExitRef.current = exitSub.unsubscribe
+        void Promise.all([dataSub.ready, exitSub.ready]).then(async () => {
+          if (current()) ready(await window.terminalAPI.createSshSession(session.id, createdSize.cols, createdSize.rows, target))
+        }).catch(failed)
+      } else {
+        const attachment = window.terminalAPI.openLocalSession({ id: session.id, cwd: live.cwd, shell: live.shell, ...createdSize }, (message) => {
+          if (message.kind === 'data') deliver(() => writeLive(message.text, () => attachment.acknowledge(message.sequence)))
+          else deliver(finish)
+        })
+        cleanupDataRef.current = attachment.dispose
+        cleanupExitRef.current = null
+        void attachment.ready.then(ready, failed)
+      }
     }
 
 

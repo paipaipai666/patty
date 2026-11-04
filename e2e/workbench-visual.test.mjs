@@ -74,7 +74,12 @@ try {
   cdp.on('Runtime.exceptionThrown', (event) => errors.push(event.exceptionDetails.exception?.description ?? event.exceptionDetails.text))
   await cdp.send('Runtime.enable')
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
-  await cdp.waitFor(`!!document.querySelector('[aria-label="New terminal"]') && document.querySelectorAll('.xterm').length === 2`)
+  try {
+    await cdp.waitFor(`!!document.querySelector('[aria-label="New terminal"]') && document.querySelectorAll('.xterm').length === 2`)
+  } catch (error) {
+    if (errors.length) throw new Error(errors.join('\n'), { cause: error })
+    throw error
+  }
   await sleep(600)
   const metrics = []
   const flames = []

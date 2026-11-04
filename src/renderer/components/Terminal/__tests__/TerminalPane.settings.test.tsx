@@ -55,9 +55,11 @@ import { useSettingsStore } from '../../../store/settingsStore'
 
 const terminalAPI = {
   write: vi.fn(),
-  createSession: vi.fn().mockResolvedValue({ success: true, pid: 1234 }),
-  onData: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: () => {} })),
-  onExit: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: () => {} })),
+  openLocalSession: vi.fn(() => ({
+    ready: Promise.resolve({ success: true, pid: 1234 }),
+    acknowledge: vi.fn(),
+    dispose: vi.fn()
+  })),
   kill: vi.fn(),
   resize: vi.fn()
 }
@@ -73,9 +75,7 @@ beforeEach(() => {
     disconnect() {}
   }
   terminalAPI.write.mockClear()
-  terminalAPI.createSession.mockClear()
-  terminalAPI.onData.mockClear()
-  terminalAPI.onExit.mockClear()
+  terminalAPI.openLocalSession.mockClear()
   terminalAPI.kill.mockClear()
   terminalAPI.resize.mockClear()
   ;(window as any).terminalAPI = terminalAPI

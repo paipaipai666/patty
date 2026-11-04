@@ -14,6 +14,7 @@ import { useApplicationKeyboard, useCommandExecution } from '../../src/renderer/
 import { usePaletteCommands } from '../../src/renderer/commands/usePaletteCommands'
 import { CommandPalette } from '../../src/renderer/components/CommandPalette/CommandPalette'
 import { useWindowMaterial } from '../../src/renderer/hooks/useWindowMaterial'
+import type { LocalPtyMessage } from '../../src/renderer/api'
 import type { WindowMaterial, WindowMaterialRequest } from '../../src/shared/windowMaterial'
 import { DEFAULT_SETTINGS } from '../../src/shared/defaultSettings'
 import { applyTheme, getThemeColors } from '../../src/renderer/styles/themes'
@@ -28,16 +29,28 @@ const sessions: TerminalSession[] = [
   { id: 'remote', title: 'Production logs', shell: 'ssh', cwd: '/srv/payments', ssh: { host: 'prod-01.example.com', user: 'deploy', port: 2222 }, color: 'amber', collectionId: null, pid: 4, createdAt: 4 }
 ]
 
+let sshOutput: ((data: string) => void) | undefined
 const listener = () => ({ ready: Promise.resolve(), unsubscribe: () => {} })
 const writes: { id: string; data: string }[] = []
 let materialResult: WindowMaterial = 'solid'
 const materialRequests: WindowMaterialRequest[] = []
 Object.defineProperty(window, 'terminalAPI', { value: {
-  onData: listener, onExit: listener, onMaximizeChange: () => () => {},
-  createSession: async (id: string) => ({ success: true, pid: 100, replay: id === 'agent'
-    ? '\x1b[38;2;224;154;126mClaude Code\x1b[0m\r\n\r\nI found the callback validation issue.\r\n\r\n  npm test -- login-callback\r\n\r\nWaiting for your approval to run the tests.\r\n'
-    : id === 'remote' ? 'deploy@prod-01:/srv/payments$ tail -f service.log\r\n09:00:01 INFO  Service ready\r\n09:00:02 INFO  Health check passed\r\n'
-    : 'PS D:\\code\\terminal\\terminal-sidebar> git status --short\r\n M src/renderer/components/Sidebar/Sidebar.tsx\r\n M src/renderer/components/Sidebar/Sidebar.module.css\r\n\r\nPS D:\\code\\terminal\\terminal-sidebar> ' }),
+  onData: (_id: string, receive: (data: string) => void) => {
+    sshOutput = receive
+    return { ready: Promise.resolve(), unsubscribe: () => { sshOutput = undefined } }
+  },
+  onExit: listener, onMaximizeChange: () => () => {},
+  createSshSession: async () => {
+    sshOutput?.('deploy@prod-01:/srv/payments$ tail -f service.log\r\n09:00:01 INFO  Service ready\r\n09:00:02 INFO  Health check passed\r\n')
+    return { success: true, pid: 100 }
+  },
+  openLocalSession: ({ id }: { id: string }, receive: (message: LocalPtyMessage) => void) => {
+    const text = id === 'agent'
+      ? '\x1b[38;2;224;154;126mClaude Code\x1b[0m\r\n\r\nI found the callback validation issue.\r\n\r\n  npm test -- login-callback\r\n\r\nWaiting for your approval to run the tests.\r\n'
+      : 'PS D:\\code\\terminal\\terminal-sidebar> git status --short\r\n M src/renderer/components/Sidebar/Sidebar.tsx\r\n M src/renderer/components/Sidebar/Sidebar.module.css\r\n\r\nPS D:\\code\\terminal\\terminal-sidebar> '
+    receive({ kind: 'data', sequence: 1, text })
+    return { ready: Promise.resolve({ success: true, pid: 100 }), acknowledge: () => {}, dispose: () => {} }
+  },
   resize: () => {}, write: (id: string, data: string) => { writes.push({ id, data }) }, kill: () => {}, stateSave: async () => {}, settingsSet: async () => ({}),
   windowMinimize: () => {}, windowMaximize: () => {}, windowClose: () => {},
   windowSetMaterial: async (request: WindowMaterialRequest): Promise<WindowMaterial> => { materialRequests.push(request); return request.enabled ? materialResult : 'solid' }

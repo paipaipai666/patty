@@ -230,12 +230,15 @@ let resizeObservers: Array<{ cb: () => void; targets: Array<Element> }> = []
 
 const terminalAPI = {
   write: vi.fn(),
-  createSession: vi.fn().mockResolvedValue({ success: true, pid: 1234 }),
-  onData: vi.fn((_id: string, cb: (data: string) => void) => {
-    onDataCallback = cb
-    return { ready: Promise.resolve(), unsubscribe: () => {} }
+  openLocalSession: vi.fn((_options, receive: (message: import('../../../api').LocalPtyMessage) => void) => {
+    let sequence = 0
+    onDataCallback = (text) => receive({ kind: 'data', sequence: ++sequence, text })
+    return {
+      ready: Promise.resolve({ success: true, pid: 1234 }),
+      acknowledge: vi.fn(),
+      dispose: vi.fn()
+    }
   }),
-  onExit: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: () => {} })),
   kill: vi.fn(),
   resize: vi.fn()
 }
@@ -310,7 +313,7 @@ beforeEach(() => {
   resizeObservers = []
   overlayCalls.length = 0
   ;(Terminal as unknown as { instances: FakeTerminal[] }).instances.length = 0
-  for (const fn of [terminalAPI.write, terminalAPI.createSession, terminalAPI.onData, terminalAPI.onExit, terminalAPI.kill, terminalAPI.resize]) {
+  for (const fn of Object.values(terminalAPI)) {
     fn.mockClear()
   }
   ;(window as any).terminalAPI = terminalAPI

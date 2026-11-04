@@ -18,21 +18,24 @@ try {
   await cdp.evaluate(`(() => {
     window.__probe = { events: [], data: [], creates: [] }
     const api = window.terminalAPI
-    const create = api.createSession
-    api.createSession = (...args) => create(...args).then(result => {
-      window.__probe.creates.push({ args, result, t: performance.now() })
-      return result
-    })
+    const open = api.openLocalSession
+    api.openLocalSession = (request, receive) => {
+      const attachment = open(request, message => {
+        if (message.kind === 'data') {
+          window.__probe.data.push({ id: request.id, s: message.text, t: performance.now() })
+        }
+        receive(message)
+      })
+      return { ...attachment, ready: attachment.ready.then(result => {
+        window.__probe.creates.push({ id: request.id, result, t: performance.now() })
+        return result
+      }) }
+    }
     const resize = api.resize
     api.resize = (id, cols, rows) => {
       window.__probe.events.push({ kind: 'resize', id, cols, rows, t: performance.now() })
       return resize(id, cols, rows)
     }
-    const onData = api.onData
-    api.onData = (id, cb) => onData(id, s => {
-      window.__probe.data.push({ id, s, t: performance.now() })
-      cb(s)
-    })
     window.__terms = () => [...document.querySelectorAll('.xterm')].map(el => {
       let fiber = el.parentElement[Object.keys(el.parentElement).find(k => k.startsWith('__reactFiber'))]
       for (; fiber; fiber = fiber.return) {
@@ -61,7 +64,7 @@ try {
   await cdp.evaluate(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'New Terminal').click()`)
   await cdp.waitFor(`window.__probe.creates.length === 1 && window.__terms().length === 1 && /PID \\d+/.test(document.body.innerText)`)
   await sleep(800)
-  const id = await cdp.evaluate('window.__probe.creates[0].args[0]')
+  const id = await cdp.evaluate('window.__probe.creates[0].id')
   const stream = async (label, count, letter) => {
     const command = `$i=0; while($i -lt ${count}){[Console]::WriteLine(("${label}:{0:D5}|{1}|END:{0:D5}" -f $i,("${letter}"*${bodyLength})));$i++;[Threading.Thread]::Sleep(10)}\r`
     await cdp.evaluate(`window.terminalAPI.write(${JSON.stringify(id)}, ${JSON.stringify(command)})`)
@@ -101,7 +104,7 @@ try {
   await sleep(1000)
   const before = await cdp.evaluate(`(() => {
     window.__beforeTerm = window.__terms()[0]
-    const creates = window.__probe.creates.filter(c => c.args[0] === ${JSON.stringify(id)})
+    const creates = window.__probe.creates.filter(c => c.id === ${JSON.stringify(id)})
     return { pid: creates.at(-1).result.pid, creates: window.__probe.creates.length }
   })()`)
   await stream('CLOSE', 200, 'C')
@@ -124,7 +127,7 @@ try {
   Object.assign(results.close, await cdp.evaluate(`(() => ({
     sameTerminal: window.__terms()[0] === window.__beforeTerm,
     beforePid: ${before.pid},
-    afterPid: window.__probe.creates.filter(c => c.args[0] === ${JSON.stringify(id)}).at(-1).result.pid
+    afterPid: window.__probe.creates.filter(c => c.id === ${JSON.stringify(id)}).at(-1).result.pid
   }))()`))
   if (!lifecycleOnly) {
     const size = await cdp.evaluate(`(() => {

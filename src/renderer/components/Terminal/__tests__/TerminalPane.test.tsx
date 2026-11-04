@@ -80,17 +80,18 @@ vi.mock('../../../utils/shellReadiness', () => ({ markTerminalOpen: () => {} }))
 
 import { TerminalPane } from '../TerminalPane'
 import { useSessionStore } from '../../../store/sessionStore'
+import type { LocalPtyMessage } from '../../../api'
 
 
 let lastOnExit: (() => void) | undefined
+const localReady = vi.fn().mockResolvedValue({ success: true, pid: 1234 })
+const disconnect = vi.fn()
 
 const terminalAPI = {
   write: vi.fn(),
-  createSession: vi.fn().mockResolvedValue({ success: true, pid: 1234 }),
-  onData: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: () => {} })),
-  onExit: vi.fn((_id: string, cb: () => void) => {
-    lastOnExit = cb
-    return { ready: Promise.resolve(), unsubscribe: () => {} }
+  openLocalSession: vi.fn((_options, receive: (message: LocalPtyMessage) => void) => {
+    lastOnExit = () => receive({ kind: 'exit', code: 0 })
+    return { ready: localReady(), acknowledge: vi.fn(), dispose: disconnect }
   }),
   kill: vi.fn(),
   resize: vi.fn()
@@ -107,7 +108,7 @@ beforeEach(() => {
     disconnect() {}
   }
   lastOnExit = undefined
-  for (const fn of [terminalAPI.write, terminalAPI.createSession, terminalAPI.onData, terminalAPI.onExit, terminalAPI.kill, terminalAPI.resize]) {
+  for (const fn of [...Object.values(terminalAPI), localReady, disconnect]) {
     fn.mockClear()
   }
   ;(window as any).terminalAPI = terminalAPI
@@ -145,7 +146,7 @@ describe('TerminalPane PTY lifecycle (C5)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(50)
     })
-    expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
+    expect(terminalAPI.openLocalSession).toHaveBeenCalledTimes(1)
 
 
     act(() => {
@@ -157,7 +158,7 @@ describe('TerminalPane PTY lifecycle (C5)', () => {
       root.unmount()
     })
 
-    expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
+    expect(disconnect).toHaveBeenCalledTimes(1)
     expect(terminalAPI.kill).not.toHaveBeenCalled()
 
 
@@ -166,13 +167,12 @@ describe('TerminalPane PTY lifecycle (C5)', () => {
     })
 
 
-    expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
-    expect(terminalAPI.onData).toHaveBeenCalledTimes(1)
+    expect(terminalAPI.openLocalSession).toHaveBeenCalledTimes(1)
   })
 })
 
-describe('TerminalPane async create (SSH StrictMode race)', () => {
-  it('ignores a createSession result that resolves after unmount', async () => {
+describe('TerminalPane async local attach', () => {
+  it('ignores a connection result that resolves after unmount', async () => {
     const { useToastStore } = await import('../../../store/toastStore')
     const { useSessionStore } = await import('../../../store/sessionStore')
     useToastStore.setState({ toasts: [] })
@@ -180,7 +180,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
 
     type CreateResult = { success: boolean; pid: number; error?: string }
     let resolveCreate: (value: CreateResult) => void = () => {}
-    terminalAPI.createSession.mockImplementationOnce(
+    localReady.mockImplementationOnce(
       () => new Promise<CreateResult>((resolve) => { resolveCreate = resolve })
     )
     const { root } = render()
@@ -188,7 +188,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(terminalAPI.createSession).toHaveBeenCalledTimes(1)
+    expect(terminalAPI.openLocalSession).toHaveBeenCalledTimes(1)
 
 
     act(() => { root.unmount() })
@@ -202,8 +202,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
     expect(useToastStore.getState().toasts).toHaveLength(0)
     expect(useSessionStore.getState().updatePid).not.toHaveBeenCalled()
 
-    expect(terminalAPI.onData).toHaveBeenCalledTimes(1)
-    expect(terminalAPI.onExit).toHaveBeenCalledTimes(1)
+    expect(disconnect).toHaveBeenCalledTimes(1)
   })
 
   it('writes the backend error into the terminal on create failure', async () => {
@@ -212,7 +211,7 @@ describe('TerminalPane async create (SSH StrictMode race)', () => {
     const before = instances.length
     const { useToastStore } = await import('../../../store/toastStore')
     useToastStore.setState({ toasts: [] })
-    terminalAPI.createSession.mockResolvedValueOnce({
+    localReady.mockResolvedValueOnce({
       success: false,
       pid: 0,
       error: 'auth: Authentication failed'

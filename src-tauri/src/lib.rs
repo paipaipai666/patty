@@ -10,7 +10,6 @@ mod conpty;
 mod hook_identity;
 mod hook_state;
 mod window_material;
-#[cfg(test)]
 mod pty_output;
 
 use serde_json::{json, Value};
@@ -73,17 +72,39 @@ fn state_save(state: Value) -> Result<(), String> {
 async fn create_pty(
     app: tauri::AppHandle,
     id: String,
-    cwd: Option<String>,
-    shell: Option<String>,
     cols: Option<u16>,
     rows: Option<u16>,
-    ssh: Option<ssh::SshTarget>,
+    ssh: ssh::SshTarget,
 ) -> Value {
-    if let Some(target) = ssh {
-        return sshconn::create(Some(app), &id, target, cols.unwrap_or(80), rows.unwrap_or(24))
-            .await;
+    sshconn::create(Some(app), &id, ssh, cols.unwrap_or(80), rows.unwrap_or(24)).await
+}
+
+#[tauri::command]
+async fn create_local_pty(
+    app: tauri::AppHandle,
+    id: String,
+    cwd: Option<String>,
+    shell: Option<String>,
+    cols: u16,
+    rows: u16,
+    connection: String,
+    output: tauri::ipc::Channel<pty_output::Message>,
+) -> Value {
+    if connection.is_empty() || connection.len() > 64 {
+        return json!({ "pid": 0, "success": false, "error": "Invalid local terminal connection" });
     }
-    pty::create(Some(&app), &id, cwd.as_deref(), shell.as_deref(), cols, rows)
+    let send: pty_output::SendMessage = std::sync::Arc::new(move |message| output.send(message.clone()).is_ok());
+    pty::create(Some(&app), &id, cwd.as_deref(), shell.as_deref(), Some(cols), Some(rows), Some((connection, send)))
+}
+
+#[tauri::command]
+fn acknowledge_local_pty(connection: &str, through: u32) {
+    pty_output::acknowledge(connection, through);
+}
+
+#[tauri::command]
+fn disconnect_local_pty(connection: &str) {
+    pty_output::disconnect(connection);
 }
 
 #[tauri::command]
@@ -338,6 +359,9 @@ pub fn run() {
             state_load,
             state_save,
             create_pty,
+            create_local_pty,
+            acknowledge_local_pty,
+            disconnect_local_pty,
             write_pty,
             resize_pty,
             kill_pty,

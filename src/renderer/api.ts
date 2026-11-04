@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { Channel, invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { flushNow } from './store/dirtyScheduler'
@@ -32,13 +32,72 @@ const listenHandle = (registration: Promise<Unsubscribe>): ListenerHandle => ({
   unsubscribe: asyncUnsub(registration)
 })
 
-export const terminalAPI = {
+export type LocalPtyMessage =
+  | { kind: 'data'; sequence: number; text: string }
+  | { kind: 'exit'; code: number }
 
-  createSession: (id: string, cwd?: string, shell?: string, cols?: number, rows?: number, ssh?: SshTarget | null) =>
-    invoke<{ pid: number; success: boolean; replay?: string | null; error?: string; windowsPty?: IWindowsPty }>(
-      'create_pty',
-      { id, cwd, shell, cols, rows, ssh }
-    ),
+interface LocalPtyRequest {
+  id: string
+  cwd?: string
+  shell?: string
+  cols: number
+  rows: number
+}
+
+export interface PtyResult {
+  pid: number
+  success: boolean
+  error?: string
+  windowsPty?: IWindowsPty
+}
+
+const pendingLocalStarts = new Map<string, Promise<PtyResult>>()
+
+function openLocalSession(request: LocalPtyRequest, receive: (message: LocalPtyMessage) => void) {
+  const connection = crypto.randomUUID()
+  let disposed = false
+  let through = 0
+  let ackScheduled = false
+  const previous = pendingLocalStarts.get(request.id)
+  const ready = Promise.resolve(previous).catch(() => undefined).then(() => {
+    if (disposed) return { success: false, pid: 0 }
+    const output = new Channel<LocalPtyMessage>((message) => {
+      if (!disposed) receive(message)
+    })
+    return invoke<PtyResult>('create_local_pty', { ...request, connection, output })
+  })
+  pendingLocalStarts.set(request.id, ready)
+  const clearPending = () => {
+    if (pendingLocalStarts.get(request.id) === ready) pendingLocalStarts.delete(request.id)
+  }
+  void ready.then(clearPending, clearPending)
+  return {
+    ready,
+    acknowledge: (sequence: number) => {
+      if (disposed || sequence <= through) return
+      through = sequence
+      if (ackScheduled) return
+      ackScheduled = true
+      queueMicrotask(() => {
+        ackScheduled = false
+        if (!disposed) void invoke('acknowledge_local_pty', { connection, through }).catch(() => undefined)
+      })
+    },
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      void ready.then((result) => {
+        if (result.success) return invoke('disconnect_local_pty', { connection })
+      }).catch(() => undefined)
+    },
+  }
+}
+
+export const terminalAPI = {
+  openLocalSession,
+
+  createSshSession: (id: string, cols: number, rows: number, ssh: SshTarget) =>
+    invoke<PtyResult>('create_pty', { id, cols, rows, ssh }),
 
   write: (id: string, data: string) => {
     void invoke('write_pty', { id, data })
@@ -46,7 +105,10 @@ export const terminalAPI = {
 
   resize: (id: string, cols: number, rows: number) => invoke<void>('resize_pty', { id, cols, rows }),
 
-  kill: (id: string) => invoke<{ success: boolean; error?: string }>('kill_pty', { id }),
+  kill: async (id: string) => {
+    await pendingLocalStarts.get(id)?.catch(() => undefined)
+    return invoke<{ success: boolean; error?: string }>('kill_pty', { id })
+  },
 
   onData: (id: string, callback: (data: string) => void): ListenerHandle =>
     listenHandle(listen<string>(`pty:data:${id}`, (event) => callback(event.payload))),

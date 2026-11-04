@@ -10,6 +10,7 @@ use std::sync::{mpsc, Arc, LazyLock, Mutex, OnceLock, RwLock};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
+use crate::pty_output::{Output, SendMessage};
 
 pub fn resource_dir() -> PathBuf {
     APP_RESOURCE_DIR.get().cloned().unwrap_or_default()
@@ -17,10 +18,8 @@ pub fn resource_dir() -> PathBuf {
 
 
 
-pub struct Shared {
-    attached: AtomicBool,
-
-    buffer: Mutex<ReplayBuffer>,
+struct Shared {
+    output: Output,
     app: Option<AppHandle>,
 
     image_rows: AtomicU32,
@@ -28,12 +27,6 @@ pub struct Shared {
     image_pending: AtomicBool,
 }
 
-
-#[derive(Default)]
-struct ReplayBuffer {
-    chunks: std::collections::VecDeque<String>,
-    total: usize,
-}
 
 pub struct Session {
     pid: u32,
@@ -44,6 +37,7 @@ pub struct Session {
     master: Mutex<Box<dyn MasterPty + Send>>,
     child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
     shared: Arc<Shared>,
+    activated: AtomicBool,
 }
 
 impl Session {
@@ -510,8 +504,7 @@ fn writer_loop(mut writer: Box<dyn Write + Send>, receiver: mpsc::Receiver<Vec<u
     }
 }
 
-fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
-    let shared = session.shared.clone();
+fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Vec<u8>>, mut reader: Box<dyn Read + Send>) {
     let mut carry: Vec<u8> = Vec::new();
     let mut dsr = DsrState::Pending(String::new());
     let mut image_tracker = ImageRowTracker::default();
@@ -528,32 +521,30 @@ fn reader_loop(id: String, session: Arc<Session>, mut reader: Box<dyn Read + Sen
                 }
                 let credited = image_tracker.feed(&text);
                 if credited > 0 {
-                    session.shared.image_rows.fetch_add(credited, Ordering::Relaxed);
+                    shared.image_rows.fetch_add(credited, Ordering::Relaxed);
                 }
-                session.shared.image_pending.store(image_tracker.is_pending(), Ordering::Relaxed);
+                shared.image_pending.store(image_tracker.is_pending(), Ordering::Relaxed);
                 let (forward, reply) = dsr_filter(&mut dsr, &text);
                 if reply {
-                    let _ = session.writer.send(DSR_REPLY.to_vec());
+                    let _ = writer.send(DSR_REPLY.to_vec());
                 }
                 let Some(text) = forward else { continue };
                 if text.is_empty() {
                     continue;
                 }
-                if shared.attached.load(Ordering::Relaxed) {
-                    #[cfg(feature = "e2e")]
-                    let probe = crate::benchmark::dispatch_probe();
-                    emit(&shared.app, &format!("pty:data:{id}"), &text);
-                    #[cfg(feature = "e2e")]
-                    if let Some(probe) = probe {
-                        crate::benchmark::record_dispatch(probe, &text);
-                    }
-                } else {
-                    buffer_push(&shared, text);
-                }
+                shared.output.push(text);
             }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(_) => break,
         }
     }
+    if let DsrState::Pending(held) = dsr {
+        shared.output.push(held);
+    }
+    if !carry.is_empty() {
+        shared.output.push(String::from_utf8_lossy(&carry).into_owned());
+    }
+    shared.output.eof();
 }
 
 fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
@@ -571,17 +562,18 @@ fn wait_loop(id: String, child: Arc<Mutex<Box<dyn Child + Send + Sync>>>) {
     };
 
 
-    let (app, hook_root) = {
+    let session = {
         let mut map = SESSIONS.write().unwrap();
         let Some(session) = map.get(&id) else { return };
         if !Arc::ptr_eq(&session.child, &child) {
             return;
         }
-        let session = map.remove(&id).unwrap();
-        (session.shared.app.clone(), session.hook_root)
+        map.remove(&id).unwrap()
     };
-    if let Some(root) = hook_root { crate::hooks::remove_pane(app.as_ref(), &id, root); }
-    emit(&app, &format!("pty:exit:{id}"), code);
+    if let Some(root) = session.hook_root { crate::hooks::remove_pane(session.shared.app.as_ref(), &id, root); }
+    let output = session.shared.output;
+    drop(session);
+    output.exit(code);
 }
 
 
@@ -640,7 +632,8 @@ fn spawn_inner(
     shell: Option<&str>,
     cols: Option<u16>,
     rows: Option<u16>,
-    attached: bool,
+    activated: bool,
+    attachment: Option<(String, SendMessage)>,
 ) -> Result<u32, String> {
     let shell_path = shell_path(shell);
     let cwd = normalize_cwd(cwd);
@@ -689,9 +682,16 @@ fn spawn_inner(
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
     let (writer_tx, writer_rx) = mpsc::channel();
 
+    let output = Output::new();
+    if let Some((connection, send)) = attachment {
+        if !output.attach(connection, send) {
+            output.close();
+            let _ = child.lock().unwrap().kill();
+            return Err("Local terminal connection is already in use".into());
+        }
+    }
     let shared = Arc::new(Shared {
-        attached: AtomicBool::new(attached),
-        buffer: Mutex::new(ReplayBuffer::default()),
+        output,
         app: app.cloned(),
         image_rows: AtomicU32::new(0),
         image_pending: AtomicBool::new(false),
@@ -706,13 +706,13 @@ fn spawn_inner(
         master: Mutex::new(pair.master),
         child: child.clone(),
         shared: shared.clone(),
+        activated: AtomicBool::new(activated),
     });
     SESSIONS.write().unwrap().insert(id.to_string(), session.clone());
     thread::spawn(move || writer_loop(writer, writer_rx));
 
-    let reader_id = id.to_string();
-    let reader_session = session.clone();
-    thread::spawn(move || reader_loop(reader_id, reader_session, reader));
+    let reply = session.writer.clone();
+    thread::spawn(move || reader_loop(shared, reply, reader));
 
     let wait_id = id.to_string();
     thread::spawn(move || wait_loop(wait_id, child));
@@ -720,39 +720,14 @@ fn spawn_inner(
     Ok(pid)
 }
 
-fn take_buffer(shared: &Shared) -> Option<String> {
-    let buf = std::mem::take(&mut *shared.buffer.lock().unwrap());
-    if buf.chunks.is_empty() {
-        None
-    } else {
-        Some(buf.chunks.into_iter().collect())
-    }
-}
-
-
-const PREHEAT_BUFFER_CAP: usize = 256 * 1024;
-
-
-fn buffer_push(shared: &Shared, text: String) {
-    let mut buf = shared.buffer.lock().unwrap();
-    buf.total += text.len();
-    buf.chunks.push_back(text);
-    while buf.total > PREHEAT_BUFFER_CAP && buf.chunks.len() > 1 {
-        if let Some(front) = buf.chunks.pop_front() {
-            buf.total -= front.len();
-        }
-    }
-}
-
-
-
-pub fn create(
+pub(crate) fn create(
     app: Option<&AppHandle>,
     id: &str,
     cwd: Option<&str>,
     shell: Option<&str>,
     cols: Option<u16>,
     rows: Option<u16>,
+    attachment: Option<(String, SendMessage)>,
 ) -> Value {
     let _spawn_guard = begin_spawn(id);
     let cwd = normalize_cwd(cwd);
@@ -761,7 +736,7 @@ pub fn create(
         let mut map = SESSIONS.write().unwrap();
         match map.get(id) {
             Some(existing)
-                if existing.shared.attached.load(Ordering::Relaxed)
+                if existing.activated.load(Ordering::Relaxed)
                     || (existing.cwd.as_deref() == cwd
                         && existing.shell.as_deref() == shell) =>
             {
@@ -770,9 +745,13 @@ pub fn create(
                 if let Err(error) = existing.resize(cols, rows) {
                     return json!({ "pid": existing.pid, "success": false, "error": error });
                 }
-                let was_attached = existing.shared.attached.swap(true, Ordering::Relaxed);
-                let replay = if was_attached { None } else { take_buffer(&existing.shared) };
-                return create_success(existing.pid, replay);
+                if let Some((connection, send)) = attachment {
+                    if !existing.shared.output.attach(connection, send) {
+                        return json!({ "pid": existing.pid, "success": false, "error": "Local terminal connection is unavailable" });
+                    }
+                }
+                existing.activated.store(true, Ordering::Relaxed);
+                return create_success(existing.pid);
             }
             Some(_) => map.remove(id),
             None => None,
@@ -783,8 +762,8 @@ pub fn create(
         terminate(&victim);
     }
 
-    match spawn_inner(app, id, cwd, shell, cols, rows, true) {
-        Ok(pid) => create_success(pid, None),
+    match spawn_inner(app, id, cwd, shell, cols, rows, true, attachment) {
+        Ok(pid) => create_success(pid),
         Err(e) => {
             eprintln!("[pty] create failed for {id}: {e}");
             json!({ "pid": 0, "success": false, "error": e })
@@ -792,12 +771,12 @@ pub fn create(
     }
 }
 
-fn create_success(pid: u32, replay: Option<String>) -> Value {
+fn create_success(pid: u32) -> Value {
     let windows_pty = json!({
         "backend": "conpty",
         "buildNumber": crate::conpty::XTERM_REFLOW_COMPATIBILITY_BUILD,
     });
-    json!({ "pid": pid, "success": true, "replay": replay, "windowsPty": windows_pty })
+    json!({ "pid": pid, "success": true, "windowsPty": windows_pty })
 }
 
 
@@ -810,7 +789,7 @@ pub fn warm(app: &AppHandle, id: &str, cwd: Option<&str>, shell: Option<&str>) {
     if SESSIONS.read().unwrap().contains_key(id) {
         return;
     }
-    if let Err(e) = spawn_inner(Some(app), id, cwd, shell, None, None, false) {
+    if let Err(e) = spawn_inner(Some(app), id, cwd, shell, None, None, false, None) {
         eprintln!("[pty] failed to warm {id}: {e}");
     }
 }
@@ -899,6 +878,7 @@ pub fn kill(id: &str) -> Value {
 }
 
 fn terminate(session: &Session) {
+    session.shared.output.close();
     let alive = matches!(session.child.lock().unwrap().try_wait(), Ok(None));
     if alive {
         kill_process_tree(session.pid);
@@ -935,7 +915,7 @@ mod tests {
 
     #[test]
     fn bundled_conpty_advertises_reflow_capability_independently_of_the_os_build() {
-        assert_eq!(create_success(123, None)["windowsPty"], json!({
+        assert_eq!(create_success(123)["windowsPty"], json!({
             "backend": "conpty",
             "buildNumber": 21376,
         }));
@@ -1249,52 +1229,12 @@ mod tests {
         assert_eq!(result["success"], true);
     }
 
-    #[test]
-    fn buffer_push_preserves_order_under_cap() {
-        let shared = Arc::new(Shared {
-            attached: AtomicBool::new(false),
-            buffer: Mutex::new(ReplayBuffer::default()),
-            app: None,
-            image_rows: AtomicU32::new(0),
-            image_pending: AtomicBool::new(false),
-        });
-        buffer_push(&shared, "a".to_string());
-        buffer_push(&shared, "b".to_string());
-        buffer_push(&shared, "c".to_string());
-        assert_eq!(shared.buffer.lock().unwrap().chunks.iter().cloned().collect::<String>(), "abc");
+    fn create(app: Option<&AppHandle>, id: &str, cwd: Option<&str>, shell: Option<&str>, cols: Option<u16>, rows: Option<u16>) -> Value {
+        super::create(app, id, cwd, shell, cols, rows, None)
     }
 
-    #[test]
-    fn buffer_push_drops_oldest_chunks_over_cap() {
-        let shared = Arc::new(Shared {
-            attached: AtomicBool::new(false),
-            buffer: Mutex::new(ReplayBuffer::default()),
-            app: None,
-            image_rows: AtomicU32::new(0),
-            image_pending: AtomicBool::new(false),
-        });
-        let chunk = "x".repeat(PREHEAT_BUFFER_CAP / 2);
-        buffer_push(&shared, chunk.clone());
-        buffer_push(&shared, chunk.clone());
-        buffer_push(&shared, "tail".to_string());
-        let kept = shared.buffer.lock().unwrap().chunks.iter().cloned().collect::<String>();
-        assert_eq!(kept, format!("{chunk}tail"));
-        assert!(shared.buffer.lock().unwrap().total <= PREHEAT_BUFFER_CAP, "buffer must stay under cap");
-    }
-
-    #[test]
-    fn take_buffer_clears_and_returns_joined() {
-        let shared = Arc::new(Shared {
-            attached: AtomicBool::new(false),
-            buffer: Mutex::new(ReplayBuffer::default()),
-            app: None,
-            image_rows: AtomicU32::new(0),
-            image_pending: AtomicBool::new(false),
-        });
-        buffer_push(&shared, "hello".to_string());
-        buffer_push(&shared, " world".to_string());
-        assert_eq!(take_buffer(&shared).as_deref(), Some("hello world"));
-        assert!(shared.buffer.lock().unwrap().chunks.is_empty());
+    fn spawn_inner(app: Option<&AppHandle>, id: &str, cwd: Option<&str>, shell: Option<&str>, cols: Option<u16>, rows: Option<u16>, activated: bool) -> Result<u32, String> {
+        super::spawn_inner(app, id, cwd, shell, cols, rows, activated, None)
     }
 
     struct EnsureTestSession {
@@ -1359,26 +1299,45 @@ mod tests {
     }
 
     #[test]
-    fn repeated_create_attaches_warm_process_and_replays_only_once() {
+    fn conpty_delivers_warm_replay_and_tail_before_reporting_exit() {
+        use crate::pty_output::{acknowledge, Message};
         let session = EnsureTestSession::new("warm-once");
+        let replay = "\x1b\\PREHEAT_READY\r\n";
         let pid = spawn_inner(None, &session.id, session.cwd.to_str(), Some("cmd"), None, None, false)
             .expect("warm cmd");
-        write(&session.id, "echo PREHEAT_READY\r");
+        write(&session.id, "echo PREHEAT_%COMSPEC:~0,0%READY\r");
+        let mut warm = false;
         for _ in 0..60 {
-            let ready = SESSIONS.read().unwrap().get(&session.id).is_some_and(|s| {
-                s.shared.buffer.lock().unwrap().chunks.iter().any(|text| text.contains("PREHEAT_READY"))
-            });
-            if ready {
+            if SESSIONS.read().unwrap().get(&session.id).is_some_and(|s| s.shared.output.history().contains(replay)) {
+                warm = true;
                 break;
             }
-            thread::sleep(Duration::from_millis(100));
+            thread::sleep(Duration::from_millis(50));
         }
-        let first = create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(100), Some(30));
+        assert!(warm, "preheat output did not reach ConPTY");
+        let (tx, rx) = mpsc::channel();
+        let connection = format!("{}-channel", session.id);
+        let first = super::create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(80), Some(24),
+            Some((connection.clone(), Arc::new(move |message| tx.send(message.clone()).is_ok()))));
         assert_eq!(first["pid"], pid);
-        assert!(first["replay"].as_str().is_some_and(|text| text.contains("PREHEAT_READY")));
-        let second = create(None, &session.id, session.cwd.to_str(), Some("cmd"), Some(100), Some(30));
-        assert_eq!(second["pid"], pid, "an already attached warm session must stay alive");
-        assert!(second["replay"].is_null(), "preheat output must be replayed once");
+        write(&session.id, "echo LAST_%COMSPEC:~0,0%LINE & exit /b 7\r");
+        let mut output = String::new();
+        let mut through = 0;
+        let code = loop {
+            match rx.recv_timeout(Duration::from_secs(5)).unwrap() {
+                Message::Data { sequence, text } => {
+                    assert_eq!(sequence, through + 1);
+                    through = sequence;
+                    output.push_str(&text);
+                    acknowledge(&connection, sequence);
+                }
+                Message::Exit { code } => break code,
+            }
+        };
+        assert_eq!(code, 7);
+        let tail = "\x1b\\LAST_LINE \r\n";
+        assert_eq!(output.matches(replay).count(), 1);
+        assert!(output.find(replay).unwrap() < output.find(tail).expect("last command output must arrive before exit"));
     }
 
     #[test]
@@ -1473,7 +1432,7 @@ mod tests {
         {
             let map = SESSIONS.read().unwrap();
             let session = map.get(&id).expect("session registered");
-            let buffered = session.shared.buffer.lock().unwrap().chunks.iter().cloned().collect::<String>();
+            let buffered = session.shared.output.history();
             assert!(!buffered.is_empty(), "expected some shell banner output");
         }
 
