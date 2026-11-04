@@ -10,6 +10,8 @@ mod conpty;
 mod hook_identity;
 mod hook_state;
 mod window_material;
+#[cfg(test)]
+mod pty_output;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
