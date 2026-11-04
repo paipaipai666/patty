@@ -200,6 +200,7 @@ impl HubState {
 struct Hub {
     state: Mutex<HubState>,
     changed: Condvar,
+    wake: Option<crate::output_wake::DeadlineWake>,
 }
 
 static HUB: LazyLock<Arc<Hub>> = LazyLock::new(|| {
@@ -212,6 +213,11 @@ static HUB: LazyLock<Arc<Hub>> = LazyLock::new(|| {
             credits: Credits::new(TOTAL_LIMIT, PANE_LIMIT),
         }),
         changed: Condvar::new(),
+        wake: crate::output_wake::DeadlineWake::new()
+            .map_err(|error| {
+                eprintln!("[pty] Native output wake unavailable: {error}");
+            })
+            .ok(),
     });
     let worker = hub.clone();
     std::thread::spawn(move || worker.dispatch());
@@ -219,6 +225,13 @@ static HUB: LazyLock<Arc<Hub>> = LazyLock::new(|| {
 });
 
 impl Hub {
+    fn notify(&self) {
+        self.changed.notify_all();
+        if let Some(wake) = &self.wake {
+            wake.signal().expect("signal terminal output scheduler");
+        }
+    }
+
     fn dispatch(&self) {
         loop {
             let mut state = self.state.lock().unwrap();
@@ -226,6 +239,15 @@ impl Hub {
                 let now = Instant::now();
                 match state.next_delivery(now) {
                     (Some(delivery), _) => break delivery,
+                    (None, deadline) if self.wake.is_some() => {
+                        drop(state);
+                        self.wake
+                            .as_ref()
+                            .unwrap()
+                            .wait(deadline)
+                            .expect("wait for terminal output");
+                        state = self.state.lock().unwrap();
+                    }
                     (None, Some(wake)) => {
                         state = self
                             .changed
@@ -291,7 +313,7 @@ impl Output {
         state.credits.open(credit);
         state.connections.insert(id.clone(), self.0);
         state.streams.get_mut(&self.0).unwrap().link = Some(Link { id, credit, send });
-        HUB.changed.notify_all();
+        HUB.notify();
         true
     }
 
@@ -316,7 +338,7 @@ impl Output {
                     .deadline
                     .get_or_insert_with(|| Instant::now() + BATCH_DELAY);
                 stream.live.push(text);
-                HUB.changed.notify_all();
+                HUB.notify();
                 return;
             }
             state = HUB.changed.wait(state).unwrap();
@@ -342,7 +364,7 @@ impl Output {
             stream.eof = true;
         }
         state.reap(self.0);
-        HUB.changed.notify_all();
+        HUB.notify();
     }
 
     pub(crate) fn close(self) {
@@ -351,7 +373,7 @@ impl Output {
             state.connections.remove(&link.id);
             state.credits.close(link.credit);
         }
-        HUB.changed.notify_all();
+        HUB.notify();
     }
 
     #[cfg(test)]
@@ -384,13 +406,22 @@ pub(crate) fn acknowledge(id: &str, through: u32) {
         .unwrap()
         .credit;
     if state.credits.acknowledge(credit, through) {
-        HUB.changed.notify_all();
+        HUB.notify();
     }
 }
 
 pub(crate) fn disconnect(id: &str) {
     HUB.state.lock().unwrap().disconnect(id);
-    HUB.changed.notify_all();
+    HUB.notify();
+}
+
+#[cfg(feature = "e2e")]
+pub(crate) fn wait_mode() -> &'static str {
+    match &HUB.wake {
+        Some(wake) if wake.high_resolution() => "high_resolution",
+        Some(_) => "standard_timer",
+        None => "condition_variable",
+    }
 }
 
 #[derive(Default)]

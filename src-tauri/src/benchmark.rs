@@ -217,6 +217,7 @@ pub fn benchmark_exchange(report: Option<Value>) -> Result<u8, String> {
         let trace = serde_json::to_value(&*trace.lock().unwrap()).map_err(|error| error.to_string())?;
         let fields = report.as_object_mut().ok_or("Expected a benchmark report object")?;
         fields.insert("ptyOutput".into(), trace);
+        fields.insert("outputWaitMode".into(), Value::String(crate::pty_output::wait_mode().into()));
         let payload = serde_json::to_vec(&report).map_err(|error| error.to_string())?;
         if payload.len() > 1024 * 1024 {
             return Err("Benchmark report exceeds 1 MiB".into());

@@ -11,6 +11,7 @@ mod hook_identity;
 mod hook_state;
 mod window_material;
 mod pty_output;
+mod output_wake;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
