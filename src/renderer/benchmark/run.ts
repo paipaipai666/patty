@@ -23,7 +23,7 @@ let sequence = 0
 async function command(pane: PaneProbe, prefix = '') {
   const probeId = ++sequence
   const suffix = `${probeId}_DONE`
-  const marker = { text: `PATTY_${suffix}`, receivedAt: 0, parsedAt: 0 }
+  const marker = { text: `PATTY_${suffix}`, tail: '', receivedAt: 0, parsedAt: 0 }
   pane.marker = marker
   const start = performance.now()
   try {

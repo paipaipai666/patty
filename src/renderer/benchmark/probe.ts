@@ -27,7 +27,7 @@ export class PaneProbe {
   chunks = 0
   queuedBytes = 0
   peakQueuedBytes = 0
-  marker: { text: string; receivedAt: number; parsedAt: number } | null = null
+  marker: { text: string; tail: string; receivedAt: number; parsedAt: number } | null = null
   private disposed = false
   private readonly subscription
 
@@ -55,7 +55,15 @@ export class PaneProbe {
     this.peakQueuedBytes = Math.max(this.peakQueuedBytes, this.queuedBytes)
     peakQueuedBytes = Math.max(peakQueuedBytes, queuedBytes)
     const marker = this.marker
-    if (marker && marker.receivedAt === 0 && data.includes(marker.text)) marker.receivedAt = now
+    if (marker && marker.receivedAt === 0) {
+      const carryLength = marker.text.length - 1
+      if (data.includes(marker.text) || (marker.tail + data.slice(0, carryLength)).includes(marker.text)) {
+        marker.receivedAt = now
+        marker.tail = ''
+      } else {
+        marker.tail = (marker.tail + data.slice(-carryLength)).slice(-carryLength)
+      }
+    }
     return () => {
       if (this.disposed) return
       this.parsedBytes += bytes

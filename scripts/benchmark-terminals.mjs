@@ -84,6 +84,39 @@ function transportSummary(timeline, phase) {
   }
 }
 
+function latencyBreakdown(commands, { readMarkers, markers }) {
+  if (!readMarkers) return null
+  const measurements = []
+  let missing = 0
+  let outOfOrder = 0
+  for (const { probeId, sentAt, inputToReceiptMs, inputToBufferMs } of commands) {
+    const readAt = readMarkers[probeId]
+    const dispatchAt = markers[probeId]
+    if (![sentAt, readAt, dispatchAt, inputToReceiptMs, inputToBufferMs].every(Number.isFinite)) {
+      missing++
+      continue
+    }
+    const durations = {
+      inputToReadMs: readAt - sentAt,
+      readToDispatchMs: dispatchAt - readAt,
+      dispatchToReceiptMs: sentAt + inputToReceiptMs - dispatchAt,
+      receiptToBufferMs: inputToBufferMs - inputToReceiptMs,
+    }
+    if (Object.values(durations).some((duration) => duration < -1)) {
+      outOfOrder++
+      continue
+    }
+    measurements.push(durations)
+  }
+  return {
+    samples: measurements.length, missing, outOfOrder,
+    inputToReadMs: quantiles(measurements.map((sample) => sample.inputToReadMs)),
+    readToDispatchMs: quantiles(measurements.map((sample) => sample.readToDispatchMs)),
+    dispatchToReceiptMs: quantiles(measurements.map((sample) => sample.dispatchToReceiptMs)),
+    receiptToBufferMs: quantiles(measurements.map((sample) => sample.receiptToBufferMs)),
+  }
+}
+
 function summarize(report, samples, appStartedAt) {
   const timeline = transportTimeline(report)
   const markerAt = (probeId) => report.ptyOutput.markers[probeId]
@@ -106,6 +139,7 @@ function summarize(report, samples, appStartedAt) {
         bytesPerSecond: phase.parsedBytes * 1000 / (phase.endedAt - phase.startedAt),
         inputToReceiptMs: commands && quantiles(commands.map((sample) => sample.inputToReceiptMs)),
         inputToBufferMs: commands && quantiles(commands.map((sample) => sample.inputToBufferMs)),
+        latencyBreakdown: commands && latencyBreakdown(commands, report.ptyOutput),
         inputToPtyDispatchMs: joined ? quantiles(joined.map(({ sentAt, probeId }) => markerAt(probeId) - sentAt)) : null,
         ptyDispatchToReceiptMs: joined ? quantiles(joined.map(({ sentAt, probeId, inputToReceiptMs }) =>
           sentAt + inputToReceiptMs - markerAt(probeId))) : null,

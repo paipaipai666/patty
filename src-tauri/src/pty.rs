@@ -514,7 +514,7 @@ fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Vec<u8>>, mut reader: B
             Ok(0) => break,
             Ok(n) => {
                 #[cfg(feature = "e2e")]
-                crate::benchmark::record_read(n);
+                shared.output.trace_read(&buf[..n]);
                 let text = decode(&mut carry, &buf[..n]);
                 if text.is_empty() {
                     continue;

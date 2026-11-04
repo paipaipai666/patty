@@ -98,6 +98,8 @@ struct HubState {
 
 struct Delivery {
     id: String,
+    #[cfg(feature = "e2e")]
+    link_key: u64,
     send: SendMessage,
     message: Message,
 }
@@ -180,6 +182,8 @@ impl HubState {
             };
             let delivery = Delivery {
                 id: link.id.clone(),
+                #[cfg(feature = "e2e")]
+                link_key: link.credit,
                 send: link.send.clone(),
                 message,
             };
@@ -239,7 +243,7 @@ impl Hub {
             let delivered = (delivery.send)(&delivery.message);
             #[cfg(feature = "e2e")]
             if let (Some(probe), Message::Data { text, .. }) = (probe, &delivery.message) {
-                crate::benchmark::record_dispatch(probe, text);
+                crate::benchmark::record_dispatch(delivery.link_key, probe, text);
             }
             if !delivered {
                 disconnect(&delivery.id);
@@ -252,6 +256,11 @@ impl Hub {
 pub(crate) struct Output(u64);
 
 impl Output {
+    #[cfg(feature = "e2e")]
+    pub(crate) fn trace_read(self, bytes: &[u8]) {
+        crate::benchmark::record_read(self.0, bytes);
+    }
+
     pub(crate) fn new() -> Self {
         let mut state = HUB.state.lock().unwrap();
         let key = state.key();
