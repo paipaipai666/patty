@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { launchApp, resolveExe } from '../e2e/harness.mjs'
 
-const output = resolve('output/terminal-benchmark/transport')
+const output = resolve(process.env.PATTY_BENCHMARK_OUTPUT || 'output/terminal-benchmark/transport')
 const counts = process.argv.slice(2).length ? process.argv.slice(2).map(Number) : [1, 10, 30]
 if (process.platform !== 'win32' || counts.some((count) => ![1, 10, 30].includes(count))) {
   throw new Error('Run on Windows with no arguments or a list of session counts: 1, 10, 30')
