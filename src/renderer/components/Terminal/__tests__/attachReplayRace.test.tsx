@@ -159,11 +159,12 @@ describe('TerminalPane local output', () => {
       await vi.advanceTimersByTimeAsync(50)
     })
     const term = TerminalMock.instances.at(-1)!
-    expect(term.writes.join('')).toBe('PREHEAT-BANNER\r\nATTACH-WINDOW-OUTPUT\r\n')
+    expect(term.writes).toEqual(['PREHEAT-BANNER\r\n'])
     act(() => receive({ kind: 'data', sequence: 3, text: '\x1b]1337;File=' }))
     expect(acknowledge).not.toHaveBeenCalled()
     act(() => term.consume.shift()?.())
     expect(acknowledge.mock.calls).toEqual([[1]])
+    expect(term.writes).toEqual(['PREHEAT-BANNER\r\n', 'ATTACH-WINDOW-OUTPUT\r\n'])
     act(() => term.consume.shift()?.())
     expect(acknowledge.mock.calls).toEqual([[1], [2]])
     act(() => term.consume.shift()?.())

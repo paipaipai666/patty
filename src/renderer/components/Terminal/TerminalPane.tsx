@@ -31,6 +31,7 @@ import { PaneProbe, panes as benchmarkPanes } from '../../benchmark/probe'
 import type { PtyResult } from '../../api'
 import { markTerminalOpen } from '../../utils/shellReadiness'
 import { createPtyResizeQueue } from './ptyResizeQueue'
+import { terminalOutputScheduler } from './outputScheduler'
 
 interface TerminalPaneProps {
   session: TerminalSession
@@ -97,6 +98,7 @@ function startAtlasGuard(addonRef: RefObject<WebglAddon | null>): IntervalHandle
 export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const visibleRef = useRef(visible)
   visibleRef.current = visible
+  const outputLaneRef = useRef<ReturnType<typeof terminalOutputScheduler.open> | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -665,7 +667,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         else pending.push(action)
       }
       const writeLive = (data: string, consumed?: () => void) => {
-        const parsed = probe?.receive(data)
         if (!firstDataReceivedRef.current) {
           firstDataReceivedRef.current = true
           setHasData(true)
@@ -674,7 +675,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         const extracted = iipExtractRef.current!(data)
         const placeAll = () => {
           if (!current()) return
-          parsed?.()
           for (const image of extracted.images) placeIipImage(term, image)
           consumed?.()
         }
@@ -716,7 +716,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       const failed = (error: unknown) => ready({ success: false, pid: 0, error: String(error) })
       if (live.ssh) {
         const target = live.ssh
-        const dataSub = window.terminalAPI.onData(session.id, (data) => deliver(() => writeLive(data)))
+        const dataSub = window.terminalAPI.onData(session.id, (data) => {
+          const parsed = probe?.receive(data)
+          deliver(() => writeLive(data, parsed))
+        })
         const exitSub = window.terminalAPI.onExit(session.id, () => deliver(finish))
         cleanupDataRef.current = dataSub.unsubscribe
         cleanupExitRef.current = exitSub.unsubscribe
@@ -724,11 +727,24 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
           if (current()) ready(await window.terminalAPI.createSshSession(session.id, createdSize.cols, createdSize.rows, target))
         }).catch(failed)
       } else {
+        const lane = terminalOutputScheduler.open(visibleRef.current)
+        outputLaneRef.current = lane
         const attachment = window.terminalAPI.openLocalSession({ id: session.id, cwd: live.cwd, shell: live.shell, ...createdSize }, (message) => {
-          if (message.kind === 'data') deliver(() => writeLive(message.text, () => attachment.acknowledge(message.sequence)))
+          if (message.kind === 'data') {
+            const parsed = probe?.receive(message.text)
+            deliver(() => lane.push((done) => writeLive(message.text, () => {
+              parsed?.()
+              attachment.acknowledge(message.sequence)
+              done()
+            })))
+          }
           else deliver(finish)
         })
-        cleanupDataRef.current = attachment.dispose
+        cleanupDataRef.current = () => {
+          lane.dispose()
+          if (outputLaneRef.current === lane) outputLaneRef.current = null
+          attachment.dispose()
+        }
         cleanupExitRef.current = null
         void attachment.ready.then(ready, failed)
       }
@@ -784,6 +800,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     const term = termRef.current
     if (!term) return
 
+    outputLaneRef.current?.setVisible(visible)
     if (visible) {
       if (!webglAddonRef.current && !canvasAddonRef.current) {
         try {
