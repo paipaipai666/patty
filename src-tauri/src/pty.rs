@@ -1616,6 +1616,78 @@ mod tests {
     }
 
     #[test]
+    fn shell_trace_preserves_real_commands_native_results_and_restores_after_failure() {
+        for shell in ["powershell", "pwsh"] {
+            let session = EnsureTestSession::new(&format!("shell-trace-{shell}"));
+            let created = create(None, &session.id, session.cwd.to_str(), Some(shell), Some(160), Some(30));
+            assert_eq!(created["success"], true);
+            let wait = |after: u64| {
+                let deadline = std::time::Instant::now() + Duration::from_secs(25);
+                loop {
+                    let state = serde_json::to_value(crate::command_state::snapshot(&session.id)).unwrap();
+                    if state["revision"].as_u64().unwrap_or(0) > after && state["status"] == "finished" { break state; }
+                    assert!(std::time::Instant::now() < deadline, "{shell}: command did not finish: {state}");
+                    thread::sleep(Duration::from_millis(20));
+                }
+            };
+            let deadline = std::time::Instant::now() + Duration::from_secs(20);
+            while serde_json::to_value(crate::command_state::snapshot(&session.id)).unwrap()["status"] != "ready" {
+                assert!(std::time::Instant::now() < deadline);
+                thread::sleep(Duration::from_millis(20));
+            }
+            struct TraceFiles(Vec<PathBuf>);
+            impl Drop for TraceFiles {
+                fn drop(&mut self) { for file in &self.0 { let _ = std::fs::remove_file(file); } }
+            }
+            let files = TraceFiles(vec![session.marker.with_extension("ps1"), session.marker.with_extension("json")]);
+            std::fs::write(&files.0[0], include_str!("../../src/renderer/benchmark/shellTrace.ps1")).unwrap();
+            let script = files.0[0].to_string_lossy().replace('\'', "''");
+            let output = files.0[1].to_string_lossy().replace('\'', "''");
+            let marker = session.marker.to_string_lossy().replace('\'', "''");
+            write(&session.id, &format!("$global:traceEditor=$global:__PattyShellState.OriginalReadLine; $global:traceClassifier=(Get-Item Function:\\__PattyResultKind).ScriptBlock; . '{script}'; Invoke-PattyBenchmarkShellTrace Install; Invoke-PattyBenchmarkShellTrace Begin\r"));
+            let mut state = wait(0);
+            assert_eq!(state["exitCode"], 0, "{shell}: trace install failed: {state}");
+            for id in [101, 102] {
+                write(&session.id, &format!("__PattyBenchmarkStamp {id} 0;__PattyBenchmarkStamp {id} 1;Write-Output ('PATTY_'+'{id}_DONE');__PattyBenchmarkStamp {id} 2;Add-Content -LiteralPath '{marker}' -Value '{id}'\r"));
+                state = wait(state["revision"].as_u64().unwrap());
+                assert_eq!(state["exitCode"], 0);
+            }
+            for _ in 0..2 {
+                write(&session.id, "cmd.exe /c exit 7\r");
+                state = wait(state["revision"].as_u64().unwrap());
+                assert_eq!(state["exitCode"], 7, "{shell}: native result changed");
+            }
+            write(&session.id, "Write-Error 'expected trace test failure'\r");
+            state = wait(state["revision"].as_u64().unwrap());
+            assert_eq!(state["exitCode"], 1);
+            write(&session.id, &format!("Invoke-PattyBenchmarkShellTrace Export -Name 'test' -ExpectedCount 2 -Path '{output}'\r"));
+            state = wait(state["revision"].as_u64().unwrap());
+            assert_eq!(state["exitCode"], 0, "{shell}: trace export failed: {state}");
+            let batches: Value = serde_json::from_str(&std::fs::read_to_string(&files.0[1]).unwrap()).unwrap();
+            assert_eq!(batches.as_array().unwrap().len(), 1);
+            assert_eq!(batches[0]["name"], "test");
+            assert!(batches[0]["frequency"].as_f64().unwrap() > 0.0);
+            let rows = batches[0]["rows"].as_array().unwrap();
+            assert_eq!(rows.len(), 2);
+            for (index, row) in rows.iter().enumerate() {
+                let values = row.as_array().unwrap();
+                assert_eq!(values.len(), 7);
+                assert_eq!(values[0].as_f64().unwrap(), 101.0 + index as f64);
+                let times: Vec<f64> = values[1..].iter().map(|value| value.as_f64().unwrap()).collect();
+                assert!(times[0] > 0.0);
+                assert!(times.windows(2).all(|pair| pair[0] <= pair[1]), "{times:?}");
+            }
+            write(&session.id, &format!("try {{ Invoke-PattyBenchmarkShellTrace Export -Name 'invalid' -ExpectedCount 999 -Path '{output}' }} finally {{ Invoke-PattyBenchmarkShellTrace Restore }}\r"));
+            state = wait(state["revision"].as_u64().unwrap());
+            assert_eq!(state["exitCode"], 1, "a failed diagnostic must propagate its error");
+            write(&session.id, &format!("if ((Test-Path Variable:global:__PattyBenchmarkShellTrace) -or -not [object]::ReferenceEquals($global:traceEditor,$global:__PattyShellState.OriginalReadLine) -or -not [object]::ReferenceEquals($global:traceClassifier,(Get-Item Function:\\__PattyResultKind).ScriptBlock)) {{ throw 'trace retained' }}; Add-Content -LiteralPath '{marker}' -Value 'restored'\r"));
+            state = wait(state["revision"].as_u64().unwrap());
+            assert_eq!(state["exitCode"], 0, "{shell}: original functions were not restored");
+            assert_eq!(std::fs::read_to_string(&session.marker).unwrap().replace("\r\n", "\n"), "101\n102\nrestored\n");
+        }
+    }
+
+    #[test]
     fn spawn_echo_and_exit_cleanup() {
 
         let id = format!("test-{}", std::process::id());
