@@ -1,6 +1,7 @@
-param([switch]$ManualClick)
+param([switch]$ManualClick, [switch]$ProgramStatus)
 
 $ErrorActionPreference = 'Stop'
+if ($ManualClick -and $ProgramStatus) { throw 'Choose ManualClick or ProgramStatus' }
 $OutputEncoding = New-Object Text.UTF8Encoding $false
 [Console]::OutputEncoding = $OutputEncoding
 $repository = Split-Path $PSScriptRoot
@@ -13,6 +14,7 @@ try {
     if (-not [IO.File]::Exists($binary)) { throw ('Dedicated integration build missing: '+$binary) }
     $env:PATTY_EXE = $binary
     $env:PATTY_NOTIFICATION_MANUAL_CLICK = if($ManualClick){'1'}else{'0'}
+    $env:PATTY_VERIFY_PROGRAM_STATUS = if($ProgramStatus){'1'}else{'0'}
     & node.exe --test (Join-Path $PSScriptRoot 'notification-callback-output.test.mjs')
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     & node.exe (Join-Path $PSScriptRoot 'notification-activation.test.mjs')

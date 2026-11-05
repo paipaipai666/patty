@@ -4,10 +4,13 @@ import { useWorkspaceStore } from '../store/workspaceStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { selectSession, closeSession } from '../store/sessionLifecycle'
 import { focusActiveTerminal } from '../commands/useApplicationKeyboard'
+import { noticeSessions } from '../components/Sidebar/sessionQuery'
 
+type ProgramSample = 'blocked' | 'working' | 'done' | 'error' | 'clear' | 'prompt' | 'invalid' | 'reset'
 type Request = { sequence: number } & (
-  | { action: 'snapshot' | 'openSettings' | 'cleanup' | 'closeApp' }
+  | { action: 'snapshot' | 'openSettings' | 'openDetails' | 'nextAttention' | 'closePanel' | 'minimize' | 'cleanup' | 'closeApp' }
   | { action: 'select' | 'notify' | 'remove'; sessionId: string }
+  | { action: 'program'; sessionId: string; report: ProgramSample }
 )
 
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
@@ -42,14 +45,54 @@ function snapshot() {
     actualFocusPaneId: document.activeElement?.closest('[data-pane-id]')?.getAttribute('data-pane-id') ?? null,
     terminalFocused: document.activeElement?.classList.contains('xterm-helper-textarea') === true,
     settingsOpen: useSettingsStore.getState().settingsOpen,
+    programs: sessions.programStates,
+    notices: noticeSessions(sessions.sessions, sessions.agentStates, 'all', sessions.programStates).map(session => session.id),
     text: document.body.innerText.slice(-4000),
     trace,
   }
 }
 
+const programSamples: Record<ProgramSample, string> = {
+  blocked: "]7501;state=blocked:kind=permission:app=deploy:title=RGVwbG95IHByZXZpZXc=:msg=QXBwcm92ZSBkZXBsb3ltZW50:progress=60",
+  working: ']7501;state=working:app=deploy:progress=70',
+  done: ']7501;state=done:app=deploy',
+  error: ']7501;state=error:app=deploy',
+  clear: ']7501;state=clear',
+  prompt: ']133;A',
+  invalid: ']7501;state=blocked:msg=Cg==',
+  reset: 'c',
+}
+
+async function paletteCommand(label: string) {
+  document.querySelector<HTMLButtonElement>('[aria-label="Open command palette"]')?.click()
+  await until('command palette', () => Boolean(document.querySelector('[role="combobox"]')))
+  const input = document.querySelector<HTMLInputElement>('[role="combobox"]')
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  if (!input || !setter) throw new Error('Missing command palette input')
+  setter.call(input, label)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await until('matching command', () => Array.from(document.querySelectorAll('[role="option"]')).some(option => option.textContent?.includes(label)))
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+}
+
 async function execute(request: Request) {
   switch (request.action) {
     case 'snapshot': return {}
+    case 'program': {
+      if (!['target', 'sibling', 'other'].includes(request.sessionId)) throw new Error('Not an isolated fixture terminal')
+      await until('program fixture process', () => (useSessionStore.getState().sessions.find(session => session.id === request.sessionId)?.pid ?? 0) > 0)
+      const samples = [programSamples[request.report]]
+      if (request.report === 'invalid') samples.push(']7501;state=idle:id=validation')
+      const script = samples.map(output => `[Console]::Write([string][char]27+'${output}'+[char]7)`).join('; ')
+      window.terminalAPI.write(request.sessionId, `powershell.exe -NoLogo -NoProfile -Command "${script}"\r`)
+      return {}
+    }
+    case 'openDetails': await paletteCommand('Show session details'); return {}
+    case 'nextAttention': await paletteCommand('Next session needing attention'); return {}
+    case 'closePanel':
+      document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      return {}
+    case 'minimize': window.terminalAPI.windowMinimize(); return {}
     case 'select':
       selectSession(request.sessionId)
       await until('selected terminal', () => {

@@ -2,7 +2,7 @@
 
 Approved: 2026-11-04. Updated: 2026-11-05.
 
-The user approved separate program records with Hook priority. Native Windows notification activation, the first prerequisite, is complete and passed actual notification clicking and warm/cold application activation on 2026-11-05. OSC 7501 implementation is in progress.
+The user approved separate program records with Hook priority. Native Windows notification activation, the first prerequisite, is complete and passed actual notification clicking and warm/cold application activation on 2026-11-05. OSC 7501 implementation and the dedicated Windows application verification are complete.
 
 ## Product requirement
 
@@ -49,4 +49,6 @@ Capability replies contain only the fixed protocol capability string. Each run h
 
 Real ConPTY verification covers reports, reattachment, completed results after process exit, and explicit removal. A local reader test preserves output byte-for-byte while 2,000 queries queue only one reply. A real localhost SSH connection verifies split reports, standard error, capability replies without a reply loop, and volatile-state cleanup on channel close. The full backend run passed 299 tests, with one opt-in notification-history test ignored and the five previously known color-baseline failures excluded.
 
-Frontend state and details, plus Hook-first attention and Windows notification integration, remain to implement. The parser corpus and the transport/ownership tests are independently rerunnable verification units.
+Frontend state, details, previews, attention selection, and Windows notifications are implemented. Hook presence takes priority even for idle and unknown states. Initial snapshots and revealing an old hidden report do not replay desktop notifications. Runtime activity and read acknowledgment stay independent.
+
+The dedicated Windows build passed real output, sidebar attention, keyboard navigation into the target split, details display, malformed-report rejection, prompt cleanup, full reset, Windows delivery, and dismissal. Its repeatable driver is `e2e/check-native-notifications.ps1 -ProgramStatus`. The first run reused a session inside its notification cooldown; the corrected driver uses an independent session without weakening rate limits. See [program status](terminal-program-status.md) for the final behavior and verification scope.

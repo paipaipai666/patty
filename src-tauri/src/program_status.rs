@@ -252,9 +252,6 @@ impl Tracker {
         changed
     }
 
-    pub fn revision(&self) -> u64 {
-        self.revision
-    }
     pub fn record_count(&self) -> usize {
         self.records.len()
     }

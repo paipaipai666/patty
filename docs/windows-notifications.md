@@ -1,12 +1,12 @@
 # Windows notifications
 
-Patty sends a Windows notification when a live local agent asks for approval, asks for input, or reports an error while the application is in the background. Initial snapshots and completed work do not trigger notifications.
+Patty sends a Windows notification when an agent or a cooperating OSC 7501 program asks for approval, asks for input, or reports an error while the application is in the background. Initial snapshots and completed work do not trigger notifications. Authenticated Hook state takes priority over program reports.
 
 The Notifications settings page has an independent desktop switch and a test button. Tool switches still control CLI integration separately. Notifications contain the session title and attention type, without command contents or output.
 
 ## Delivery and activation
 
-The backend checks the current agent revision, state, live session, saved preference, and native window focus before delivery. Each session has a 30-second cooldown; the application allows at most five notifications per minute. A session's notification replaces its previous notification. Resuming work or deleting the session removes its notification.
+The backend checks the current source revision, state, saved preference, and native window focus before delivery. Agent requests require their live local session. Program requests require their current run identity and no active Hook record; retained errors can be delivered after process exit. Each session has a 30-second cooldown; the application allows at most five notifications per minute. Hook and program sources have independent revision sequences and share these limits. A session's notification replaces its previous notification. Resuming work, clearing a report, a Hook takeover, or deleting the session removes its notification. Delivery and dismissal are serialized per pane.
 
 WinRT delivers a foreground-activated toast. Windows calls Patty's INotificationActivationCallback through its registered local COM class factory. The callback validates the notification identity and bounded session arguments before queuing an application or session target. It does not execute a URI or commands. A pending activation survives frontend initialization and is consumed once. Session selection uses the existing workspace and pane focus logic, and waits for the target terminal's textarea before focusing it.
 
@@ -35,3 +35,5 @@ powershell.exe -NoProfile -File "D:\code\terminal\terminal-sidebar\e2e\check-nat
 ```
 
 The tool execution path returned different discovery results from the user's desktop. The independent .NET probe's cold-start failure is not evidence of a failure in Patty; the actual application was verified separately. The full evidence and corrected conclusions are in [native verification](native-notification-verification.md). macOS and Linux desktop delivery are not implemented.
+
+The dedicated application also passed [OSC 7501 program delivery and dismissal](terminal-program-status.md), using actual program output and the existing native notification target. That check is available through the same wrapper with `-ProgramStatus`; warm and cold activation remain covered by the separate notification verification.

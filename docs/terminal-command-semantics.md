@@ -10,7 +10,7 @@ For a resolved native application, the result uses its LASTEXITCODE, including r
 
 The prompt captures command status before cursor repair and prompt rendering can overwrite it. The original prompt still receives its success or failure status. Input text, command arguments, and command output are not recorded in this metadata.
 
-CMD, WSL, Git Bash, SSH, and interactive nested shells have no new integration in this change. Without verified markers the command state is Not reported. OSC 7501 program status is a separate pending capability.
+CMD, WSL, Git Bash, SSH, and interactive nested shells have no new integration in this change. Without verified markers the command state is Not reported. The separate [OSC 7501 program status](terminal-program-status.md) capability accepts explicit program reports on local and SSH output.
 
 ## State ownership
 

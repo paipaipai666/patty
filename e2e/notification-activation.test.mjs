@@ -7,6 +7,8 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { resolveExe, waitForProcessDeath } from './harness.mjs'
 
 const exe = resolve(resolveExe('patty-integration-test.exe'))
+const programMode = process.env.PATTY_VERIFY_PROGRAM_STATUS === '1'
+const output = resolve(programMode ? 'output/program-status' : 'output/notification-activation')
 const root = mkdtempSync(join(tmpdir(), 'patty-e2e-notification-'))
 const data = join(root, 'Patty')
 mkdirSync(data)
@@ -115,6 +117,50 @@ function registeredCallback() {
   `], { windowsHide: true, encoding: 'utf8', env: { ...process.env, PATTY_TEST_CLSID: lastReport.callbackClassId } }))
 }
 
+async function verifyPrograms() {
+  await command('select', { sessionId: 'target' })
+  await command('select', { sessionId: 'other' })
+  const sample = report => command('program', { sessionId: 'target', report })
+  const current = report => report.programs.target?.program
+  await sample('blocked')
+  const blocked = await until('real program output reaches sidebar attention', report => current(report)?.state === 'blocked' && report.notices.includes('target'))
+  assert.equal(current(blocked).title, 'Deploy preview')
+  assert.equal(current(blocked).message, 'Approve deployment')
+  assert.equal(current(blocked).progress, 60)
+  await command('nextAttention')
+  const selected = await until('palette keyboard command selects the target split', report => report.activeWorkspaceId === 'target-workspace'
+    && report.focusedPaneId === 'target-pane' && report.actualFocusPaneId === 'target-pane' && report.terminalFocused)
+  assert.equal(selected.programs.target.activity.unread, false)
+  await command('openDetails')
+  await until('real session details show plain program metadata', report => report.text.includes('Deploy preview') && report.text.includes('Approve deployment') && report.text.includes('60%'))
+  await command('closePanel')
+  await sample('working')
+  const working = await until('resumed program leaves attention', report => current(report)?.state === 'working' && !report.notices.includes('target'))
+  await sample('invalid')
+  const invalid = await until('invalid report is rejected before the following valid record', report => report.programs.target.recordCount === 2)
+  assert.equal(current(invalid).revision, current(working).revision)
+  assert.equal(current(invalid).state, 'working')
+  await sample('done')
+  await until('completed program has an unread result', report => current(report)?.state === 'done' && report.programs.target.activity.unread)
+  await sample('prompt')
+  await until('prompt preserves the finished result', report => current(report)?.state === 'done')
+  await sample('working')
+  await until('next program starts', report => current(report)?.state === 'working')
+  await sample('prompt')
+  await until('prompt clears volatile work', report => current(report)?.id === 'validation' && current(report)?.state === 'idle')
+  await sample('done')
+  await until('new completed report', report => current(report)?.state === 'done')
+  await sample('reset')
+  await until('full terminal reset clears reports', report => current(report) === null)
+  await command('minimize')
+  await until('native application is in the background', report => !report.nativeFocused)
+  await command('program', { sessionId: 'sibling', report: 'error' })
+  await until('program error is delivered to Windows with its terminal target', report => report.programs.sibling?.program?.state === 'error'
+    && /patty-e2e:\/\/session\/sibling/.test(report.notificationXml ?? '') && report.notificationXml.includes('Reported an error'))
+  await command('program', { sessionId: 'sibling', report: 'working' })
+  await until('resuming dismisses the Windows notification', report => report.programs.sibling?.program?.state === 'working' && report.notificationXml === null)
+}
+
 try {
   const initial = await publish('snapshot')
   app = spawn(exe, [], { windowsHide: true, env: {
@@ -126,6 +172,16 @@ try {
   pids.add(app.pid)
   const boot = await reply(initial)
   assert.equal(boot.activeSessionId, 'other')
+  if (programMode) {
+    await verifyPrograms()
+    await command('cleanup')
+    await command('closeApp')
+    await waitForProcessDeath(boot.nativeProcessId, 10_000)
+    pids.delete(boot.nativeProcessId)
+    mkdirSync(output, { recursive: true })
+    writeFileSync(join(output, 'report.json'), JSON.stringify({ status: 'ok', observations }, null, 2))
+    console.log('PASS: OSC 7501 real output, sidebar attention, keyboard navigation, details, cleanup and Windows delivery')
+  } else {
   const notification = await command('notify', { sessionId: 'target' })
   assert.equal(notification.notificationSent, true)
   assert.ok(notification.protocolHandler, JSON.stringify(notification))
@@ -171,13 +227,12 @@ try {
   await command('closeApp')
   await waitForProcessDeath(cold.nativeProcessId, 10_000)
   pids.delete(cold.nativeProcessId)
-  const output = resolve('output/notification-activation')
   mkdirSync(output, { recursive: true })
   writeFileSync(join(output, 'report.json'), JSON.stringify({ status: 'ok', manualClick: process.env.PATTY_NOTIFICATION_MANUAL_CLICK === '1', observations }, null, 2))
   console.log('PASS: Windows notification delivery, system COM warm/cold activation, workspace/split focus, rejected and missing targets')
+  }
 } catch (error) {
   failed = true
-  const output = resolve('output/notification-activation')
   mkdirSync(output, { recursive: true })
   writeFileSync(join(output, 'report.json'), JSON.stringify({ status: 'error', error: String(error), lastReport, observations }, null, 2))
   console.error(error)

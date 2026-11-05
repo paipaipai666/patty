@@ -6,6 +6,19 @@ use tauri::{AppHandle, Manager};
 const IDENTIFIER: &str = "com.patty.integration-test";
 
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProgramSample {
+    Blocked,
+    Working,
+    Done,
+    Error,
+    Clear,
+    Prompt,
+    Invalid,
+    Reset,
+}
+
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Action {
     Snapshot,
@@ -22,6 +35,15 @@ pub enum Action {
         session_id: String,
     },
     OpenSettings,
+    OpenDetails,
+    NextAttention,
+    ClosePanel,
+    Minimize,
+    Program {
+        #[serde(rename = "sessionId")]
+        session_id: String,
+        report: ProgramSample,
+    },
     Cleanup,
     CloseApp,
 }
@@ -221,5 +243,24 @@ mod tests {
         assert!(request(r#"{"sequence":3,"action":"eval","code":"exit"}"#.as_bytes()).is_err());
         assert!(request(r#"{"sequence":0,"action":"snapshot"}"#.as_bytes()).is_err());
         assert!(request(&vec![b' '; 65_537]).is_err());
+    }
+
+    #[test]
+    fn program_verification_only_accepts_named_output_samples() {
+        for report in [
+            "blocked", "working", "done", "error", "clear", "prompt", "invalid", "reset",
+        ] {
+            let value = serde_json::json!({ "sequence": 1, "action": "program", "sessionId": "target", "report": report });
+            assert!(
+                request(&serde_json::to_vec(&value).unwrap()).is_ok(),
+                "{report}"
+            );
+        }
+        for value in [
+            serde_json::json!({ "sequence": 1, "action": "program", "sessionId": "target", "report": "custom" }),
+            serde_json::json!({ "sequence": 1, "action": "program", "sessionId": "target", "report": "blocked", "command": "exit" }),
+        ] {
+            assert!(request(&serde_json::to_vec(&value).unwrap()).is_err());
+        }
     }
 }
