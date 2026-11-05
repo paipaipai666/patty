@@ -3,7 +3,6 @@ import { createTerminal, selectSession } from '../store/sessionLifecycle'
 import { useSessionStore } from '../store/sessionStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { panes, queueSnapshot, receiptBuckets, resetPeak, type PaneProbe } from './probe'
-import readLineControl from './readLineControl.ps1?raw'
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 const clock = () => performance.timeOrigin + performance.now()
@@ -21,14 +20,21 @@ async function until<T>(label: string, sample: () => T | undefined, timeout = 20
 
 let sequence = 0
 
-async function command(pane: PaneProbe, prefix = '') {
+type ProbeMode = 'normal' | 'shell-trace'
+type TraceOrder = 'record-first' | 'control-first'
+
+async function command(pane: PaneProbe, prefix = '', mode: ProbeMode = 'normal') {
   const probeId = ++sequence
   const suffix = `${probeId}_DONE`
   const marker = { text: `PATTY_${suffix}`, tail: '', receivedAt: 0, parsedAt: 0 }
   pane.marker = marker
   const start = performance.now()
   try {
-    pane.terminal.input(`${prefix}Write-Output ('PATTY_'+'${suffix}')\r`, true)
+    const output = `Write-Output ('PATTY_'+'${suffix}')`
+    const text = mode === 'shell-trace'
+      ? `__PattyBenchmarkStamp ${probeId} 0;__PattyBenchmarkStamp ${probeId} 1;${output};__PattyBenchmarkStamp ${probeId} 2`
+      : prefix + output
+    pane.terminal.input(`${text}\r`, true)
     await until(marker.text, () => marker.parsedAt || undefined, 45_000)
     return {
       probeId,
@@ -78,9 +84,8 @@ async function phase<T>(name: string, action: () => Promise<T>) {
 const outputLine = "(('x'*68)+\"`r`n\")"
 const paced = `for($i=0;$i -lt 25;$i++){[Console]::Write(${outputLine}*64);Start-Sleep -Milliseconds 150};`
 const burst = `[Console]::Write(${outputLine}*2048);`
-const echoControl = String.raw`[Console]::WriteLine('PATTY_ECHO_READY');while($true){$line=[Console]::ReadLine();if($null -eq $line -or $line -eq '__PATTY_ECHO_STOP__'){break};$m=[regex]::Match($line,'PATTY_''\+''([0-9]+)_DONE');if($m.Success){[Console]::WriteLine('PATTY_'+$m.Groups[1].Value+'_DONE')};}`
 
-async function measure(count: number) {
+async function measure(count: number, traceOrder: TraceOrder) {
   await until('session and settings restored', () =>
     useSessionStore.getState().loaded && useSettingsStore.getState().loaded ? true : undefined)
   if (useSessionStore.getState().sessions.length !== 0) throw new Error('Expected empty benchmark workbench')
@@ -108,19 +113,19 @@ async function measure(count: number) {
   if (!foreground || panes.size !== count) throw new Error(`Expected ${count} mounted terminals`)
   const background = [...panes.entries()].filter(([id]) => id !== foregroundId).map(([, pane]) => pane)
 
-  const inputSamples = async (prefix = '') => {
+  const inputSamples = async (prefix = '', mode: ProbeMode = 'normal') => {
     const samples = []
     for (let index = 0; index < 20; index++) {
-      samples.push(await command(foreground, prefix))
+      samples.push(await command(foreground, prefix, mode))
       await delay(90)
     }
     return samples
   }
 
-  const backgroundSamples = async (name: string, prefix = '') => {
+  const backgroundSamples = async (name: string, prefix = '', mode: ProbeMode = 'normal') => {
     let backgroundCommandMs: number[] = []
     const result = await phase(name, async () => {
-      const [input, completed] = await Promise.all([inputSamples(prefix), Promise.all(background.map((pane) => command(pane, paced)))])
+      const [input, completed] = await Promise.all([inputSamples(prefix, mode), Promise.all(background.map((pane) => command(pane, paced)))])
       backgroundCommandMs = completed.map((sample) => sample.inputToBufferMs)
       return input
     })
@@ -184,46 +189,38 @@ async function measure(count: number) {
     while (performance.now() < deadline) {
       const state = await window.terminalAPI.commandStateSnapshot(foregroundId)
       if (state && state.revision > (before?.revision ?? 0) && state.status === 'finished') {
-        if (state.exitCode !== 0) throw new Error('ReadLine control command failed')
+        if (state.exitCode !== 0) throw new Error('Shell tracing command failed')
         return
       }
       await delay(10)
     }
-    throw new Error('ReadLine control command did not finish')
+    throw new Error('Shell tracing command did not finish')
   }
-  const encodedControl = btoa(String.fromCharCode(...new TextEncoder().encode(readLineControl)))
-  await checkedControl(`. ([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedControl}')))); Invoke-PattyBenchmarkReadLineControl Install;`)
+  await checkedControl(". (Join-Path $env:PATTY_E2E_INTEGRATION_HOME 'benchmark-shell-trace.ps1'); Invoke-PattyBenchmarkShellTrace Install;")
   try {
-    await delay(200)
-    const increment = '$global:__PattyBenchmarkReadLineState.Commands++;'
-    phases.push(await phase('command-readline-input', () => inputSamples(increment)))
-    if (background.length) phases.push(await backgroundSamples('command-readline-background', increment))
-    await checkedControl(`Invoke-PattyBenchmarkReadLineControl Verify -ExpectedCount ${background.length ? 40 : 20};`)
+    const groups = traceOrder === 'record-first' ? ['recorded', 'disabled'] : ['disabled', 'recorded']
+    for (const group of groups) {
+      for (const load of background.length ? ['input', 'background'] : ['input']) {
+        const name = `shell-trace-${group}-${load}`
+        await checkedControl(`Invoke-PattyBenchmarkShellTrace ${group === 'recorded' ? 'Begin' : 'Pause'};`)
+        await delay(200)
+        phases.push(load === 'background'
+          ? await backgroundSamples(name, '', 'shell-trace')
+          : await phase(name, () => inputSamples('', 'shell-trace')))
+        if (group === 'recorded') {
+          await checkedControl(`Invoke-PattyBenchmarkShellTrace Export -Name '${name}' -ExpectedCount 20 -Path (Join-Path $env:PATTY_E2E_INTEGRATION_HOME 'benchmark-shell-traces.json');`)
+        }
+      }
+    }
   } finally {
-    await checkedControl('Invoke-PattyBenchmarkReadLineControl Restore;')
+    await checkedControl('Invoke-PattyBenchmarkShellTrace Restore;')
   }
   await delay(200)
-  phases.push(await phase('shell-readline-input-restored', () => inputSamples()))
-  if (background.length) phases.push(await backgroundSamples('shell-readline-background-restored'))
-  const echoReady = { text: 'PATTY_ECHO_READY', tail: '', receivedAt: 0, parsedAt: 0 }
-  foreground.marker = echoReady
-  foreground.terminal.input(`${echoControl}\r`, true)
-  try {
-    await until('console echo control ready', () => echoReady.parsedAt || undefined)
-    foreground.marker = null
-    await delay(200)
-    phases.push(await phase('console-readline-input', inputSamples))
-    if (background.length) phases.push(await backgroundSamples('console-readline-background'))
-  } finally {
-    foreground.marker = null
-    foreground.terminal.input('__PATTY_ECHO_STOP__\r', true)
-    await command(foreground)
-  }
-  await delay(200)
-  if (background.length) phases.push(await backgroundSamples('shell-restored-after-console'))
+  phases.push(await phase('input-restored', () => inputSamples()))
+  if (background.length) phases.push(await backgroundSamples('background-output-restored'))
   phases.push(await phase('settled', () => delay(7_000)))
   return {
-    status: 'ok', count, createStartedAt, startupMs: startup, phases,
+    status: 'ok', count, traceOrder, createStartedAt, startupMs: startup, phases,
     receiptBuckets: receiptBuckets(),
     webview: navigator.userAgent, devicePixelRatio: window.devicePixelRatio,
     viewport: { width: window.innerWidth, height: window.innerHeight },
@@ -231,7 +228,7 @@ async function measure(count: number) {
 }
 
 export async function run(): Promise<void> {
-  const count = await invoke<number>('benchmark_exchange', { report: null })
-  const report = await measure(count).catch((error: unknown) => ({ status: 'error', count, error: String(error) }))
+  const { count, traceOrder } = await invoke<{ count: number; traceOrder: TraceOrder }>('benchmark_exchange', { report: null })
+  const report = await measure(count, traceOrder).catch((error: unknown) => ({ status: 'error', count, error: String(error) }))
   await invoke('benchmark_exchange', { report })
 }

@@ -1,6 +1,7 @@
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::io::Read;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -209,15 +210,25 @@ pub(crate) fn request_count(data: &Path, integrations: Option<&Path>, text: &str
 }
 
 #[tauri::command]
-pub fn benchmark_exchange(report: Option<Value>) -> Result<u8, String> {
+pub fn benchmark_exchange(report: Option<Value>) -> Result<BenchmarkRequest, String> {
     let data = crate::store::data_dir();
     let count = load_count(&data)?;
+    let order = trace_order(std::env::var("PATTY_BENCHMARK_TRACE_ORDER").ok().as_deref())?;
     let trace = OUTPUT.get_or_init(Mutex::default);
+    let integrations = std::env::var_os("PATTY_E2E_INTEGRATION_HOME").ok_or("Missing isolated integrations directory")?;
+    if report.is_none() {
+        std::fs::create_dir_all(&integrations).map_err(|error| error.to_string())?;
+        std::fs::write(Path::new(&integrations).join("benchmark-shell-trace.ps1"), include_str!("../../src/renderer/benchmark/shellTrace.ps1"))
+            .map_err(|error| error.to_string())?;
+    }
     if let Some(mut report) = report {
         let trace = serde_json::to_value(&*trace.lock().unwrap()).map_err(|error| error.to_string())?;
         let fields = report.as_object_mut().ok_or("Expected a benchmark report object")?;
         fields.insert("ptyOutput".into(), trace);
         fields.insert("outputWaitMode".into(), Value::String(crate::pty_output::wait_mode().into()));
+        if let Some(batches) = read_shell_traces(&Path::new(&integrations).join("benchmark-shell-traces.json"))? {
+            fields.insert("shellTraces".into(), batches);
+        }
         let payload = serde_json::to_vec(&report).map_err(|error| error.to_string())?;
         if payload.len() > 1024 * 1024 {
             return Err("Benchmark report exceeds 1 MiB".into());
@@ -226,7 +237,7 @@ pub fn benchmark_exchange(report: Option<Value>) -> Result<u8, String> {
         std::fs::write(&temporary, payload).map_err(|error| error.to_string())?;
         std::fs::rename(temporary, data.join("benchmark-report.json")).map_err(|error| error.to_string())?;
     }
-    Ok(count)
+    Ok(BenchmarkRequest { count, trace_order: order })
 }
 
 pub(crate) fn load_count(data: &Path) -> Result<u8, String> {
@@ -236,9 +247,72 @@ pub(crate) fn load_count(data: &Path) -> Result<u8, String> {
     request_count(data, Some(Path::new(&integrations)), &request)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TraceOrder {
+    RecordFirst,
+    ControlFirst,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchmarkRequest {
+    count: u8,
+    trace_order: TraceOrder,
+}
+
+fn trace_order(value: Option<&str>) -> Result<TraceOrder, String> {
+    match value {
+        None | Some("record-first") => Ok(TraceOrder::RecordFirst),
+        Some("control-first") => Ok(TraceOrder::ControlFirst),
+        _ => Err("Benchmark trace order must be record-first or control-first".into()),
+    }
+}
+
+fn read_shell_traces(path: &Path) -> Result<Option<Value>, String> {
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+    let mut bytes = Vec::new();
+    file.take(65537).read_to_end(&mut bytes).map_err(|error| error.to_string())?;
+    if bytes.len() > 65536 { return Err("Shell trace exceeds 64 KiB".into()); }
+    let batches: Value = serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+    let list = batches.as_array().ok_or("Expected Shell trace batch array")?;
+    if list.is_empty() || list.len() > 4 { return Err("Expected one to four Shell trace batches".into()); }
+    Ok(Some(batches))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shell_trace_order_rejects_unknown_requests() {
+        assert_eq!(trace_order(None).unwrap(), TraceOrder::RecordFirst);
+        assert_eq!(trace_order(Some("record-first")).unwrap(), TraceOrder::RecordFirst);
+        assert_eq!(trace_order(Some("control-first")).unwrap(), TraceOrder::ControlFirst);
+        assert!(trace_order(Some("anything")).is_err());
+    }
+
+    #[test]
+    fn shell_trace_report_reads_only_bounded_json_batches() {
+        let path = std::env::temp_dir().join(format!("patty-trace-reader-{}.json", std::process::id()));
+        struct TraceFile(std::path::PathBuf);
+        impl Drop for TraceFile { fn drop(&mut self) { let _ = std::fs::remove_file(&self.0); } }
+        let file = TraceFile(path);
+        assert_eq!(read_shell_traces(&file.0).unwrap(), None);
+        let expected = serde_json::json!([{ "name": "diagnostic-input", "rows": [[7, 1, 2, 3, 4, 5, 6]] }]);
+        std::fs::write(&file.0, expected.to_string()).unwrap();
+        assert_eq!(read_shell_traces(&file.0).unwrap(), Some(expected));
+        for invalid in ["{", "{}", "[1,2,3,4,5]"] {
+            std::fs::write(&file.0, invalid).unwrap();
+            assert!(read_shell_traces(&file.0).is_err(), "{invalid}");
+        }
+        std::fs::write(&file.0, vec![b' '; 65537]).unwrap();
+        assert!(read_shell_traces(&file.0).is_err());
+    }
 
     #[test]
     fn output_trace_counts_bytes_at_each_boundary_and_ignores_echoed_probes() {

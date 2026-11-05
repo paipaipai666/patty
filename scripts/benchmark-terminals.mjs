@@ -5,11 +5,14 @@ import { arch, cpus, release, totalmem } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { launchApp, resolveExe } from '../e2e/harness.mjs'
+import { analyzeReport } from './analyze-terminal-latency.mjs'
 
 const output = resolve(process.env.PATTY_BENCHMARK_OUTPUT || 'output/terminal-benchmark/transport')
 const counts = process.argv.slice(2).length ? process.argv.slice(2).map(Number) : [1, 10, 30]
 const resourceMode = process.env.PATTY_BENCHMARK_RESOURCE_MODE ?? 'full'
+const traceOrder = process.env.PATTY_BENCHMARK_TRACE_ORDER ?? 'record-first'
 if (!['full', 'process'].includes(resourceMode)) throw new Error('PATTY_BENCHMARK_RESOURCE_MODE must be full or process')
+if (!['record-first', 'control-first'].includes(traceOrder)) throw new Error('PATTY_BENCHMARK_TRACE_ORDER must be record-first or control-first')
 if (process.platform !== 'win32' || counts.some((count) => ![1, 10, 30].includes(count))) {
   throw new Error('Run on Windows with no arguments or a list of session counts: 1, 10, 30')
 }
@@ -223,10 +226,13 @@ async function benchmark(count) {
       xtermVersion: lock.packages['node_modules/@xterm/xterm'].version,
       executableHash,
       resourceMode,
+      traceOrder,
     }
     const summary = summarize(report, samples, app.startedAt)
     const path = join(output, `${count}-sessions.json`)
     writeFileSync(path, JSON.stringify({ environment, report, samples, summary }, null, 2) + '\n')
+    analyzeReport({ environment, report, samples })
+    if (report.traceOrder !== traceOrder) throw new Error(`Unexpected Shell trace order; report saved at ${path}`)
     const balance = summary.outputBalance
     if (balance.dispatchedBytes !== balance.receivedBytes || balance.dispatchedEvents !== balance.receivedEvents) {
       throw new Error(`Terminal output did not balance; report saved at ${path}`)
