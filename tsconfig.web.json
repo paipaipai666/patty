@@ -18,5 +18,5 @@
       "@/*": ["src/renderer/*"]
     }
   },
-  "include": ["src/renderer/**/*", "src/shared/**/*", "src/renderer/themes/*.json", "resources/**/*.ts", "e2e/visual/**/*.tsx"]
+  "include": ["src/renderer/**/*", "src/shared/**/*", "src/shared/__fixtures__/*.json", "src/renderer/themes/*.json", "resources/**/*.ts", "e2e/visual/**/*.tsx"]
 }

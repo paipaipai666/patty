@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { registerOsc7Handler } from '../../../utils/osc7Handler'
 import { cellAlignedLines, createIipStreamExtractor, findIipSlot } from '../iipParser'
 import { createIIPStreamPatcher } from '../iipStreamPatcher'
+import programStatusFixtures from '../../../../shared/__fixtures__/program-status.json'
 
 const esc = '\x1b'
 const csi = `${esc}[`
@@ -29,6 +30,15 @@ describe('terminal protocol compatibility with real xterm', () => {
   })
 
   afterEach(() => terminal.dispose())
+
+  it.each(programStatusFixtures)('preserves text and cursor for OSC 7501: $name', async fixture => {
+    const replies: string[] = []
+    terminal.onData(data => replies.push(data))
+    for (const byte of new TextEncoder().encode(fixture.output)) await write(Uint8Array.of(byte))
+    expect([line(0), line(1)].join('\n')).toBe(fixture.text)
+    expect(terminal.buffer.active.cursorX).toBe(5)
+    expect(replies).toEqual([])
+  })
 
   it('keeps command markers invisible and preserves the prompt and command output', async () => {
     await write(`${osc}133;A\x07PS> ${osc}133;B${st}`)

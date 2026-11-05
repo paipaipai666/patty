@@ -2,7 +2,7 @@
 
 Approved: 2026-11-04. Updated: 2026-11-05.
 
-The user approved separate program records with Hook priority. Native Windows notification activation, the first prerequisite, is complete and passed actual notification clicking and warm/cold application activation on 2026-11-05. OSC 7501 implementation has not started.
+The user approved separate program records with Hook priority. Native Windows notification activation, the first prerequisite, is complete and passed actual notification clicking and warm/cold application activation on 2026-11-05. OSC 7501 implementation is in progress.
 
 ## Product requirement
 
@@ -38,3 +38,9 @@ Approved: keep program records separate from authenticated Agent Hook records. S
 Alternative: merge program and Hook events into a single last-writer stream. This could expose a child program's blocked state during an Agent run, but would need a new cross-source ownership contract and could allow ordinary output to replace a genuine Agent state.
 
 The user explicitly approved this route under AGENTS.md's architectural-decision and cross-module planning rules. The implementation may proceed without reconfirming the source-selection decision.
+
+## Implementation status
+
+The bounded parser and record lifecycle are implemented. Nine Rust behavior tests cover validation, read boundaries, replacement, hierarchical clearing, inherited application names, urgency, terminal resets, prompt and process cleanup, fixed capability responses, and 256-record eviction. Shared fixtures also pass seven byte-at-a-time cases against actual xterm, preserving terminal text, cursor position, and generated-input behavior. Type checking passes.
+
+The core is not yet connected to local or SSH output. Per-run ownership, coalesced updates, frontend state and details, and Hook-first attention/notification integration remain to implement. Parser validation and the shared fixture corpus form the first independently verifiable commit of the approved protocol work.

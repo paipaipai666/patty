@@ -14,6 +14,7 @@ mod pty_output;
 mod output_wake;
 mod desktop_notifications;
 mod command_state;
+mod program_status;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;

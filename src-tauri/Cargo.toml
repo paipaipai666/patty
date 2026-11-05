@@ -26,6 +26,8 @@ russh = { version = "=0.62.4", default-features = false, features = ["ring", "fl
 tokio = { version = "1", features = ["sync", "time"] }
 bytes = "1"
 futures = "0.3"
+base64 = "=0.22.1"
+unicode-general-category = "=1.1.0"
 
 [dev-dependencies]
 rand = "0.10"

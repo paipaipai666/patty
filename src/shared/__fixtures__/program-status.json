@@ -1,0 +1,51 @@
+[
+  {
+    "name": "approval with BEL",
+    "output": "before\r\n\u001b]7501;state=blocked:kind=permission:app=deploy:msg=QXBwcm92ZQ==\u0007after",
+    "selected": {"revision": 1, "id": "", "state": "blocked", "kind": "permission", "app": "deploy", "message": "Approve"},
+    "count": 1,
+    "text": "before\nafter"
+  },
+  {
+    "name": "UTF-8 and optional padding with ST",
+    "output": "before\r\n\u001b]7501;state=working:progress=40:title=5p6E5bu6:msg=V29ya2luZw\u001b\\after",
+    "selected": {"revision": 1, "id": "", "state": "working", "progress": 40, "title": "构建", "message": "Working"},
+    "count": 1,
+    "text": "before\nafter"
+  },
+  {
+    "name": "reports completely replace records",
+    "output": "before\r\n\u001b]7501;state=blocked:kind=question:app=deploy:msg=QXBwcm92ZQ==\u0007\u001b]7501;state=working\u0007after",
+    "selected": {"revision": 2, "id": "", "state": "working"},
+    "count": 1,
+    "text": "before\nafter"
+  },
+  {
+    "name": "hierarchy clearing and application inheritance",
+    "output": "before\r\n\u001b]7501;state=working:app=deploy\u0007\u001b]7501;state=blocked:kind=auth:id=build/test\u0007\u001b]7501;state=error:id=builder\u0007\u001b]7501;state=clear:id=build\u0007after",
+    "selected": {"revision": 3, "id": "builder", "state": "error", "app": "deploy"},
+    "count": 2,
+    "text": "before\nafter"
+  },
+  {
+    "name": "a prompt retains completed results",
+    "output": "before\r\n\u001b]7501;state=done\u0007\u001b]7501;state=working:id=worker\u0007\u001b]133;A\u0007after",
+    "selected": {"revision": 1, "id": "", "state": "done"},
+    "count": 1,
+    "text": "before\nafter"
+  },
+  {
+    "name": "invalid decoded controls discard the complete report",
+    "output": "before\r\n\u001b]7501;state=working\u0007\u001b]7501;state=blocked:msg=Cg==\u0007after",
+    "selected": {"revision": 1, "id": "", "state": "working"},
+    "count": 1,
+    "text": "before\nafter"
+  },
+  {
+    "name": "control strings cannot inject reports",
+    "output": "before\r\n\u001b]7501;state=done\u0007\u001bP\u001b]7501;state=blocked\u0007\u001b\\after",
+    "selected": {"revision": 1, "id": "", "state": "done"},
+    "count": 1,
+    "text": "before\nafter"
+  }
+]
