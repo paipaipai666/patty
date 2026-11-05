@@ -1,6 +1,6 @@
 # Shell latency boundary tracing
 
-Date: 2026-11-05. Status: approved. Shared Shell instrumentation passed its initial real-ConPTY behavior check. Report integration and bounded native comparisons are in progress.
+Date: 2026-11-05. Status: approved and completed within the run budget. See the [measured results and decision](shell-latency-tracing-results.md). No production performance change is supported by this unit's evidence.
 
 ## Evidence
 
