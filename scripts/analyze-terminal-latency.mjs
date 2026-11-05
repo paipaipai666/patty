@@ -11,6 +11,7 @@ function quantiles(values) {
 
 function stages(sample, trace) {
   const id = sample.probeId
+  assert.ok([id, sample.sentAt, sample.inputToReceiptMs, sample.inputToBufferMs].every(Number.isFinite), `Missing paired timestamps for probe ${id}`)
   const times = [sample.sentAt, trace.inputReceivedMarkers[id], trace.inputQueuedMarkers[id], trace.inputWriteMarkers[id],
     trace.inputWrittenMarkers[id], trace.readMarkers[id], trace.markers[id], sample.sentAt + sample.inputToReceiptMs, sample.sentAt + sample.inputToBufferMs]
   assert.ok(times.every(Number.isFinite), `Missing paired timestamps for probe ${id}`)

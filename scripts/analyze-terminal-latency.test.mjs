@@ -30,6 +30,9 @@ test('rejects missing and invalid timing pairs rather than dropping slow samples
   const missing = fixture()
   delete missing.report.ptyOutput.readMarkers[7]
   assert.throws(() => analyzeReport(missing), /Missing paired timestamps for probe 7/)
+  const absentReceipt = fixture()
+  absentReceipt.report.phases[0].data[0].inputToReceiptMs = null
+  assert.throws(() => analyzeReport(absentReceipt), /Missing paired timestamps for probe 7/)
   const reversed = fixture()
   reversed.report.ptyOutput.inputWrittenMarkers[7] = 1040
   assert.throws(() => analyzeReport(reversed), /Out-of-order childAndConpty/)

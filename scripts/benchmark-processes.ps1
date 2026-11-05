@@ -1,4 +1,4 @@
-param([int]$AppPid, [string]$OutputPath)
+param([int]$AppPid, [string]$OutputPath, [ValidateSet('full','process')][string]$Mode = 'full')
 
 $ErrorActionPreference = 'Stop'
 $gpuEngines = 'Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine'
@@ -17,30 +17,32 @@ while (Get-Process -Id $AppPid -ErrorAction SilentlyContinue) {
 
   $engines = $null
   $memory = $null
-  try {
-    $byProcess = @{}
-    foreach ($engine in (Get-CimInstance $gpuEngines -Property Name,UtilizationPercentage)) {
-      if ($engine.Name -match '^pid_(\d+)_') {
-        $key = [int]$Matches[1]
-        if ($included.Contains($key)) { $byProcess[$key] = [Math]::Max([int]$byProcess[$key], [int]$engine.UtilizationPercentage) }
+  if ($Mode -eq 'full') {
+    try {
+      $byProcess = @{}
+      foreach ($engine in (Get-CimInstance $gpuEngines -Property Name,UtilizationPercentage)) {
+        if ($engine.Name -match '^pid_(\d+)_') {
+          $key = [int]$Matches[1]
+          if ($included.Contains($key)) { $byProcess[$key] = [Math]::Max([int]$byProcess[$key], [int]$engine.UtilizationPercentage) }
+        }
       }
-    }
-    $engines = $byProcess
-  } catch { }
-  try {
-    $byProcess = @{}
-    foreach ($allocation in (Get-CimInstance $gpuMemory -Property Name,DedicatedUsage)) {
-      if ($allocation.Name -match '^pid_(\d+)_') {
-        $key = [int]$Matches[1]
-        if ($included.Contains($key)) { $byProcess[$key] = [long]$byProcess[$key] + [long]$allocation.DedicatedUsage }
+      $engines = $byProcess
+    } catch { }
+    try {
+      $byProcess = @{}
+      foreach ($allocation in (Get-CimInstance $gpuMemory -Property Name,DedicatedUsage)) {
+        if ($allocation.Name -match '^pid_(\d+)_') {
+          $key = [int]$Matches[1]
+          if ($included.Contains($key)) { $byProcess[$key] = [long]$byProcess[$key] + [long]$allocation.DedicatedUsage }
+        }
       }
+      $memory = $byProcess
+    } catch { }
     }
-    $memory = $byProcess
-  } catch { }
   $time = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
   $processes = @(foreach ($process in (Get-Process -Id @($included) -ErrorAction SilentlyContinue)) {
-    $gpu = if ($null -ne $engines) { [int]$engines[$process.Id] }
-    $dedicated = if ($null -ne $memory) { [long]$memory[$process.Id] }
+    $gpu = if ($null -ne $engines) { [int]$engines[$process.Id] } else { $null }
+    $dedicated = if ($null -ne $memory) { [long]$memory[$process.Id] } else { $null }
     @{
       pid = $process.Id
       name = $process.ProcessName

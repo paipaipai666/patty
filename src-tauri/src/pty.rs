@@ -1567,6 +1567,55 @@ mod tests {
     }
 
     #[test]
+    fn readline_control_executes_commands_preserves_markers_and_restores_the_editor() {
+        let session = EnsureTestSession::new("readline-command-control");
+        let created = create(None, &session.id, session.cwd.to_str(), Some("powershell"), Some(120), Some(30));
+        assert_eq!(created["success"], true);
+        let wait = |after: u64| {
+            let deadline = std::time::Instant::now() + Duration::from_secs(20);
+            loop {
+                let state = serde_json::to_value(crate::command_state::snapshot(&session.id)).unwrap();
+                if state["revision"].as_u64().unwrap_or(0) > after && state["status"] == "finished" { break state; }
+                assert!(std::time::Instant::now() < deadline, "command did not finish: {state}");
+                thread::sleep(Duration::from_millis(20));
+            }
+        };
+        let ready_deadline = std::time::Instant::now() + Duration::from_secs(20);
+        while serde_json::to_value(crate::command_state::snapshot(&session.id)).unwrap()["status"] != "ready" {
+            assert!(std::time::Instant::now() < ready_deadline);
+            thread::sleep(Duration::from_millis(20));
+        }
+        struct ScriptFile(PathBuf);
+        impl Drop for ScriptFile { fn drop(&mut self) { let _ = std::fs::remove_file(&self.0); } }
+        let script = ScriptFile(session.marker.with_extension("ps1"));
+        std::fs::write(&script.0, include_str!("../../src/renderer/benchmark/readLineControl.ps1")).unwrap();
+        write(&session.id, &format!(". '{}'; Invoke-PattyBenchmarkReadLineControl Install\r", script.0.to_string_lossy().replace('\'', "''")));
+        let mut state = wait(0);
+        assert_eq!(state["exitCode"], 0, "readline control was not installed: {state}");
+        let run_id = state["runId"].clone();
+        let marker = session.marker.to_string_lossy().replace('\'', "''");
+        for index in 0..3 {
+            write(&session.id, &format!("$global:__PattyBenchmarkReadLineState.Commands++; Add-Content -LiteralPath '{marker}' -Value 'command-{index}'\r"));
+            state = wait(state["revision"].as_u64().unwrap());
+            assert_eq!(state["exitCode"], 0);
+            assert_eq!(state["runId"], run_id);
+        }
+        write(&session.id, "Invoke-PattyBenchmarkReadLineControl Verify -ExpectedCount 3\r");
+        state = wait(state["revision"].as_u64().unwrap());
+        assert_eq!(state["exitCode"], 0);
+        write(&session.id, "Invoke-PattyBenchmarkReadLineControl Verify -ExpectedCount 999\r");
+        state = wait(state["revision"].as_u64().unwrap());
+        assert_eq!(state["exitCode"], 1, "a wrong command count must fail");
+        write(&session.id, "Invoke-PattyBenchmarkReadLineControl Restore\r");
+        state = wait(state["revision"].as_u64().unwrap());
+        assert_eq!(state["exitCode"], 0);
+        write(&session.id, &format!("if (Test-Path Variable:global:__PattyBenchmarkReadLineState) {{ throw 'control retained' }}; Add-Content -LiteralPath '{marker}' -Value 'restored'\r"));
+        state = wait(state["revision"].as_u64().unwrap());
+        assert_eq!(state["exitCode"], 0);
+        assert_eq!(std::fs::read_to_string(&session.marker).unwrap().replace("\r\n", "\n"), "command-0\ncommand-1\ncommand-2\nrestored\n");
+    }
+
+    #[test]
     fn spawn_echo_and_exit_cleanup() {
 
         let id = format!("test-{}", std::process::id());

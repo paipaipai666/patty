@@ -8,6 +8,8 @@ import { launchApp, resolveExe } from '../e2e/harness.mjs'
 
 const output = resolve(process.env.PATTY_BENCHMARK_OUTPUT || 'output/terminal-benchmark/transport')
 const counts = process.argv.slice(2).length ? process.argv.slice(2).map(Number) : [1, 10, 30]
+const resourceMode = process.env.PATTY_BENCHMARK_RESOURCE_MODE ?? 'full'
+if (!['full', 'process'].includes(resourceMode)) throw new Error('PATTY_BENCHMARK_RESOURCE_MODE must be full or process')
 if (process.platform !== 'win32' || counts.some((count) => ![1, 10, 30].includes(count))) {
   throw new Error('Run on Windows with no arguments or a list of session counts: 1, 10, 30')
 }
@@ -194,7 +196,7 @@ async function benchmark(count) {
   const reportPath = join(app.appData, 'Patty', 'benchmark-report.json')
   const sampler = spawn('powershell.exe', [
     '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
-    resolve('scripts/benchmark-processes.ps1'), '-AppPid', String(app.pid), '-OutputPath', samplingPath,
+    resolve('scripts/benchmark-processes.ps1'), '-AppPid', String(app.pid), '-OutputPath', samplingPath, '-Mode', resourceMode,
   ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
   let samplerError = ''
   sampler.stderr.on('data', (data) => { samplerError = (samplerError + data.toString()).slice(-2000) })
@@ -220,6 +222,7 @@ async function benchmark(count) {
       pattyVersion: JSON.parse(readFileSync('package.json', 'utf8')).version,
       xtermVersion: lock.packages['node_modules/@xterm/xterm'].version,
       executableHash,
+      resourceMode,
     }
     const summary = summarize(report, samples, app.startedAt)
     const path = join(output, `${count}-sessions.json`)

@@ -3,6 +3,7 @@ import { createTerminal, selectSession } from '../store/sessionLifecycle'
 import { useSessionStore } from '../store/sessionStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { panes, queueSnapshot, receiptBuckets, resetPeak, type PaneProbe } from './probe'
+import readLineControl from './readLineControl.ps1?raw'
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 const clock = () => performance.timeOrigin + performance.now()
@@ -107,19 +108,19 @@ async function measure(count: number) {
   if (!foreground || panes.size !== count) throw new Error(`Expected ${count} mounted terminals`)
   const background = [...panes.entries()].filter(([id]) => id !== foregroundId).map(([, pane]) => pane)
 
-  const inputSamples = async () => {
+  const inputSamples = async (prefix = '') => {
     const samples = []
     for (let index = 0; index < 20; index++) {
-      samples.push(await command(foreground))
+      samples.push(await command(foreground, prefix))
       await delay(90)
     }
     return samples
   }
 
-  const backgroundSamples = async (name: string) => {
+  const backgroundSamples = async (name: string, prefix = '') => {
     let backgroundCommandMs: number[] = []
     const result = await phase(name, async () => {
-      const [input, completed] = await Promise.all([inputSamples(), Promise.all(background.map((pane) => command(pane, paced)))])
+      const [input, completed] = await Promise.all([inputSamples(prefix), Promise.all(background.map((pane) => command(pane, paced)))])
       backgroundCommandMs = completed.map((sample) => sample.inputToBufferMs)
       return input
     })
@@ -171,37 +172,55 @@ async function measure(count: number) {
       const completed = await running
       return { switches, backgroundCommandMs: completed.map((sample) => sample.inputToBufferMs) }
     }))
-    selectSession(foregroundId)
-    await frame()
-    await frame()
-    await delay(200)
-    phases.push(await backgroundSamples('prompt-repair-enabled'))
-    await command(foreground, '$global:__PattyBenchmarkRepair=(Get-Item -LiteralPath Function:\\__PattyRepairImageCursor).ScriptBlock; function global:__PattyRepairImageCursor {};')
-    try {
-      await delay(200)
-      phases.push(await backgroundSamples('prompt-repair-disabled'))
-    } finally {
-      await command(foreground, 'Set-Item -LiteralPath Function:\\global:__PattyRepairImageCursor -Value $global:__PattyBenchmarkRepair; Remove-Variable -Scope Global -Name __PattyBenchmarkRepair;')
-    }
-    await delay(200)
-    phases.push(await backgroundSamples('prompt-repair-restored'))
-    const echoReady = { text: 'PATTY_ECHO_READY', tail: '', receivedAt: 0, parsedAt: 0 }
-    foreground.marker = echoReady
-    foreground.terminal.input(`${echoControl}\r`, true)
-    try {
-      await until('console echo control ready', () => echoReady.parsedAt || undefined)
-      foreground.marker = null
-      await delay(200)
-      phases.push(await phase('console-readline-input', inputSamples))
-      phases.push(await backgroundSamples('console-readline-background'))
-    } finally {
-      foreground.marker = null
-      foreground.terminal.input('__PATTY_ECHO_STOP__\r', true)
-      await command(foreground)
-    }
-    await delay(200)
-    phases.push(await backgroundSamples('shell-restored-after-console'))
   }
+  selectSession(foregroundId)
+  await frame()
+  await frame()
+  await delay(200)
+  const checkedControl = async (prefix: string) => {
+    const before = await window.terminalAPI.commandStateSnapshot(foregroundId)
+    await command(foreground, prefix)
+    const deadline = performance.now() + 20_000
+    while (performance.now() < deadline) {
+      const state = await window.terminalAPI.commandStateSnapshot(foregroundId)
+      if (state && state.revision > (before?.revision ?? 0) && state.status === 'finished') {
+        if (state.exitCode !== 0) throw new Error('ReadLine control command failed')
+        return
+      }
+      await delay(10)
+    }
+    throw new Error('ReadLine control command did not finish')
+  }
+  const encodedControl = btoa(String.fromCharCode(...new TextEncoder().encode(readLineControl)))
+  await checkedControl(`. ([ScriptBlock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedControl}')))); Invoke-PattyBenchmarkReadLineControl Install;`)
+  try {
+    await delay(200)
+    const increment = '$global:__PattyBenchmarkReadLineState.Commands++;'
+    phases.push(await phase('command-readline-input', () => inputSamples(increment)))
+    if (background.length) phases.push(await backgroundSamples('command-readline-background', increment))
+    await checkedControl(`Invoke-PattyBenchmarkReadLineControl Verify -ExpectedCount ${background.length ? 40 : 20};`)
+  } finally {
+    await checkedControl('Invoke-PattyBenchmarkReadLineControl Restore;')
+  }
+  await delay(200)
+  phases.push(await phase('shell-readline-input-restored', () => inputSamples()))
+  if (background.length) phases.push(await backgroundSamples('shell-readline-background-restored'))
+  const echoReady = { text: 'PATTY_ECHO_READY', tail: '', receivedAt: 0, parsedAt: 0 }
+  foreground.marker = echoReady
+  foreground.terminal.input(`${echoControl}\r`, true)
+  try {
+    await until('console echo control ready', () => echoReady.parsedAt || undefined)
+    foreground.marker = null
+    await delay(200)
+    phases.push(await phase('console-readline-input', inputSamples))
+    if (background.length) phases.push(await backgroundSamples('console-readline-background'))
+  } finally {
+    foreground.marker = null
+    foreground.terminal.input('__PATTY_ECHO_STOP__\r', true)
+    await command(foreground)
+  }
+  await delay(200)
+  if (background.length) phases.push(await backgroundSamples('shell-restored-after-console'))
   phases.push(await phase('settled', () => delay(7_000)))
   return {
     status: 'ok', count, createStartedAt, startupMs: startup, phases,
