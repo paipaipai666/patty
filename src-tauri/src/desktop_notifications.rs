@@ -44,20 +44,56 @@ impl NoticeKind {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(tag = "source", rename_all = "lowercase")]
+pub enum NoticeSource {
+    Agent {
+        revision: u64,
+    },
+    Program {
+        revision: u64,
+        #[serde(rename = "runId")]
+        run_id: String,
+    },
+}
+
+impl NoticeSource {
+    fn is_stale_for(&self, previous: &Self) -> bool {
+        match (self, previous) {
+            (Self::Agent { revision }, Self::Agent { revision: before })
+            | (
+                Self::Program { revision, .. },
+                Self::Program {
+                    revision: before, ..
+                },
+            ) => revision <= before,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttentionNotice {
+    pane_id: String,
+    title: String,
+    kind: NoticeKind,
+    #[serde(flatten)]
+    source: NoticeSource,
+}
+
 #[derive(Default)]
 struct DeliveryPolicy {
-    panes: HashMap<String, (u64, u64)>,
+    panes: HashMap<String, (NoticeSource, u64)>,
     recent: VecDeque<u64>,
     shown: HashSet<String>,
 }
 
 impl DeliveryPolicy {
-    fn accept(&mut self, pane: &str, revision: u64, _kind: NoticeKind, now: u64) -> bool {
-        if self
-            .panes
-            .get(pane)
-            .is_some_and(|(last, sent)| revision <= *last || now.saturating_sub(*sent) < 30_000)
-        {
+    fn accept(&mut self, pane: &str, source: NoticeSource, _kind: NoticeKind, now: u64) -> bool {
+        if self.panes.get(pane).is_some_and(|(last, sent)| {
+            source.is_stale_for(last) || now.saturating_sub(*sent) < 30_000
+        }) {
             return false;
         }
         while self
@@ -70,7 +106,7 @@ impl DeliveryPolicy {
         if self.recent.len() >= 5 {
             return false;
         }
-        self.panes.insert(pane.into(), (revision, now));
+        self.panes.insert(pane.into(), (source, now));
         self.recent.push_back(now);
         true
     }
@@ -239,14 +275,49 @@ fn eligible(
         })
 }
 
-#[tauri::command]
-pub async fn notify_attention(
-    app: AppHandle,
-    pane_id: String,
-    title: String,
+fn eligible_program(
     kind: NoticeKind,
     revision: u64,
-) -> Result<bool, String> {
+    run_id: &str,
+    hook: Option<crate::hook_state::AgentUpdate>,
+    current: Option<crate::program_state::Update>,
+) -> bool {
+    if hook.is_some_and(|update| update.agent.is_some()) {
+        return false;
+    }
+    current.is_some_and(|update| {
+        update.revision == revision
+            && update.run_id == run_id
+            && update.program.is_some_and(|program| {
+                use crate::program_status::{Kind, State};
+                matches!(
+                    (kind, program.record.state),
+                    (
+                        NoticeKind::Approval,
+                        State::Blocked {
+                            kind: Some(Kind::Permission),
+                            ..
+                        }
+                    ) | (
+                        NoticeKind::Input,
+                        State::Blocked {
+                            kind: Some(Kind::Question | Kind::Auth) | None,
+                            ..
+                        }
+                    ) | (NoticeKind::Error, State::Error)
+                )
+            })
+    })
+}
+
+#[tauri::command]
+pub async fn notify_attention(app: AppHandle, notice: AttentionNotice) -> Result<bool, String> {
+    let AttentionNotice {
+        pane_id,
+        title,
+        kind,
+        source,
+    } = notice;
     if !valid_id(&pane_id) {
         return Err("Invalid session".into());
     }
@@ -258,19 +329,29 @@ pub async fn notify_attention(
         let focused = app
             .get_webview_window("main")
             .is_none_or(|window| window.is_focused().unwrap_or(true));
-        if !crate::pty::session_exists(&pane_id)
-            || !eligible(
-                enabled,
-                focused,
-                kind,
-                revision,
-                crate::hooks::agent_update(&pane_id),
-            )
-        {
+        let current_hook = crate::hooks::agent_update(&pane_id);
+        let allowed = match &source {
+            NoticeSource::Agent { revision } => {
+                crate::pty::session_exists(&pane_id)
+                    && eligible(enabled, focused, kind, *revision, current_hook)
+            }
+            NoticeSource::Program { revision, run_id } => {
+                enabled
+                    && !focused
+                    && eligible_program(
+                        kind,
+                        *revision,
+                        run_id,
+                        current_hook,
+                        crate::program_state::update(&pane_id),
+                    )
+            }
+        };
+        if !allowed {
             return Ok(false);
         }
         static START: LazyLock<Instant> = LazyLock::new(Instant::now);
-        if !policy.accept(&pane_id, revision, kind, START.elapsed().as_millis() as u64) {
+        if !policy.accept(&pane_id, source, kind, START.elapsed().as_millis() as u64) {
             return Ok(false);
         }
         let sent = platform::show(
@@ -844,6 +925,138 @@ mod tests {
     use super::*;
 
     #[test]
+    fn program_delivery_requires_the_current_run_and_no_hook_state() {
+        let registry = std::sync::Arc::new(crate::program_state::Registry::default());
+        let run = registry.start("p1");
+        run.feed(b"\x1b]7501;state=blocked:kind=permission\x07");
+        let current = registry.snapshot().programs.pop().unwrap();
+        let check = |kind, revision, run_id: &str, hook, program| {
+            eligible_program(kind, revision, run_id, hook, program)
+        };
+        assert!(check(
+            NoticeKind::Approval,
+            current.revision,
+            &current.run_id,
+            None,
+            Some(current.clone())
+        ));
+        assert!(!check(
+            NoticeKind::Input,
+            current.revision,
+            &current.run_id,
+            None,
+            Some(current.clone())
+        ));
+        assert!(!check(
+            NoticeKind::Approval,
+            current.revision - 1,
+            &current.run_id,
+            None,
+            Some(current.clone())
+        ));
+        assert!(!check(
+            NoticeKind::Approval,
+            current.revision,
+            "replaced",
+            None,
+            Some(current.clone())
+        ));
+        for status in [
+            crate::hooks::AgentStatus::Idle,
+            crate::hooks::AgentStatus::Unknown,
+        ] {
+            let hook = crate::hook_state::AgentUpdate {
+                pane_id: "p1".into(),
+                revision: 500,
+                agent: Some(crate::hooks::AgentState {
+                    ai_type: "codex",
+                    status,
+                }),
+            };
+            assert!(!check(
+                NoticeKind::Approval,
+                current.revision,
+                &current.run_id,
+                Some(hook),
+                Some(current.clone())
+            ));
+        }
+        let cleared_hook = crate::hook_state::AgentUpdate {
+            pane_id: "p1".into(),
+            revision: 501,
+            agent: None,
+        };
+        assert!(check(
+            NoticeKind::Approval,
+            current.revision,
+            &current.run_id,
+            Some(cleared_hook),
+            Some(current.clone())
+        ));
+        run.feed(b"\x1b]7501;state=error\x07");
+        run.eof();
+        let result = registry.snapshot().programs.pop().unwrap();
+        assert!(check(
+            NoticeKind::Error,
+            result.revision,
+            &result.run_id,
+            None,
+            Some(result.clone())
+        ));
+        let replacement = registry.start("p1");
+        let fresh = registry.snapshot().programs.pop().unwrap();
+        assert!(!check(
+            NoticeKind::Error,
+            result.revision,
+            &result.run_id,
+            None,
+            Some(fresh)
+        ));
+        replacement.retire();
+        assert!(!check(
+            NoticeKind::Error,
+            result.revision,
+            &result.run_id,
+            None,
+            None
+        ));
+    }
+
+    #[test]
+    fn attention_sources_share_limits_but_not_revision_sequences() {
+        let mut policy = DeliveryPolicy::default();
+        let agent = NoticeSource::Agent { revision: 500 };
+        let program = NoticeSource::Program {
+            revision: 3,
+            run_id: "1".into(),
+        };
+        assert!(policy.accept("p1", agent.clone(), NoticeKind::Input, 0));
+        assert!(!policy.accept("p1", program.clone(), NoticeKind::Input, 1_000));
+        assert!(policy.accept("p1", program.clone(), NoticeKind::Input, 30_000));
+        assert!(!policy.accept("p1", program.clone(), NoticeKind::Input, 60_000));
+        assert!(!policy.accept(
+            "p1",
+            NoticeSource::Program {
+                revision: 2,
+                run_id: "1".into()
+            },
+            NoticeKind::Input,
+            60_000
+        ));
+        assert!(policy.accept("p1", agent, NoticeKind::Input, 60_000));
+        let parsed: AttentionNotice = serde_json::from_value(serde_json::json!({
+            "paneId": "p1", "title": "Build", "kind": "input", "source": "program", "revision": 3, "runId": "1"
+        })).unwrap();
+        assert_eq!(parsed.source, program);
+        for value in [
+            serde_json::json!({ "paneId":"p1", "title":"Build", "kind":"input", "revision":3 }),
+            serde_json::json!({ "paneId":"p1", "title":"Build", "kind":"input", "source":"program", "revision":3 }),
+        ] {
+            assert!(serde_json::from_value::<AttentionNotice>(value).is_err());
+        }
+    }
+
+    #[test]
     fn foreground_disabled_and_stale_requests_do_not_deliver() {
         use crate::hook_state::AgentUpdate;
         use crate::hooks::{AgentState, AgentStatus};
@@ -888,15 +1101,52 @@ mod tests {
     #[test]
     fn attention_delivery_is_deduplicated_and_limited_per_session_and_globally() {
         let mut policy = DeliveryPolicy::default();
-        assert!(policy.accept("a", 1, NoticeKind::Input, 0));
-        assert!(!policy.accept("a", 1, NoticeKind::Input, 40_000));
-        assert!(!policy.accept("a", 2, NoticeKind::Input, 1_000));
-        assert!(policy.accept("a", 3, NoticeKind::Input, 30_000));
+        assert!(policy.accept(
+            "a",
+            NoticeSource::Agent { revision: 1 },
+            NoticeKind::Input,
+            0
+        ));
+        assert!(!policy.accept(
+            "a",
+            NoticeSource::Agent { revision: 1 },
+            NoticeKind::Input,
+            40_000
+        ));
+        assert!(!policy.accept(
+            "a",
+            NoticeSource::Agent { revision: 2 },
+            NoticeKind::Input,
+            1_000
+        ));
+        assert!(policy.accept(
+            "a",
+            NoticeSource::Agent { revision: 3 },
+            NoticeKind::Input,
+            30_000
+        ));
         for (index, pane) in ["b", "c", "d"].into_iter().enumerate() {
-            assert!(policy.accept(pane, index as u64 + 4, NoticeKind::Approval, 31_000));
+            assert!(policy.accept(
+                pane,
+                NoticeSource::Agent {
+                    revision: index as u64 + 4
+                },
+                NoticeKind::Approval,
+                31_000
+            ));
         }
-        assert!(!policy.accept("e", 7, NoticeKind::Error, 32_000));
-        assert!(policy.accept("e", 8, NoticeKind::Error, 61_000));
+        assert!(!policy.accept(
+            "e",
+            NoticeSource::Agent { revision: 7 },
+            NoticeKind::Error,
+            32_000
+        ));
+        assert!(policy.accept(
+            "e",
+            NoticeSource::Agent { revision: 8 },
+            NoticeKind::Error,
+            61_000
+        ));
     }
 
     #[test]

@@ -1,4 +1,8 @@
 export type NoticeKind = 'approval' | 'input' | 'error'
+export type AttentionNotice = { paneId: string; title: string; kind: NoticeKind } & (
+  | { source: 'agent'; revision: number }
+  | { source: 'program'; revision: number; runId: string }
+)
 export type DesktopActivation = { kind: 'app' } | { kind: 'session'; sessionId: string }
 
 export function parseDesktopActivation(value: unknown): DesktopActivation | null {

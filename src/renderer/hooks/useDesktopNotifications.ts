@@ -6,6 +6,7 @@ import { focusActiveTerminal } from '../commands/useApplicationKeyboard'
 import { notificationChanges } from '../utils/desktopNotifications'
 import { useWorkspaceStore } from '../store/workspaceStore'
 import { toast } from '../store/toastStore'
+import type { AttentionNotice } from '../../shared/desktopNotifications'
 
 export function useDesktopNotifications(onActivate: () => void) {
   useEffect(() => {
@@ -54,6 +55,17 @@ export function useDesktopNotifications(onActivate: () => void) {
     const failed = () => {
       if (alive && !warned) { warned = true; toast('Windows notifications unavailable. Check notification settings.') }
     }
+    const deliveries = new Map<string, Promise<void>>()
+    const deliver = (paneId: string, dismiss: boolean, notice?: AttentionNotice) => {
+      const task = (deliveries.get(paneId) ?? Promise.resolve()).then(async () => {
+        if (!alive) return
+        if (dismiss) await api.dismissDesktopNotification(paneId)
+        if (alive && notice && useSettingsStore.getState().settings.desktopNotifications) await api.notifyAttention(notice)
+      }).catch(failed).finally(() => {
+        if (deliveries.get(paneId) === task) deliveries.delete(paneId)
+      })
+      deliveries.set(paneId, task)
+    }
     let draining = false
     let again = false
     const drain = async () => {
@@ -81,9 +93,9 @@ export function useDesktopNotifications(onActivate: () => void) {
       if (focusTarget && next.activeSessionId !== focusTarget) cancelFocus()
       if (next.loaded && !previous.loaded) queueMicrotask(() => { void drain() })
       const changes = notificationChanges(next, previous)
-      for (const paneId of changes.dismiss) void api.dismissDesktopNotification(paneId).catch(failed)
-      if (!useSettingsStore.getState().settings.desktopNotifications) return
-      for (const notice of changes.notices) void api.notifyAttention(notice).catch(failed)
+      const notices = new Map(changes.notices.map(notice => [notice.paneId, notice]))
+      const dismiss = new Set(changes.dismiss)
+      for (const paneId of new Set([...dismiss, ...notices.keys()])) deliver(paneId, dismiss.has(paneId), notices.get(paneId))
     })
     return () => { alive = false; cancelFocus(); unsubscribe(); activation.unsubscribe() }
   }, [onActivate])

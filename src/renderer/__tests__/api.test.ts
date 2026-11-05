@@ -41,6 +41,12 @@ beforeEach(() => {
 })
 
 describe('agent state IPC', () => {
+  it('sends the discriminated notification source in a single request', async () => {
+    const notice = { paneId: 'p1', title: 'Build', kind: 'approval', source: 'program', runId: '1', revision: 3 } satisfies import('../../shared/desktopNotifications').AttentionNotice
+    invokeMock.mockResolvedValueOnce(true)
+    await expect(terminalAPI.notifyAttention(notice)).resolves.toBe(true)
+    expect(invokeMock).toHaveBeenCalledWith('notify_attention', { notice })
+  })
   it('validates program snapshots and event batches at the IPC boundary', async () => {
     const batch: ProgramBatch = { revision: 3, programs: [{ paneId: 'p1', revision: 3, runId: '1', recordCount: 1, program: { id: '', revision: 1, state: 'blocked', kind: 'auth' } }] }
     invokeMock.mockResolvedValueOnce(batch)

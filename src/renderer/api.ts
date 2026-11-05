@@ -8,7 +8,7 @@ import type { PersistedState } from '../shared/stateTypes'
 import type { IWindowsPty } from '@xterm/xterm'
 import { parseAgentSnapshot, parseAgentUpdate, type AgentUpdate } from '../shared/agentTypes'
 import { parseWindowMaterial, type WindowMaterialRequest } from '../shared/windowMaterial'
-import { parseDesktopActivation, type NoticeKind } from '../shared/desktopNotifications'
+import { parseDesktopActivation, type AttentionNotice } from '../shared/desktopNotifications'
 import { parseCommandSnapshot } from '../shared/commandTypes'
 import { parseProgramBatch, type ProgramBatch } from '../shared/programTypes'
 
@@ -114,8 +114,7 @@ export const terminalAPI = {
     if (!result) throw new Error('Invalid command state snapshot')
     return result
   },
-  notifyAttention: (notice: { paneId: string; title: string; kind: NoticeKind; revision: number }) =>
-    invoke<boolean>('notify_attention', notice),
+  notifyAttention: (notice: AttentionNotice) => invoke<boolean>('notify_attention', { notice }),
   dismissDesktopNotification: (paneId: string) => invoke<void>('dismiss_desktop_notification', { paneId }),
   testDesktopNotification: (paneId: string | null) => invoke<boolean>('test_desktop_notification', { paneId }),
   onDesktopActivation: (callback: () => void): ListenerHandle => listenHandle(listen('desktop:activation', callback)),

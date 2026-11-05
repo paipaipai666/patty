@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS } from '../../../shared/defaultSettings'
 import type { DesktopActivation } from '../../../shared/desktopNotifications'
 import { focusActiveTerminal } from '../../commands/useApplicationKeyboard'
 import { SettingsModal } from '../../components/Settings/SettingsModal'
+import type { ProgramRecord } from '../../../shared/programTypes'
 
 vi.mock('../../commands/useApplicationKeyboard', async importOriginal => ({
   ...await importOriginal<typeof import('../../commands/useApplicationKeyboard')>(),
@@ -19,7 +20,7 @@ let root: ReturnType<typeof createRoot>
 let container: HTMLDivElement
 let signal: () => void
 let pending: DesktopActivation | null
-const dismiss = vi.fn(async () => undefined)
+const dismiss = vi.fn(async (): Promise<void> => undefined)
 const notify = vi.fn(async () => true)
 const take = vi.fn(async () => { const target = pending; pending = null; return target })
 const activate = vi.fn()
@@ -72,12 +73,41 @@ it('delivers only new states and dismisses notices when work resumes', async () 
   useSessionStore.setState({ loaded: true })
   await act(async () => root.render(<Harness />))
   await act(async () => useSessionStore.getState().applyAgentUpdate({ paneId: 'p1', revision: 1, agent: { aiType: 'codex', status: 'waiting_approval' } }))
-  expect(notify).toHaveBeenCalledWith({ paneId: 'p1', title: 'First', revision: 1, kind: 'approval' })
+  expect(notify).toHaveBeenCalledWith({ paneId: 'p1', title: 'First', revision: 1, kind: 'approval', source: 'agent' })
   await act(async () => useSessionStore.getState().applyAgentUpdate({ paneId: 'p1', revision: 2, agent: { aiType: 'codex', status: 'working' } }))
   expect(dismiss).toHaveBeenCalledWith('p1')
   useSettingsStore.setState(state => ({ settings: { ...state.settings, desktopNotifications: false } }))
   await act(async () => useSessionStore.getState().applyAgentUpdate({ paneId: 'p1', revision: 3, agent: { aiType: 'codex', status: 'error' } }))
   expect(notify).toHaveBeenCalledTimes(1)
+})
+
+it('delivers program edges without replaying a startup snapshot or hidden Hook fallback', async () => {
+  const report = (revision: number, program: ProgramRecord) => useSessionStore.getState().applyProgramBatch({ revision, programs: [{ paneId: 'p1', revision, runId: '1', recordCount: 1, program }] })
+  await act(async () => root.render(<Harness />))
+  await act(async () => report(2, { id: '', revision: 1, state: 'blocked', kind: 'permission' }))
+  await act(async () => useSessionStore.setState({ loaded: true }))
+  expect(notify).not.toHaveBeenCalled()
+  await act(async () => report(3, { id: '', revision: 2, state: 'working' }))
+  expect(dismiss).toHaveBeenCalledWith('p1')
+  await act(async () => report(4, { id: '', revision: 3, state: 'blocked', kind: 'auth' }))
+  expect(notify).toHaveBeenLastCalledWith({ paneId: 'p1', title: 'First', source: 'program', revision: 4, runId: '1', kind: 'input' })
+  await act(async () => useSessionStore.getState().markAgentRead('p1'))
+  await act(async () => useSessionStore.getState().applyAgentUpdate({ paneId: 'p1', revision: 1, agent: { aiType: 'codex', status: 'idle' } }))
+  await act(async () => useSessionStore.getState().applyAgentUpdate({ paneId: 'p1', revision: 2, agent: null }))
+  expect(notify).toHaveBeenCalledTimes(1)
+})
+
+it('finishes dismissing the previous source before showing a replacement notification', async () => {
+  useSessionStore.setState({ loaded: true })
+  await act(async () => root.render(<Harness />))
+  await act(async () => useSessionStore.getState().applyProgramBatch({ revision: 2, programs: [{ paneId: 'p1', revision: 2, runId: '1', recordCount: 1, program: { id: '', revision: 1, state: 'error' } }] }))
+  let release = () => {}
+  dismiss.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve }))
+  await act(async () => useSessionStore.getState().applyAgentUpdate({ paneId: 'p1', revision: 20, agent: { aiType: 'codex', status: 'error' } }))
+  expect(notify).toHaveBeenCalledTimes(1)
+  await act(async () => release())
+  expect(notify).toHaveBeenCalledTimes(2)
+  expect(notify).toHaveBeenLastCalledWith({ paneId: 'p1', title: 'First', source: 'agent', revision: 20, kind: 'error' })
 })
 
 it('focuses the target after its terminal input mounts during cold startup', async () => {
