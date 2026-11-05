@@ -38,7 +38,7 @@ while (Get-Process -Id $AppPid -ErrorAction SilentlyContinue) {
       }
       $memory = $byProcess
     } catch { }
-    }
+  }
   $time = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
   $processes = @(foreach ($process in (Get-Process -Id @($included) -ErrorAction SilentlyContinue)) {
     $gpu = if ($null -ne $engines) { [int]$engines[$process.Id] } else { $null }

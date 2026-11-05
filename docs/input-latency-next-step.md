@@ -1,6 +1,6 @@
 # Input latency: bounded control plan
 
-Date: 2026-11-05. Status: awaiting approval for the new benchmark controls. Installed release 2.0.18 acceptance is complete.
+Date: 2026-11-05. Status: approved, implemented, and compared within the run budget. Installed release 2.0.18 acceptance is complete. The normal Shell latency target remains unmet; see [comparison results](input-latency-controls.md).
 
 ## Evidence and premise
 
