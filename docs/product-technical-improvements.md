@@ -178,7 +178,7 @@ Agent 原生会话身份与 CLI Resume 继续暂停。非 Agent 主线先完成�
 
 ## 调研依据
 
-2.0.18 正式安装包已构建并通过文件及隔离检查；5 条旧配色断言已修正，普通后端 300 项、E2E 后端 307 项通过，均未排除测试。当前安装版仍有运行中的终端任务，升级与安装版通知身份验收待执行。见 [发布验收](releases/2.0.18-verification.md)。
+2.0.18 正式安装包已构建并通过文件及隔离检查；5 条旧配色断言已修正，普通后端 300 项、E2E 后端 307 项通过，均未排除测试。用户已自行升级，安装文件、运行进程和卸载登记均为 2.0.18，13 个安装文件哈希与安装包一致；安装版通知身份的投递与点击验收待执行。见 [发布验收](releases/2.0.18-verification.md)。
 
 - [Ghostty 1.4：程序状态、性能、兼容测试和 libghostty 边界](https://ghostty.org/docs/install/release-notes/1-4-0)
 - [Ghostty Shell Integration](https://ghostty.org/docs/features/shell-integration)
