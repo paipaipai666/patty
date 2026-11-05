@@ -5,6 +5,7 @@ import { PaneTreeRoot } from '../../src/renderer/components/Pane/PaneTree'
 import { TitleBar } from '../../src/renderer/components/TitleBar/TitleBar'
 import { SessionInfo } from '../../src/renderer/components/App/SessionInfo'
 import { SettingsModal } from '../../src/renderer/components/Settings/SettingsModal'
+import { MetricsDashboard } from '../../src/renderer/components/MetricsDashboard/MetricsDashboard'
 import { useSessionStore, type TerminalSession } from '../../src/renderer/store/sessionStore'
 import { useWorkspaceStore } from '../../src/renderer/store/workspaceStore'
 import { useSettingsStore } from '../../src/renderer/store/settingsStore'
@@ -40,6 +41,7 @@ Object.defineProperty(window, 'terminalAPI', { value: {
     return { ready: Promise.resolve(), unsubscribe: () => { sshOutput = undefined } }
   },
   onExit: listener, onMaximizeChange: () => () => {},
+  metricsHistory: async () => ({ samples: [], firstTerminal: [] }), onMetricsTick: () => () => {},
   createSshSession: async () => {
     sshOutput?.('deploy@prod-01:/srv/payments$ tail -f service.log\r\n09:00:01 INFO  Service ready\r\n09:00:02 INFO  Health check passed\r\n')
     return { success: true, pid: 100 }
@@ -82,6 +84,7 @@ Object.defineProperty(window, 'workbenchPreview', { value: { setTheme, addCustom
 function Workbench() {
   useWindowMaterial()
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [metricsOpen, setMetricsOpen] = useState(false)
   const [infoId, setInfoId] = useState<string | null>(null)
   const closeInfo = useCallback(() => setInfoId(null), [])
   const visible = useSessionStore((state) => state.sidebarVisible)
@@ -108,9 +111,10 @@ function Workbench() {
   return <div className={appStyles.app}>
     <TitleBar sidebarVisible={visible} onToggleSidebar={() => useSessionStore.getState().toggleSidebar()} onOpenCommands={() => setPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
     <main className="visual-stage" style={{ flexDirection: position === 'right' ? 'row-reverse' : undefined }}>
-      {visible && <Sidebar onNewTerminal={() => useSessionStore.getState().addSession()} onNewTerminalPickFolder={() => {}} onNewSsh={() => {}} onSelectSession={selectSession} onCloseSession={closeSession} onOpenCommands={() => setPaletteOpen(true)} blocked={paletteOpen || infoId !== null} />}
+      {visible && <Sidebar onNewTerminal={() => useSessionStore.getState().addSession()} onNewTerminalPickFolder={() => {}} onNewSsh={() => {}} onSelectSession={selectSession} onCloseSession={closeSession} onOpenCommands={() => setPaletteOpen(true)} onOpenMetrics={() => setMetricsOpen(true)} blocked={paletteOpen || infoId !== null} />}
       <div className={appStyles.content} data-terminal-surface>
         <div className="visual-panes"><PaneTreeRoot /></div>
+        <MetricsDashboard open={metricsOpen} onClose={() => setMetricsOpen(false)} />
       </div>
     </main>
     <SettingsModal />

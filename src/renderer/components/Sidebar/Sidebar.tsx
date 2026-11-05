@@ -8,6 +8,7 @@ import {
 import {
   Add16Regular,
   Alert20Regular,
+  Pulse20Regular,
   Search16Regular,
   ChevronDown16Regular,
   Folder16Regular,
@@ -31,6 +32,7 @@ interface SidebarProps {
   onCloseSession: (id: string) => void
   onSelectSession: (id: string) => void
   onOpenCommands?: () => void
+  onOpenMetrics?: () => void
   blocked?: boolean
   onCollectionContextMenu?: (e: React.MouseEvent, collectionId: string) => void
 }
@@ -42,6 +44,7 @@ export function Sidebar({
   onCloseSession,
   onSelectSession,
   onOpenCommands,
+  onOpenMetrics,
   blocked = false,
   onCollectionContextMenu
 }: SidebarProps) {
@@ -320,6 +323,7 @@ export function Sidebar({
           <button ref={notificationButton} type="button" className={styles.toolButton} aria-label="Notifications" aria-description={`${notices.length} new or waiting sessions`} title="Notifications" aria-haspopup="dialog" aria-expanded={notificationsOpen} onClick={() => { setMenu(null); setNotificationsOpen(value => !value) }}>
             <Alert20Regular aria-hidden />{notices.length > 0 && <span className={styles.notificationDot} aria-hidden />}
           </button>
+          {onOpenMetrics && <button type="button" className={styles.toolButton} aria-label="Show performance metrics" title="Performance metrics" onClick={() => { setMenu(null); setNotificationsOpen(false); onOpenMetrics() }}><Pulse20Regular aria-hidden /></button>}
           <button type="button" className={styles.toolButton} aria-label="Open command palette" title="Find sessions and commands" onClick={onOpenCommands}><Search16Regular aria-hidden /></button>
         </div>
       </div>

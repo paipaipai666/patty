@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react-dom/test-utils'
 import type { TerminalSession } from '../store/sessionStore'
+import type { Sidebar } from '../components/Sidebar/Sidebar'
+import type { MetricsDashboard } from '../components/MetricsDashboard/MetricsDashboard'
 
 const hoisted = vi.hoisted(() => {
   const mockAddSession = vi.fn().mockReturnValue('sess-new')
@@ -128,7 +130,7 @@ vi.mock('../components/TitleBar/TitleBar', () => ({
 }))
 
 vi.mock('../components/Sidebar/Sidebar', () => ({
-  Sidebar: () => <div data-testid="sidebar" />
+  Sidebar: ({ onOpenMetrics }: Pick<Parameters<typeof Sidebar>[0], 'onOpenMetrics'>) => <div data-testid="sidebar"><button aria-label="Show performance metrics" onClick={onOpenMetrics} /></div>
 }))
 
 vi.mock('../components/Terminal/TerminalArea', () => ({
@@ -140,7 +142,7 @@ vi.mock('../components/StatusBar/StatusBar', () => ({
 }))
 
 vi.mock('../components/MetricsDashboard/MetricsDashboard', () => ({
-  MetricsDashboard: () => <div data-testid="metrics-dashboard" />
+  MetricsDashboard: ({ open, onClose }: Parameters<typeof MetricsDashboard>[0]) => open ? <section aria-label="Performance"><button aria-label="Close performance metrics" onClick={onClose} /></section> : null
 }))
 
 vi.mock('../components/SshMonitor/SshMonitorPanel', () => ({
@@ -234,6 +236,18 @@ describe('App', () => {
   it('calls settingsInit on mount', () => {
     render()
     expect(hoisted.mockSettingsInit).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens performance metrics from the sidebar and samples only while open', () => {
+    const { container } = render()
+    expect(container.querySelector('[aria-label="Performance"]')).toBeNull()
+    expect(terminalAPI.metricsSetSampling).toHaveBeenLastCalledWith(false)
+    act(() => { container.querySelector<HTMLButtonElement>('[aria-label="Show performance metrics"]')!.click() })
+    expect(container.querySelector('[aria-label="Performance"]')).not.toBeNull()
+    expect(terminalAPI.metricsSetSampling).toHaveBeenLastCalledWith(true)
+    act(() => { container.querySelector<HTMLButtonElement>('[aria-label="Close performance metrics"]')!.click() })
+    expect(container.querySelector('[aria-label="Performance"]')).toBeNull()
+    expect(terminalAPI.metricsSetSampling).toHaveBeenLastCalledWith(false)
   })
 
   it('calls loadState on mount', () => {

@@ -401,7 +401,7 @@ export default function App() {
       <TitleBar sidebarVisible={sidebarVisible} onToggleSidebar={toggleSidebar} onOpenCommands={() => setCommandPaletteOpen(true)} commandShortcut={shortcuts.commandPalette} />
       <div className={styles.main} style={sidebarOnRight ? { flexDirection: 'row-reverse' } : undefined}>
         <div ref={sidebarWrapperRef} className={styles.sidebarWrapper} aria-hidden={!sidebarVisible} style={{ width: sidebarVisible ? sidebarWidth : 0, visibility: sidebarVisible ? 'visible' : 'hidden' }}>
-          <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onOpenCommands={() => setCommandPaletteOpen(true)} blocked={modalOpen || commandPaletteOpen} onCollectionContextMenu={handleCollectionContextMenu} />
+          <Sidebar onNewTerminal={handleNewTerminal} onNewTerminalPickFolder={handleNewTerminalPickFolder} onNewSsh={handleNewSsh} onCloseSession={handleCloseSession} onSelectSession={handleSelectSession} onOpenCommands={() => setCommandPaletteOpen(true)} onOpenMetrics={() => setMetricsOpen(true)} blocked={modalOpen || commandPaletteOpen} onCollectionContextMenu={handleCollectionContextMenu} />
         </div>
         <div
           className={styles.content}

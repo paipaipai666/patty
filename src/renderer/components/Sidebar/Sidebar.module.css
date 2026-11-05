@@ -17,6 +17,7 @@
 }
 .tools {
   display: flex;
+  flex-shrink: 0;
   gap: 4px;
   margin-left: auto;
 }
@@ -32,6 +33,15 @@
 .toolButton:hover {
   background: var(--bg-item-hover);
   color: var(--text-primary);
+}
+@container session-sidebar (max-width: 180px) {
+  .header {
+    gap: 4px;
+    padding-inline: 8px;
+  }
+  .tools {
+    gap: 2px;
+  }
 }
 .notificationDot {
   position: absolute;

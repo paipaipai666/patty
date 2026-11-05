@@ -109,10 +109,17 @@ try {
       assert.ok(measured.headerHeight <= 56, `${theme} ${width}: header too tall`)
       assert.equal(await cdp.evaluate(`document.querySelector('[data-testid="pane-header"]') === null && document.querySelector('[aria-label="Search sessions"]') === null`), true)
       assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-sidebar]')).backgroundColor === getComputedStyle(document.querySelector('[data-tauri-drag-region]').parentElement).backgroundColor`), true)
+      assert.deepEqual(await cdp.evaluate(`(() => { const button = document.querySelector('[aria-label="Show performance metrics"]'); const rect = button.getBoundingClientRect(); return { previous: button.previousElementSibling.getAttribute('aria-label'), next: button.nextElementSibling.getAttribute('aria-label'), text: button.textContent, width: rect.width, height: rect.height } })()`), { previous: 'Notifications', next: 'Open command palette', text: '', width: 28, height: 28 })
       metrics.push({ theme, ...measured })
       const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
       writeFileSync(join(output, `${theme}-${width}.png`), Buffer.from(shot.data, 'base64'))
     }
+    await cdp.evaluate(`document.querySelector('[aria-label="Show performance metrics"]').focus()`)
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' })
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
+    await cdp.waitFor(`document.body.textContent.includes('CPU Load') && document.body.textContent.includes('Memory') && document.body.textContent.includes('GPU')`)
+    await cdp.evaluate(`document.querySelector('[data-terminal-surface] [aria-label="Close"]').click()`)
+    await cdp.waitFor(`!document.body.textContent.includes('CPU Load')`)
   }
   for (const [theme, side] of [['dark', 'left'], ['light', 'right']]) {
     await cdp.evaluate(`window.workbenchPreview.setTheme(${JSON.stringify(theme)}); window.workbenchPreview.sessions.getState().setSidebarWidth(160); window.workbenchPreview.settings.setState(state => ({settings: {...state.settings, sidebarPosition: ${JSON.stringify(side)}}}))`)
