@@ -529,7 +529,7 @@ mod tests {
     fn boot_bg_defaults_to_dark() {
         let settings = store::default_settings();
         let c = boot_bg_from_settings(&settings);
-        assert_eq!(c, tauri::window::Color(20, 21, 23, 255));
+        assert_eq!(c, tauri::window::Color(32, 32, 32, 255));
     }
 
     #[test]
@@ -545,7 +545,7 @@ mod tests {
         let mut settings = store::default_settings();
         settings["theme"] = json!("light");
         let c = boot_bg_from_settings(&settings);
-        assert_eq!(c, tauri::window::Color(238, 240, 243, 255));
+        assert_eq!(c, tauri::window::Color(243, 243, 243, 255));
     }
 
     #[test]
@@ -561,7 +561,7 @@ mod tests {
         let mut settings = store::default_settings();
         settings["theme"] = json!("nonexistent-theme");
         let c = boot_bg_from_settings(&settings);
-        assert_eq!(c, tauri::window::Color(20, 21, 23, 255));
+        assert_eq!(c, tauri::window::Color(32, 32, 32, 255));
     }
 
     #[test]
