@@ -307,13 +307,20 @@ fn boot_bg_from_settings(settings: &Value) -> tauri::window::Color {
 
 #[cfg(feature = "e2e")]
 mod benchmark;
+#[cfg(feature = "e2e")]
+mod native_verification;
 
 pub fn run() {
+    let context = tauri::generate_context!();
+    #[cfg(feature = "e2e")]
+    if let Err(error) = native_verification::prepare(&context.config().identifier) {
+        eprintln!("[main] {error}");
+        std::process::exit(1);
+    }
     if let Err(error) = installer::validate_integration_environment() {
         eprintln!("[main] {error}");
         std::process::exit(1);
     }
-    let context = tauri::generate_context!();
     #[cfg(feature = "e2e")]
     if context.config().identifier == "com.patty.benchmark" {
         if let Err(error) = benchmark::load_count(&store::data_dir()) {
@@ -344,6 +351,9 @@ pub fn run() {
                 .build()?;
 
             pty::init_resource_dir(app.handle());
+            if let Err(error) = desktop_notifications::start(app.handle()) {
+                eprintln!("[main] notification callback failed to start: {error}");
+            }
             desktop_notifications::receive_activation(app.handle(), std::env::args());
             if let Err(e) = hooks::start_hook_server(app.handle().clone()) {
                 eprintln!("[main] hook server failed to start: {e}");
@@ -393,9 +403,16 @@ pub fn run() {
             metrics_record_first_terminal,
             #[cfg(feature = "e2e")]
             benchmark::benchmark_exchange,
+            #[cfg(feature = "e2e")]
+            native_verification::native_verification_exchange,
+            #[cfg(feature = "e2e")]
+            native_verification::native_verification_cleanup,
         ])
-        .run(context)
-        .expect("error while running tauri application");
+        .build(context)
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) { desktop_notifications::stop(app); }
+        });
 }
 
 #[cfg(test)]

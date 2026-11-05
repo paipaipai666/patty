@@ -34,3 +34,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 if (import.meta.env.MODE === 'benchmark') {
   void import('./benchmark/run').then(({ run }) => run())
 }
+if (import.meta.env.MODE === 'integration') {
+  void import('./verification/native').then(({ run }) => run())
+}

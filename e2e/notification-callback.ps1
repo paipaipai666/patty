@@ -1,13 +1,14 @@
 param(
     [Parameter(Mandatory=$true)][Guid]$ClassId,
     [Parameter(Mandatory=$true)][ValidateSet('com.patty.integration-test','com.patty.integration-test.dev','com.patty.integration-test.registration-probe')][string]$Identity,
-    [Parameter(Mandatory=$true)][string]$Argument
+    [Parameter(Mandatory=$true)][string]$Argument,
+    [string]$ContextFile
 )
 
 $ErrorActionPreference = 'Stop'
 $OutputEncoding = New-Object Text.UTF8Encoding $false
 [Console]::OutputEncoding = $OutputEncoding
-Add-Type @'
+$source = @'
 using System;
 using System.Runtime.InteropServices;
 [ComImport, Guid("53E31837-6600-4A81-9395-75CFFE746F94"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -27,10 +28,17 @@ public static class PattyNotificationCallbackVerifier {
     }
 }
 '@
+Add-Type ($source + [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'registration-context.cs')))
+if ($ContextFile) {
+    $path=[IO.Path]::GetFullPath($ContextFile)
+    $folder=[IO.Path]::GetDirectoryName($path)
+    if ([IO.Path]::GetFileName($path) -ne 'client.context' -or [IO.Path]::GetDirectoryName($folder) -ne [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') -or -not [IO.Path]::GetFileName($folder).StartsWith('patty-e2e-registration-')) { throw 'Callback context requires its probe directory' }
+    [IO.File]::WriteAllText($path,[PattyRegistrationContext]::Snapshot())
+}
 try {
     [PattyNotificationCallbackVerifier]::Invoke($ClassId, $Identity, $Argument)
-    [pscustomobject]@{hresult='0x00000000'} | ConvertTo-Json -Compress
+    [pscustomobject]@{hresult='0x00000000';context=[PattyRegistrationContext]::Snapshot()} | ConvertTo-Json -Compress
 } catch {
-    [pscustomobject]@{hresult=('0x{0:X8}' -f $_.Exception.GetBaseException().HResult);error=$_.Exception.GetBaseException().Message} | ConvertTo-Json -Compress
+    [pscustomobject]@{hresult=('0x{0:X8}' -f $_.Exception.GetBaseException().HResult);error=$_.Exception.GetBaseException().Message;context=[PattyRegistrationContext]::Snapshot()} | ConvertTo-Json -Compress
     exit 1
 }

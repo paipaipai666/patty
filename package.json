@@ -14,6 +14,8 @@
     "build": "vite build",
     "build:e2e": "tauri build --no-bundle --features e2e",
     "build:benchmark": "tauri build --no-bundle --features e2e --config src-tauri/tauri.benchmark.conf.json",
+    "build:integration": "tauri build --no-bundle --features e2e --config src-tauri/tauri.integration.conf.json",
+    "test:e2e:notifications": "node e2e/notification-activation.test.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "node e2e/smoke.test.mjs",

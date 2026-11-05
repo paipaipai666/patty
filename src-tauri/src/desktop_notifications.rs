@@ -4,6 +4,9 @@ use std::sync::{LazyLock, Mutex};
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(windows)]
+mod callback;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Target {
@@ -76,6 +79,13 @@ impl DeliveryPolicy {
 static POLICY: LazyLock<Mutex<DeliveryPolicy>> =
     LazyLock::new(|| Mutex::new(DeliveryPolicy::default()));
 static PENDING: Mutex<Option<Target>> = Mutex::new(None);
+#[cfg(feature = "e2e")]
+static ACTIVATIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(feature = "e2e")]
+pub(crate) fn verification_activation_count() -> u64 {
+    ACTIVATIONS.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 fn scheme(app: &AppHandle) -> &'static str {
     match app.config().identifier.as_str() {
@@ -105,18 +115,111 @@ fn activation(uri: &str, scheme: &str) -> Option<Target> {
 }
 
 pub fn receive_activation(app: &AppHandle, args: impl IntoIterator<Item = String>) {
+    #[cfg(feature = "e2e")]
+    ACTIVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if let Some(target) = args
         .into_iter()
         .find_map(|arg| activation(&arg, scheme(app)))
     {
-        *PENDING.lock().unwrap() = Some(target.clone());
-        let _ = app.emit("desktop:activation", target);
+        publish_target(app, target);
+    }
+}
+
+fn publish_target(app: &AppHandle, target: Target) {
+    *PENDING.lock().unwrap() = Some(target.clone());
+    let _ = app.emit("desktop:activation", target);
+}
+
+pub fn start(app: &AppHandle) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        if app.config().identifier == "com.patty.benchmark" {
+            return Ok(());
+        }
+        if app.try_state::<callback::Host>().is_some() {
+            return Ok(());
+        }
+        let handle = app.clone();
+        let host = callback::Host::start(
+            platform::identity(app),
+            scheme(app).into(),
+            std::sync::Arc::new(move |target| {
+                let queued = handle.clone();
+                handle
+                    .run_on_main_thread(move || {
+                        #[cfg(feature = "e2e")]
+                        ACTIVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        publish_target(&queued, target);
+                        if let Some(window) = queued.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    })
+                    .map_err(|error| {
+                        windows::core::Error::new(
+                            windows::Win32::Foundation::E_FAIL,
+                            error.to_string(),
+                        )
+                    })
+            }),
+        )?;
+        app.manage(host);
+    }
+    Ok(())
+}
+
+pub fn stop(app: &AppHandle) {
+    #[cfg(windows)]
+    if let Some(host) = app.try_state::<callback::Host>() {
+        host.stop();
     }
 }
 
 #[tauri::command]
 pub fn take_desktop_activation() -> Option<Target> {
     PENDING.lock().unwrap().take()
+}
+
+#[cfg(all(feature = "e2e", windows))]
+pub(crate) fn verification_xml(app: &AppHandle) -> Result<Option<String>, String> {
+    platform::verification_xml(app)
+}
+
+#[cfg(all(feature = "e2e", windows))]
+pub(crate) fn verification_cleanup(app: &AppHandle) -> Result<(), String> {
+    platform::verification_cleanup(app)
+}
+
+#[cfg(all(feature = "e2e", windows))]
+pub(crate) fn verification_association(app: &AppHandle) -> Result<String, String> {
+    platform::verification_association(app)
+}
+
+#[cfg(all(feature = "e2e", windows))]
+pub(crate) fn verification_callback(app: &AppHandle) -> Option<(String, String)> {
+    let identity = platform::identity(app);
+    Some((format!("{{{:?}}}", callback::class_id(&identity)), identity))
+}
+
+#[cfg(all(feature = "e2e", not(windows)))]
+pub(crate) fn verification_callback(_: &AppHandle) -> Option<(String, String)> {
+    None
+}
+
+#[cfg(all(feature = "e2e", not(windows)))]
+pub(crate) fn verification_association(_: &AppHandle) -> Result<String, String> {
+    Err("Windows required".into())
+}
+
+#[cfg(all(feature = "e2e", not(windows)))]
+pub(crate) fn verification_xml(_: &AppHandle) -> Result<Option<String>, String> {
+    Ok(None)
+}
+
+#[cfg(all(feature = "e2e", not(windows)))]
+pub(crate) fn verification_cleanup(_: &AppHandle) -> Result<(), String> {
+    Ok(())
 }
 
 fn eligible(
@@ -261,7 +364,7 @@ fn toast_xml(uri: &str, title: &str, body: &str) -> String {
 #[cfg(windows)]
 mod platform {
     use super::*;
-    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use windows::{
         core::HSTRING,
         Data::Xml::Dom::XmlDocument,
@@ -329,7 +432,7 @@ mod platform {
         result
     }
 
-    fn identity(app: &AppHandle) -> String {
+    pub(super) fn identity(app: &AppHandle) -> String {
         let id = &app.config().identifier;
         if cfg!(debug_assertions) {
             format!("{id}.dev")
@@ -340,6 +443,16 @@ mod platform {
 
     fn register(app_id: &str, label: &str, protocol_scheme: &str) -> Result<(), String> {
         let exe = std::env::current_exe().map_err(|error| error.to_string())?;
+        let arguments = String::new();
+        #[cfg(feature = "e2e")]
+        let arguments = if matches!(
+            app_id,
+            "com.patty.integration-test" | "com.patty.integration-test.dev"
+        ) {
+            crate::native_verification::protocol_arguments()?
+        } else {
+            arguments
+        };
         let protocol = format!("Software\\Classes\\{protocol_scheme}");
         write_registry(
             &protocol,
@@ -347,26 +460,164 @@ mod platform {
         )?;
         write_registry(
             &format!("{protocol}\\shell\\open\\command"),
-            &[("", &format!("\"{}\" \"%1\"", exe.display()))],
+            &[("", &format!("\"{}\" {arguments} \"%1\"", exe.display()))],
         )?;
         write_registry(
             &format!("Software\\Classes\\AppUserModelId\\{app_id}"),
-            &[("DisplayName", label)],
+            &[
+                ("DisplayName", label),
+                (
+                    "CustomActivator",
+                    &format!("{{{:?}}}", callback::class_id(app_id)),
+                ),
+            ],
+        )?;
+        write_registry(
+            &format!(
+                "Software\\Classes\\CLSID\\{{{:?}}}\\LocalServer32",
+                callback::class_id(app_id)
+            ),
+            &[(
+                "",
+                &format!(
+                    "\"{}\" --notification-activation {arguments}",
+                    exe.display()
+                ),
+            )],
         )?;
         register_shortcut(app_id, label, &exe)
-            .map_err(|error| format!("Register notification shortcut: {error}"))
+            .map_err(|error| format!("Register notification shortcut: {error}"))?;
+        association_changed();
+        Ok(())
+    }
+
+    fn association_changed() {
+        use windows::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_FLUSH};
+        unsafe {
+            SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_FLUSH, None, None);
+        }
+    }
+
+    #[cfg(feature = "e2e")]
+    pub(super) fn verification_association(app: &AppHandle) -> Result<String, String> {
+        use windows::{
+            core::{PCWSTR, PWSTR},
+            Win32::UI::Shell::{
+                AssocQueryStringW, ASSOCF_IS_PROTOCOL, ASSOCF_VERIFY, ASSOCSTR_EXECUTABLE,
+            },
+        };
+        let name: Vec<_> = scheme(app).encode_utf16().chain(Some(0)).collect();
+        let mut buffer = vec![0u16; 32_768];
+        let mut length = buffer.len() as u32;
+        unsafe {
+            AssocQueryStringW(
+                ASSOCF_IS_PROTOCOL | ASSOCF_VERIFY,
+                ASSOCSTR_EXECUTABLE,
+                PCWSTR(name.as_ptr()),
+                PCWSTR::null(),
+                Some(PWSTR(buffer.as_mut_ptr())),
+                &mut length,
+            )
+        }
+        .ok()
+        .map_err(|error| error.to_string())?;
+        let end = buffer
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(buffer.len());
+        String::from_utf16(&buffer[..end]).map_err(|error| error.to_string())
     }
 
     fn shortcut_path(label: &str) -> Result<std::path::PathBuf, String> {
-        let app_data = std::env::var_os("APPDATA").ok_or("Windows app data folder unavailable")?;
-        Ok(std::path::PathBuf::from(app_data)
-            .join("Microsoft/Windows/Start Menu/Programs")
-            .join(format!("{label}.lnk")))
+        use windows::Win32::{
+            System::Com::CoTaskMemFree,
+            UI::Shell::{FOLDERID_Programs, SHGetKnownFolderPath, KF_FLAG_DEFAULT},
+        };
+        let raw = unsafe { SHGetKnownFolderPath(&FOLDERID_Programs, KF_FLAG_DEFAULT, None) }
+            .map_err(|error| error.to_string())?;
+        let path =
+            std::path::PathBuf::from(std::ffi::OsString::from_wide(unsafe { raw.as_wide() }));
+        unsafe {
+            CoTaskMemFree(Some(raw.0.cast()));
+        }
+        Ok(path.join(format!("{label}.lnk")))
+    }
+
+    #[test]
+    fn notification_shortcut_uses_the_windows_start_menu_when_app_data_is_isolated() {
+        let _guard = crate::store::TEST_ENV_LOCK.lock().unwrap();
+        struct Restore(Option<std::ffi::OsString>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                match &self.0 {
+                    Some(value) => std::env::set_var("APPDATA", value),
+                    None => std::env::remove_var("APPDATA"),
+                }
+            }
+        }
+        let _restore = Restore(std::env::var_os("APPDATA"));
+        let isolated = std::env::temp_dir().join("patty-e2e-shortcut-path");
+        std::env::set_var("APPDATA", &isolated);
+        let path = shortcut_path("Patty integration test").unwrap();
+        assert!(
+            !path.starts_with(&isolated),
+            "The notification identity must be registered in the actual Windows Start menu"
+        );
+    }
+
+    #[cfg(feature = "e2e")]
+    pub(super) fn verification_xml(app: &AppHandle) -> Result<Option<String>, String> {
+        let _apartment = Apartment::new()?;
+        let history = ToastNotificationManager::History().map_err(|error| error.to_string())?;
+        let notices = match history.GetHistoryWithId(&HSTRING::from(identity(app))) {
+            Ok(notices) => notices,
+            Err(error) if error.code().0 == 0x80070490u32 as i32 => return Ok(None),
+            Err(error) => return Err(error.to_string()),
+        };
+        if notices.Size().map_err(|error| error.to_string())? == 0 {
+            return Ok(None);
+        }
+        notices
+            .GetAt(0)
+            .and_then(|notice| notice.Content())
+            .and_then(|content| content.GetXml())
+            .map(|xml| Some(xml.to_string()))
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(feature = "e2e")]
+    pub(super) fn verification_cleanup(app: &AppHandle) -> Result<(), String> {
+        use windows_sys::Win32::System::Registry::RegDeleteTreeW;
+        let _apartment = Apartment::new()?;
+        let _ = ToastNotificationManager::History()
+            .and_then(|history| history.ClearWithId(&HSTRING::from(identity(app))));
+        for path in [
+            format!("Software\\Classes\\AppUserModelId\\{}", identity(app)),
+            format!("Software\\Classes\\{}", scheme(app)),
+            format!(
+                "Software\\Classes\\CLSID\\{{{:?}}}",
+                callback::class_id(&identity(app))
+            ),
+        ] {
+            let path: Vec<_> = path.encode_utf16().chain(Some(0)).collect();
+            let status = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, path.as_ptr()) };
+            if status != 0 && status != 2 {
+                return Err(format!("Test registration cleanup failed: {status}"));
+            }
+        }
+        association_changed();
+        match std::fs::remove_file(shortcut_path(
+            app.config().product_name.as_deref().unwrap_or("Patty"),
+        )?) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.to_string()),
+        }
     }
 
     fn register_shortcut(app_id: &str, label: &str, exe: &std::path::Path) -> Result<(), String> {
         use windows::{
-            core::{Interface, GUID, PCWSTR},
+            core::{Interface, PCWSTR},
             Win32::{
                 Storage::EnhancedStorage::{
                     PKEY_AppUserModel_ID, PKEY_AppUserModel_ToastActivatorCLSID,
@@ -395,9 +646,7 @@ mod platform {
                 props.SetValue(&PKEY_AppUserModel_ID, &PROPVARIANT::from(app_id))?;
                 props.SetValue(
                     &PKEY_AppUserModel_ToastActivatorCLSID,
-                    &InitPropVariantFromCLSID(&GUID::from_u128(
-                        0x68fa1bcc_5358_4f42_bcf9_38f72b3938b3,
-                    ))?,
+                    &InitPropVariantFromCLSID(&callback::class_id(app_id))?,
                 )?;
                 props.Commit()?;
                 file.Save(PCWSTR(path_wide.as_ptr()), true)
@@ -421,6 +670,9 @@ mod platform {
     ) -> Result<bool, String> {
         if app.config().identifier == "com.patty.benchmark" {
             return Ok(false);
+        }
+        if app.try_state::<callback::Host>().is_none() {
+            return Err("Windows notification callback is unavailable".into());
         }
         show_registered(
             &identity(app),
@@ -495,6 +747,10 @@ mod platform {
                 for path in [
                     format!("Software\\Classes\\AppUserModelId\\{}", self.id),
                     format!("Software\\Classes\\{}", self.protocol),
+                    format!(
+                        "Software\\Classes\\CLSID\\{{{:?}}}",
+                        callback::class_id(&self.id)
+                    ),
                 ] {
                     let path: Vec<_> = path.encode_utf16().chain(Some(0)).collect();
                     unsafe {

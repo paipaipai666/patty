@@ -1,0 +1,9 @@
+{
+  "identifier": "com.patty.integration-test",
+  "productName": "Patty integration test",
+  "mainBinaryName": "patty-integration-test",
+  "build": {
+    "frontendDist": "../out/integration",
+    "beforeBuildCommand": "node scripts/prepare-conpty.mjs && npx vite build --mode integration --outDir ../../out/integration"
+  }
+}
