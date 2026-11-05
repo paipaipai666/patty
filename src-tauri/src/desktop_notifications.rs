@@ -358,7 +358,7 @@ fn toast_xml(uri: &str, title: &str, body: &str) -> String {
             })
             .collect()
     }
-    format!("<toast activationType=\"protocol\" launch=\"{}\"><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{}</text></binding></visual></toast>", escape(uri), escape(title), escape(body))
+    format!("<toast activationType=\"foreground\" launch=\"{}\"><visual><binding template=\"ToastGeneric\"><text>{}</text><text>{}</text></binding></visual></toast>", escape(uri), escape(title), escape(body))
 }
 
 #[cfg(windows)]
@@ -900,9 +900,10 @@ mod tests {
     }
 
     #[test]
-    fn notification_xml_keeps_titles_as_text_and_uses_protocol_activation() {
+    fn notification_xml_keeps_titles_as_text_and_uses_native_activation() {
         let text = toast_xml("patty://session/a", "A < B & C", "Needs \"approval\"");
-        assert!(text.contains("activationType=\"protocol\""));
+        assert!(text.contains("activationType=\"foreground\""));
+        assert!(!text.contains("activationType=\"protocol\""));
         assert!(text.contains("launch=\"patty://session/a\""));
         assert!(text.contains("A &lt; B &amp; C"));
         assert!(!text.contains("< B"));

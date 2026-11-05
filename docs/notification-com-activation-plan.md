@@ -1,6 +1,6 @@
 # Native notification callback plan
 
-Status: approved by the user on 2026-11-04; implementation in progress.
+Status: approved on 2026-11-04; completed on 2026-11-05. The user-run actual Patty build passed real notification clicking, system callbacks, warm and cold process activation, workspace and split focus, and invalid and deleted targets.
 
 ## Goal
 

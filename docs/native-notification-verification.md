@@ -1,6 +1,8 @@
 # Native notification activation verification
 
-Date: 2026-11-04
+Last updated: 2026-11-05
+
+Completed: the actual dedicated Patty build passed a real Windows notification click, native COM callbacks, warm and cold activation, workspace and split focus, and invalid and deleted targets. The final report records status ok and manualClick true. Earlier sections preserve the failed attempts and hypotheses; they are not current blockers.
 
 ## Scope
 
@@ -45,13 +47,13 @@ rtk proxy powershell -NoProfile -File e2e/windows-uri.ps1
 rtk proxy powershell -NoProfile -File e2e/windows-uri.ps1 -Uri vscode://session/target
 ```
 
-The native runner now requires WinRT support before asking for a manual click, and uses LaunchUriAsync for automatic activation. It fails before another missing-application dialog when support is unavailable. The previous Shell suite pass is not a notification-click pass. A transient Windows file-sharing failure also interrupted one manual wait; request-file replacement now retries only sharing-related errors for at most two seconds.
+At that stage the native runner required WinRT support before asking for a manual click. The subsequent COM implementation replaced that discovery gate with actual callback invocation. The previous Shell suite pass was not a notification-click pass. A transient Windows file-sharing failure also interrupted one manual wait; request-file replacement now retries only sharing-related errors for at most two seconds.
 
-## Remaining decision
+## Decision after the protocol attempts
 
 The Start menu correction and association broadcast did not restore real click activation. The reason for Windows' protocol-resolution difference remains unresolved. Do not ask the user to repeat notification clicks under this registration.
 
-The proposed alternative is the documented COM activation callback hosted in Patty's own executable, with an actual system COM round trip verified before another manual notification click. This changes the previously approved protocol route and needs architectural consent. See [COM activation plan](notification-com-activation-plan.md). OSC 7501's independent-state, Hook-first plan remains approved and unimplemented.
+The alternative was the documented COM activation callback hosted in Patty's own executable, with an actual system COM round trip before another manual notification click. The user approved the change in activation route. See [COM activation plan](notification-com-activation-plan.md). OSC 7501's independent-state, Hook-first plan remains approved and unimplemented.
 
 ## COM callback after approval
 
@@ -95,4 +97,14 @@ The user ran `e2e/check-native-notifications.ps1` from their normal PowerShell. 
 
 This proves the actual callback implementation's cold start; the independent .NET probe's failure is not a valid blocker for Patty. The cause of that probe's binding failure and the tool-launched registration-discovery difference are not established. No operating-system settings were changed to obtain the pass.
 
+The real user-run report also records QueryUriSupportAsync as Available for patty-e2e. The earlier NotSupported finding belongs to the tool execution path and must not be generalized to the user's normal Windows desktop. The approved native callback route is now independently verified through the real application.
+
 The remaining acceptance is switching toast XML to foreground callback activation and verifying one actual notification-center click. Direct COM invocation alone does not complete that last acceptance.
+
+## Final manual acceptance on 2026-11-05
+
+The toast XML was changed to foreground callback activation after its regression first failed with the previous protocol XML. The dedicated application was rebuilt. The user then ran `e2e/check-native-notifications.ps1 -ManualClick`, clicked the newly delivered notification, and reported the full suite passing.
+
+The actual saved report records `status: ok` and `manualClick: true`. Warm activation reached process 39140, target-workspace, target-pane and its textarea. Cold activation reached a new process, 26160, with the same correct workspace and split. The deleted-target check retained the other session. Invalid command arguments and another build's identity were rejected. The manual runner contains no automatic warm-activation fallback, so this result requires the real notification action.
+
+The test processes exited and the dedicated registrations, notification history, shortcut, and temporary data were cleaned up. The production frontend build passed and contains no native-verification entry chunk. The tool execution and independent .NET probe differences remain diagnostic limitations; they no longer block the actual verified implementation.
