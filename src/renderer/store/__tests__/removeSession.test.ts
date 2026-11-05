@@ -5,6 +5,8 @@ vi.stubGlobal('window', {
   terminalAPI: {
     kill,
     stateLoad: vi.fn(),
+    onProgramUpdate: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: vi.fn() })),
+    programStateSnapshot: vi.fn(async () => ({ revision: 0, programs: [] })),
     agentStateSnapshot: vi.fn(async () => ({ revision: 0, agents: [] })),
     onAgentUpdate: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: vi.fn() }))
   },

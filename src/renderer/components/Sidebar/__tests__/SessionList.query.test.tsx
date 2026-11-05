@@ -32,7 +32,7 @@ beforeEach(() => {
       { id: 'api', name: 'Payments API', parentId: 'work', collapsed: true, createdAt: 2 }
     ],
     activeSessionId: 'scratch',
-    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0
   })
   useWorkspaceStore.setState({ workspaces: [] })
 })

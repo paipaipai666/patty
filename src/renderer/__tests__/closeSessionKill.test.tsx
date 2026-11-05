@@ -85,6 +85,8 @@ beforeEach(() => {
       workspaces: [],
       activeWorkspaceId: null
     }),
+    onProgramUpdate: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: vi.fn() })),
+    programStateSnapshot: vi.fn(async () => ({ revision: 0, programs: [] })),
     agentStateSnapshot: vi.fn(async () => ({ revision: 0, agents: [] })),
     onAgentUpdate: vi.fn(() => ({ ready: Promise.resolve(), unsubscribe: vi.fn() })),
     metricsSetSampling: vi.fn(),
@@ -101,7 +103,7 @@ beforeEach(() => {
     collections: [],
     activeSessionId: null,
     loaded: false,
-    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0
   })
 })
 

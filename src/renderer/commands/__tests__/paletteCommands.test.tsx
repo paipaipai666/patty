@@ -38,7 +38,7 @@ beforeEach(() => {
   save.mockReset().mockResolvedValue({})
   folder.mockReset().mockResolvedValue(undefined)
   Object.defineProperty(window, 'terminalAPI', { configurable: true, value: { settingsSet: save, kill: () => {} } })
-  useSessionStore.setState({ sessions: [], collections: [], activeSessionId: null, agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, sidebarVisible: true })
+  useSessionStore.setState({ sessions: [], collections: [], activeSessionId: null, agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0, sidebarVisible: true })
   useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null })
   useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS }, settingsOpen: false, settingsCategory: null })
   useToastStore.setState({ toasts: [] })

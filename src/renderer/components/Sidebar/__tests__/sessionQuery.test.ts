@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Collection, TerminalSession } from '../../../store/sessionStore'
 import { countSessionViews, filterSessionsByAttention, nextAttentionSessionId, searchSessions } from '../sessionQuery'
+import { programSession } from '../../../../shared/programTypes'
 
 function session(id: string, values: Partial<TerminalSession> = {}): TerminalSession {
   return {
@@ -27,6 +28,13 @@ const sessions = [
   session('assistant', { title: 'Review', cwd: 'D:\\work\\web', aiType: 'claude' }),
   session('local', { title: 'Scratch', shell: 'powershell' })
 ]
+
+it('includes program reports in attention navigation but always respects idle Hook presence', () => {
+  const programStates = { remote: programSession({ paneId: 'remote', revision: 3, runId: '1', recordCount: 1, program: { id: '', revision: 1, state: 'blocked', kind: 'auth' } }) }
+  expect(nextAttentionSessionId({ sessions, agentStates: {}, programStates, activeSessionId: 'backend' })).toBe('remote')
+  expect(countSessionViews(sessions, {}, programStates)).toEqual({ all: 4, attention: 1, complete: 0 })
+  expect(nextAttentionSessionId({ sessions, agentStates: { remote: { status: 'idle', unread: false } }, programStates, activeSessionId: 'backend' })).toBeNull()
+})
 
 function ids(query: string): string[] {
   return searchSessions({ sessions, collections, query }).map((item) => item.id)

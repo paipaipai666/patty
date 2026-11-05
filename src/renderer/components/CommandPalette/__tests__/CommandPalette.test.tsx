@@ -8,6 +8,7 @@ import { useSessionStore } from '../../../store/sessionStore'
 import { useWorkspaceStore } from '../../../store/workspaceStore'
 import { useToastStore } from '../../../store/toastStore'
 import { selectSession } from '../../../store/sessionLifecycle'
+import { usePaletteCommands } from '../../../commands/usePaletteCommands'
 
 vi.mock('../../../store/dirtyScheduler', () => ({ markDirty: vi.fn() }))
 
@@ -32,13 +33,18 @@ function Harness({ options = commands }: { options?: AppCommand[] }) {
     {open && <CommandPalette commands={options} shortcut="Ctrl+Shift+P" onClose={() => setOpen(false)} onExecute={execute} />}</>
 }
 
+function ProgramHarness() {
+  const options = usePaletteCommands([], async () => undefined)
+  return <Harness options={options} />
+}
+
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   useToastStore.setState({ toasts: [] })
   useSessionStore.setState({ sessions: [
     { id: 'a', title: 'Alpha', shell: 'powershell', cwd: '', pid: 0, color: 'blue', collectionId: null, createdAt: 1 },
     { id: 'b', title: 'Beta', shell: 'powershell', cwd: '', pid: 0, color: 'blue', collectionId: null, createdAt: 2 }
-  ], activeSessionId: 'a', agentStates: {} })
+  ], activeSessionId: 'a', agentStates: {}, programStates: {}, programRevisionFloor: 0 })
   useWorkspaceStore.getState().loadFromPersisted([
     { id: 'wa', name: 'Alpha', collectionId: null, focusedPaneId: 'pa', paneTree: { id: 'pa', type: 'leaf', sessionId: 'a' } },
     { id: 'wb', name: 'Beta', collectionId: null, focusedPaneId: 'pb', paneTree: { id: 'pb', type: 'leaf', sessionId: 'b' } }
@@ -72,6 +78,21 @@ function search(value: string) {
 }
 
 describe('command palette interaction', () => {
+  it('navigates to a blocked ordinary program with the keyboard and acknowledges its report', async () => {
+    act(() => {
+      useSessionStore.getState().applyProgramBatch({ revision: 3, programs: [{ paneId: 'b', revision: 3, runId: '1', recordCount: 1, program: { id: '', revision: 1, state: 'blocked', kind: 'auth' } }] })
+      root.render(<ProgramHarness />)
+    })
+    element<HTMLInputElement>('[aria-label="Session search"]').focus()
+    await key('P', { ctrlKey: true, shiftKey: true })
+    search('Next session needing attention')
+    expect(element('[role="option"]').getAttribute('aria-disabled')).not.toBe('true')
+    await key('Enter')
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('wb')
+    expect(document.activeElement).toBe(element('[data-pane-id="pb"] textarea'))
+    expect(useSessionStore.getState().programStates.b?.activity).toEqual({ status: 'waiting_input', unread: false })
+    expect(useSessionStore.getState().sessions[1].aiType).toBeUndefined()
+  })
   it('focuses the search input and links its active option to a real enabled result', () => {
     open()
     const input = element<HTMLInputElement>('[role="combobox"]')

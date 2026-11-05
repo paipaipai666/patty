@@ -34,7 +34,7 @@ vi.mock('../../../store/sessionStore', () => {
     collections: [],
     activeSessionId: null,
     loaded: true,
-    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0,
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0,
     draggingSessionId: null,
     getState: () => state
   }

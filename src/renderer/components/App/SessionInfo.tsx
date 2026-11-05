@@ -4,10 +4,14 @@ import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import { TransientPanel } from './TransientPanel'
 import { useCommandState } from '../../hooks/useCommandState'
 import { formatCommandDuration } from '../../../shared/commandTypes'
+import { effectiveActivity } from '../../../shared/programTypes'
+import { ProgramDetails } from './ProgramDetails'
 
 export function SessionInfo({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
   const session = useSessionStore(state => state.sessions.find(item => item.id === sessionId))
-  const activity = useSessionStore(state => state.agentStates[sessionId])
+  const agent = useSessionStore(state => state.agentStates[sessionId])
+  const program = useSessionStore(state => state.programStates[sessionId])
+  const activity = effectiveActivity(agent, program)
   const command = useCommandState(session?.id ?? null)
   return <TransientPanel title="Session details" onClose={onClose}>
     {session ? <dl>
@@ -17,6 +21,7 @@ export function SessionInfo({ sessionId, onClose }: { sessionId: string; onClose
       <dt>Folder</dt><dd>{session.cwd || 'Not reported'}</dd>
       {session.shell === 'ssh' && <><dt>Connection</dt><dd>{sessionLocation(session)}</dd></>}
       <dt>Status</dt><dd>{activity ? AGENT_STATUS_LABELS[activity.status] : 'Shell session'}</dd>
+      <ProgramDetails program={program?.program} />
       <dt>Process</dt><dd>{session.pid > 0 ? `PID ${session.pid}` : 'Not reported'}</dd>
       <dt>Command</dt><dd>{!command || command.status === 'unavailable' ? 'Not reported'
         : command.status === 'ready' ? 'Ready for a command'

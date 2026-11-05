@@ -10,6 +10,7 @@ import { parseAgentSnapshot, parseAgentUpdate, type AgentUpdate } from '../share
 import { parseWindowMaterial, type WindowMaterialRequest } from '../shared/windowMaterial'
 import { parseDesktopActivation, type NoticeKind } from '../shared/desktopNotifications'
 import { parseCommandSnapshot } from '../shared/commandTypes'
+import { parseProgramBatch, type ProgramBatch } from '../shared/programTypes'
 
 const appWindow = getCurrentWindow()
 
@@ -96,6 +97,16 @@ function openLocalSession(request: LocalPtyRequest, receive: (message: LocalPtyM
 }
 
 export const terminalAPI = {
+  onProgramUpdate: (callback: (batch: ProgramBatch) => void): ListenerHandle =>
+    listenHandle(listen<unknown>('pty:program', event => {
+      const batch = parseProgramBatch(event.payload)
+      if (batch) callback(batch)
+    })),
+  programStateSnapshot: async () => {
+    const batch = parseProgramBatch(await invoke<unknown>('program_state_snapshot'))
+    if (!batch) throw new Error('Invalid program state snapshot')
+    return batch
+  },
   commandStateSnapshot: async (id: string) => {
     const value = await invoke<unknown>('command_state_snapshot', { id })
     if (value === null) return null

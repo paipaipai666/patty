@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { PersistedState } from '../../shared/stateTypes'
 import type { AgentUpdate } from '../../shared/agentTypes'
+import type { ProgramBatch } from '../../shared/programTypes'
 
 const { closeMock, flushNowMock, invokeMock, listenMock } = vi.hoisted(() => ({
   closeMock: vi.fn(),
@@ -40,6 +41,29 @@ beforeEach(() => {
 })
 
 describe('agent state IPC', () => {
+  it('validates program snapshots and event batches at the IPC boundary', async () => {
+    const batch: ProgramBatch = { revision: 3, programs: [{ paneId: 'p1', revision: 3, runId: '1', recordCount: 1, program: { id: '', revision: 1, state: 'blocked', kind: 'auth' } }] }
+    invokeMock.mockResolvedValueOnce(batch)
+    await expect(terminalAPI.programStateSnapshot()).resolves.toEqual(batch)
+    expect(invokeMock).toHaveBeenCalledWith('program_state_snapshot')
+    invokeMock.mockResolvedValueOnce({ ...batch, programs: [{ ...batch.programs[0], recordCount: 0 }] })
+    await expect(terminalAPI.programStateSnapshot()).rejects.toThrow('Invalid program state snapshot')
+    let deliver: (event: { payload: unknown }) => void = () => {}
+    const unsubscribe = vi.fn()
+    listenMock.mockImplementation((_name: string, callback: typeof deliver) => {
+      deliver = callback
+      return Promise.resolve(unsubscribe)
+    })
+    const received: ProgramBatch[] = []
+    const handle = terminalAPI.onProgramUpdate(value => received.push(value))
+    await handle.ready
+    deliver({ payload: batch })
+    deliver({ payload: { revision: 3, programs: [batch.programs[0], null] } })
+    expect(received).toEqual([batch])
+    handle.unsubscribe()
+    await Promise.resolve()
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
   it('validates native material results at the IPC boundary', async () => {
     const request = { enabled: true, appearance: 'dark', background: [27, 29, 32] } satisfies import('../../shared/windowMaterial').WindowMaterialRequest
     invokeMock.mockResolvedValueOnce('mica')

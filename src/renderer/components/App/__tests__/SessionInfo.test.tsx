@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SessionInfo } from '../SessionInfo'
 import { useSessionStore } from '../../../store/sessionStore'
 import type { CommandSnapshot } from '../../../../shared/commandTypes'
+import { programSession } from '../../../../shared/programTypes'
 
 let root: ReturnType<typeof createRoot>
 let container: HTMLDivElement
@@ -16,9 +17,23 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
+  useSessionStore.setState({ programStates: {} })
   useSessionStore.setState({ sessions: [{ id: 'remote', title: 'Production', shell: 'ssh', ssh: { host: 'prod-01', user: 'deploy', port: 2222 }, cwd: '/srv/payments', color: 'blue', pid: 42, createdAt: 1, collectionId: null }], agentStates: { remote: { status: 'waiting_approval', unread: false } } })
 })
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.useRealTimers() })
+
+it('shows independent program details as plain text while Hook status remains authoritative', async () => {
+  act(() => useSessionStore.setState({ programStates: { remote: programSession({ paneId: 'remote', revision: 3, runId: '1', recordCount: 1,
+    program: { id: 'deploy', revision: 1, state: 'blocked', kind: 'auth', app: 'release', title: '<script>Task</script>', message: 'Sign in to deploy', progress: 70 }
+  }) } }))
+  await act(async () => root.render(<SessionInfo sessionId="remote" onClose={vi.fn()} />))
+  const dialog = document.querySelector('[role="dialog"]')
+  expect(dialog?.textContent).toContain('StatusWaiting for approval')
+  expect(dialog?.textContent).toContain('ProgramreleaseProgram statusWaiting for authenticationTask<script>Task</script>MessageSign in to deployProgress70%')
+  expect(dialog?.querySelector('script')).toBeNull()
+  act(() => useSessionStore.setState({ agentStates: {} }))
+  expect(dialog?.textContent).toContain('StatusWaiting for answer')
+})
 
 it('shows live command duration and preserves unknown results instead of showing success', async () => {
   commandState.mockResolvedValue({ runId: '1', revision: 1, status: 'running', elapsedMs: 250 })

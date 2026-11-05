@@ -39,7 +39,7 @@ beforeEach(() => {
   useSessionStore.setState({ loaded: false, sessions: [
     { id: 'p1', title: 'First', shell: 'powershell', cwd: '', color: 'blue', collectionId: null, pid: 1, createdAt: 1 },
     { id: 'p2', title: 'Second', shell: 'powershell', cwd: '', color: 'blue', collectionId: null, pid: 2, createdAt: 2 }
-  ], activeSessionId: 'p2', agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0 })
+  ], activeSessionId: 'p2', agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0 })
   useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null })
   useWorkspaceStore.getState().createWorkspace('p1')
   useWorkspaceStore.getState().createWorkspace('p2')

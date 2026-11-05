@@ -28,6 +28,7 @@ export function usePaletteCommands(shortcutCommands: AppCommand[], pickFolder: (
   const activeSessionId = useSessionStore(state => state.activeSessionId)
   const sidebarVisible = useSessionStore(state => state.sidebarVisible)
   useSessionStore(state => state.agentStates)
+  useSessionStore(state => state.programStates)
   const settings = useSettingsStore(state => state.settings)
   useWorkspaceStore(state => state.workspaces)
   useWorkspaceStore(state => state.activeWorkspaceId)

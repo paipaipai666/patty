@@ -1,14 +1,15 @@
 import { SHELL_LABELS } from '../../../shared/settingsTypes'
 import type { Collection, TerminalSession } from '../../store/sessionStore'
 import { AGENT_LABELS, type AgentStates, type AgentStatus } from '../../../shared/agentTypes'
+import { effectiveActivity, type ProgramStates } from '../../../shared/programTypes'
 
 export type SessionView = 'all' | 'attention' | 'complete'
 export type NoticeView = SessionView
 
-export function noticeSessions(sessions: TerminalSession[], agentStates: AgentStates, view: NoticeView = 'all'): TerminalSession[] {
-  if (view !== 'all') return filterSessionsByAttention({ sessions, agentStates, view })
+export function noticeSessions(sessions: TerminalSession[], agentStates: AgentStates, view: NoticeView = 'all', programStates: ProgramStates = {}): TerminalSession[] {
+  if (view !== 'all') return filterSessionsByAttention({ sessions, agentStates, programStates, view })
   return sessions.filter(session => {
-    const state = agentStates[session.id]
+    const state = effectiveActivity(agentStates[session.id], programStates[session.id])
     return attentionView(state?.status) === 'attention' || (state?.status === 'complete' && state.unread)
   })
 }
@@ -19,32 +20,34 @@ function attentionView(status: AgentStatus | undefined): Exclude<SessionView, 'a
   return null
 }
 
-export function filterSessionsByAttention({ sessions, agentStates, view }: {
+export function filterSessionsByAttention({ sessions, agentStates, programStates = {}, view }: {
   sessions: TerminalSession[]
   agentStates: AgentStates
+  programStates?: ProgramStates
   view: SessionView
 }): TerminalSession[] {
   if (view === 'all') return sessions
-  return sessions.filter((session) => attentionView(agentStates[session.id]?.status) === view)
+  return sessions.filter((session) => attentionView(effectiveActivity(agentStates[session.id], programStates[session.id])?.status) === view)
 }
 
-export function countSessionViews(sessions: TerminalSession[], agentStates: AgentStates): Record<SessionView, number> {
+export function countSessionViews(sessions: TerminalSession[], agentStates: AgentStates, programStates: ProgramStates = {}): Record<SessionView, number> {
   const counts = { all: sessions.length, attention: 0, complete: 0 }
   for (const session of sessions) {
-    const view = attentionView(agentStates[session.id]?.status)
+    const view = attentionView(effectiveActivity(agentStates[session.id], programStates[session.id])?.status)
     if (view) counts[view]++
   }
   return counts
 }
 
-export function nextAttentionSessionId({ sessions, agentStates, activeSessionId }: {
+export function nextAttentionSessionId({ sessions, agentStates, programStates = {}, activeSessionId }: {
   sessions: TerminalSession[]
   agentStates: AgentStates
+  programStates?: ProgramStates
   activeSessionId: string | null
 }): string | null {
   const index = sessions.findIndex((session) => session.id === activeSessionId)
   const ordered = [...sessions.slice(index + 1), ...sessions.slice(0, index + 1)]
-  return filterSessionsByAttention({ sessions: ordered, agentStates, view: 'attention' })[0]?.id ?? null
+  return filterSessionsByAttention({ sessions: ordered, agentStates, programStates, view: 'attention' })[0]?.id ?? null
 }
 
 function normalize(value: string): string {

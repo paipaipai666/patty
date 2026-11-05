@@ -19,7 +19,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   useSettingsStore.setState({ settingsOpen: false })
-  useSessionStore.setState({ sessions, activeSessionId: 'two', sidebarVisible: true, agentStates: { one: { status: 'waiting_approval', unread: true } }, agentRevisions: {}, agentRevisionFloor: 0, draggingSessionId: null })
+  useSessionStore.setState({ sessions, activeSessionId: 'two', sidebarVisible: true, agentStates: { one: { status: 'waiting_approval', unread: true } }, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0, draggingSessionId: null })
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)

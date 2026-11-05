@@ -4,6 +4,8 @@ import { useSessionStore } from '../../store/sessionStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { AGENT_STATUS_LABELS, sessionLocation, sessionTool } from '../../utils/sessionPresentation'
 import styles from './SessionPreview.module.css'
+import { effectiveActivity } from '../../../shared/programTypes'
+import { ProgramDetails } from '../App/ProgramDetails'
 
 type Source = 'pointer' | 'focus'
 type Target = { id: string; anchor: HTMLElement }
@@ -36,7 +38,9 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
   const settingsOpen = useSettingsStore(state => state.settingsOpen)
   const sidebarVisible = useSessionStore(state => state.sidebarVisible)
   const session = useSessionStore(state => target ? state.sessions.find(item => item.id === target.id) : undefined)
-  const activity = useSessionStore(state => target ? state.agentStates[target.id] : undefined)
+  const agent = useSessionStore(state => target ? state.agentStates[target.id] : undefined)
+  const program = useSessionStore(state => target ? state.programStates[target.id] : undefined)
+  const activity = effectiveActivity(agent, program)
 
   const dismiss = useCallback(() => {
     clearTimeout(openTimer.current)
@@ -139,7 +143,7 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
     const right = anchor.right + 8
     const left = right + card.width <= window.innerWidth - 12 ? right : anchor.left - card.width - 8
     setPosition({ left: Math.max(12, Math.min(left, window.innerWidth - card.width - 12)), top: Math.max(12, Math.min(anchor.top, window.innerHeight - card.height - 12)) })
-  }, [target, session, activity])
+  }, [target, session, activity, program])
 
   const controller = useMemo(() => ({ activeId: target?.id ?? null, tooltipId, enter, leave, release, dismiss }), [target, tooltipId, enter, leave, release, dismiss])
   return <PreviewContext.Provider value={controller}>
@@ -162,6 +166,7 @@ export function SessionPreviewProvider({ children }: { children: ReactNode }) {
       <dl className={styles.details}>
         <dt>Tool</dt><dd>{sessionTool(session)}</dd>
         <dt>Status</dt><dd>{activity ? AGENT_STATUS_LABELS[activity.status] : 'Shell session'}</dd>
+        <ProgramDetails program={program?.program} />
         {activity && <><dt>Notice</dt><dd>{activity.unread ? 'Unread' : 'Read'}</dd></>}
         <dt>Folder</dt><dd className={styles.path}>{session.cwd || 'Not reported'}</dd>
         {session.shell === 'ssh' && <><dt>Connection</dt><dd className={styles.path}>{sessionLocation(session)}</dd></>}

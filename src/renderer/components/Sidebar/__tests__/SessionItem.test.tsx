@@ -6,7 +6,7 @@ vi.mock('../../../store/sessionStore', () => {
   const state: any = {
     renameSession: vi.fn(),
     setDraggingSession: vi.fn(),
-    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0,
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0,
     sessions: [],
     getState: () => state
   }

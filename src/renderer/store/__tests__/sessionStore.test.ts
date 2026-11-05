@@ -1,5 +1,6 @@
 import { agentUpdate } from '../../../shared/__tests__/agentFixtures'
 import type { AgentStatus, AgentUpdate } from '../../../shared/agentTypes'
+import { effectiveActivity, type ProgramBatch, type ProgramUpdate } from '../../../shared/programTypes'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 vi.mock('../dirtyScheduler', () => ({
@@ -8,6 +9,12 @@ vi.mock('../dirtyScheduler', () => ({
 
 const mockStateLoad = vi.fn()
 const mockAgentSnapshot = vi.fn(async () => ({ revision: 0, agents: [] as AgentUpdate[] }))
+const mockProgramSnapshot = vi.fn(async (): Promise<ProgramBatch> => ({ revision: 0, programs: [] }))
+let capturedProgramCallback: ((batch: ProgramBatch) => void) | null = null
+const mockOnProgramUpdate = vi.fn(cb => {
+  capturedProgramCallback = cb
+  return { ready: Promise.resolve(), unsubscribe: vi.fn() }
+})
 let capturedAgentCallback: ((update: AgentUpdate) => void) | null = null
 const mockOnAgentUpdate = vi.fn((cb) => {
   capturedAgentCallback = cb
@@ -18,6 +25,8 @@ vi.stubGlobal('window', {
   terminalAPI: {
     stateLoad: mockStateLoad,
     agentStateSnapshot: mockAgentSnapshot,
+    programStateSnapshot: mockProgramSnapshot,
+    onProgramUpdate: mockOnProgramUpdate,
     onAgentUpdate: mockOnAgentUpdate
   },
   addEventListener: vi.fn()
@@ -29,6 +38,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockAgentSnapshot.mockReset().mockResolvedValue({ revision: 0, agents: [] })
   capturedAgentCallback = null
+  capturedProgramCallback = null
+  mockProgramSnapshot.mockReset().mockResolvedValue({ revision: 0, programs: [] })
   teardownSessionIPC()
   useSessionStore.setState({
     sessions: [],
@@ -37,7 +48,7 @@ beforeEach(() => {
     sidebarVisible: true,
     sidebarWidth: 220,
     loaded: false,
-    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0
+    agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0
   })
 })
 
@@ -642,5 +653,81 @@ describe('buildSessionPersistedState', () => {
     expect(result.sessions[0]).not.toHaveProperty('pid')
     expect(result.activeSessionId).toBe('s1')
     expect(result.sidebarVisible).toBe(true)
+  })
+})
+
+describe('program status ownership and initialization', () => {
+  function report(overrides: Partial<ProgramUpdate> = {}): ProgramUpdate {
+    return { paneId: 's1', revision: 10, runId: '1', recordCount: 1, program: { id: '', revision: 2, state: 'blocked', kind: 'permission', app: 'deploy' }, ...overrides }
+  }
+  function apply(update: ProgramUpdate) {
+    useSessionStore.getState().applyProgramBatch({ revision: update.revision, programs: [update] })
+  }
+  function current() {
+    const state = useSessionStore.getState()
+    return effectiveActivity(state.agentStates.s1, state.programStates.s1)
+  }
+  function persisted() {
+    return { sessions: ['s1', 's2'].map(id => ({ id, title: id, color: 'blue', cwd: '', shell: 'cmd', collectionId: null })), collections: [], activeSessionId: 's2', sidebarVisible: true, sidebarWidth: 220 }
+  }
+  it('merges a newer partial batch with all other panes from an older initial snapshot', async () => {
+    mockStateLoad.mockResolvedValue(persisted())
+    mockProgramSnapshot.mockImplementationOnce(async () => {
+      capturedProgramCallback?.({ revision: 12, programs: [report({ revision: 12, program: null, recordCount: 0 })] })
+      capturedProgramCallback?.({ revision: 11, programs: [report({ revision: 11 })] })
+      return { revision: 10, programs: [report(), report({ paneId: 's2', revision: 9 })] }
+    })
+    await useSessionStore.getState().loadState()
+    expect(useSessionStore.getState().programStates.s1?.program).toBeNull()
+    expect(useSessionStore.getState().programStates.s2?.activity).toEqual({ status: 'waiting_approval', unread: true })
+    apply(report({ revision: 11 }))
+    expect(useSessionStore.getState().programStates.s1?.program).toBeNull()
+    expect(useSessionStore.getState().sessions.map(session => session.aiType)).toEqual([null, null])
+  })
+  it('preserves read state through identical reports, clears and older selections, but resets on a new run', () => {
+    const id = useSessionStore.getState().addSession()
+    const send = (update: ProgramUpdate) => apply({ ...update, paneId: id })
+    send(report())
+    useSessionStore.getState().setActive(id)
+    expect(useSessionStore.getState().programStates[id]?.activity?.unread).toBe(false)
+    send(report({ revision: 11 }))
+    expect(useSessionStore.getState().programStates[id]?.activity?.unread).toBe(false)
+    send(report({ revision: 12, program: null, recordCount: 0 }))
+    send(report({ revision: 13, program: { id: '', revision: 1, state: 'done' } }))
+    expect(useSessionStore.getState().programStates[id]?.activity).toEqual({ status: 'complete', unread: false })
+    send(report({ revision: 14, runId: '14' }))
+    expect(useSessionStore.getState().programStates[id]?.activity?.unread).toBe(true)
+    send(report({ revision: 13 }))
+    expect(useSessionStore.getState().programStates[id]?.runId).toBe('14')
+    useSessionStore.getState().removeSession(id)
+    send(report({ revision: 15 }))
+    expect(useSessionStore.getState().programStates[id]).toBeUndefined()
+  })
+  it('keeps authenticated idle and unknown Hooks above blocked program output without modifying identity', () => {
+    useSessionStore.setState({ sessions: [{ id: 's1', title: 'T', shell: 'cmd', color: 'blue', cwd: '', pid: 1, createdAt: 1, collectionId: null }] })
+    apply(report())
+    expect(current()).toEqual({ status: 'waiting_approval', unread: true })
+    for (const status of ['idle', 'unknown'] satisfies AgentStatus[]) {
+      useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: { aiType: 'codex', status } }))
+      expect(current()).toEqual({ status, unread: false })
+      useSessionStore.getState().markAgentRead('s1')
+      expect(useSessionStore.getState().programStates.s1?.activity?.unread).toBe(true)
+    }
+    expect(useSessionStore.getState().sessions[0].aiType).toBe('codex')
+    useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 's1', agent: null }))
+    expect(current()).toEqual({ status: 'waiting_approval', unread: true })
+    useSessionStore.getState().markAgentRead('s1')
+    expect(current()?.unread).toBe(false)
+  })
+  it('rejects callbacks from a torn down listener and does not persist program metadata', async () => {
+    mockStateLoad.mockResolvedValue(persisted())
+    await useSessionStore.getState().loadState()
+    const callback = capturedProgramCallback
+    callback?.({ revision: 10, programs: [report()] })
+    expect(useSessionStore.getState().programStates.s1?.program?.state).toBe('blocked')
+    expect(buildSessionPersistedState()).not.toHaveProperty('programStates')
+    teardownSessionIPC()
+    callback?.({ revision: 11, programs: [report({ revision: 11, program: null, recordCount: 0 })] })
+    expect(useSessionStore.getState().programStates.s1?.program?.state).toBe('blocked')
   })
 })

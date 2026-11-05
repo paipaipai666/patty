@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { activityFromStatus, type AgentActivity, type AgentType, type AgentStates, type AgentUpdate } from '../../shared/agentTypes'
+import { programSession, type ProgramBatch, type ProgramStates, type ProgramUpdate } from '../../shared/programTypes'
 import type { PersistedState, SessionColor, Collection } from '../../shared/stateTypes'
 import type { ShellType, SshTarget } from '../../shared/settingsTypes'
 import { markDirty } from './dirtyScheduler'
@@ -48,6 +49,8 @@ interface SessionStore {
   agentStates: AgentStates
   agentRevisions: Readonly<Record<string, number | undefined>>
   agentRevisionFloor: number
+  programStates: ProgramStates
+  programRevisionFloor: number
 
                                                                         
   draggingSessionId: string | null
@@ -77,6 +80,7 @@ interface SessionStore {
   navigateToIndex: (index: number) => void
 
   applyAgentUpdate: (update: AgentUpdate) => void
+  applyProgramBatch: (batch: ProgramBatch) => void
   markAgentRead: (id: string) => void
   setDraggingSession: (id: string | null) => void
 
@@ -108,20 +112,25 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   agentStates: {},
   agentRevisions: {},
   agentRevisionFloor: 0,
+  programStates: {},
+  programRevisionFloor: 0,
   draggingSessionId: null,
 
   loadState: async () => {
     if (ipcCleanup) ipcCleanup()
     let cancelled = false
     let unsubscribe: (() => void) | null = null
+    let unsubscribePrograms: (() => void) | null = null
     const cleanup = () => {
       cancelled = true
       unsubscribe?.()
+      unsubscribePrograms?.()
       if (ipcCleanup === cleanup) ipcCleanup = null
     }
     ipcCleanup = cleanup
     try {
       const pendingUpdates = new Map<string, AgentUpdate>()
+      const pendingPrograms = new Map<string, ProgramUpdate>()
       let stateReady = false
       const listener = window.terminalAPI.onAgentUpdate((update) => {
         if (cancelled) return
@@ -129,17 +138,35 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         else if (update.revision > (pendingUpdates.get(update.paneId)?.revision ?? 0)) pendingUpdates.set(update.paneId, update)
       })
       unsubscribe = listener.unsubscribe
-      await listener.ready
+      const programs = window.terminalAPI.onProgramUpdate(batch => {
+        if (cancelled) return
+        if (stateReady) get().applyProgramBatch(batch)
+        else for (const update of batch.programs) {
+          if (update.revision > (pendingPrograms.get(update.paneId)?.revision ?? 0)) pendingPrograms.set(update.paneId, update)
+        }
+      })
+      unsubscribePrograms = programs.unsubscribe
+      await Promise.all([listener.ready, programs.ready])
       if (cancelled) return null
       const state = await window.terminalAPI.stateLoad()
       if (cancelled) return null
-      const snapshot = await window.terminalAPI.agentStateSnapshot()
+      const [snapshot, programSnapshot] = await Promise.all([
+        window.terminalAPI.agentStateSnapshot(), window.terminalAPI.programStateSnapshot()
+      ])
       if (cancelled) return null
       const updates = new Map(snapshot.agents.map((update) => [update.paneId, update]))
       for (const update of pendingUpdates.values()) {
         if (update.revision > snapshot.revision && update.revision > (updates.get(update.paneId)?.revision ?? 0)) updates.set(update.paneId, update)
       }
       const activities = new Map<string, AgentActivity>()
+      const programUpdates = new Map(programSnapshot.programs.map(update => [update.paneId, update]))
+      for (const update of pendingPrograms.values()) {
+        if (update.revision > programSnapshot.revision && update.revision > (programUpdates.get(update.paneId)?.revision ?? 0)) programUpdates.set(update.paneId, update)
+      }
+      const programStates = Object.fromEntries(state.sessions.flatMap(session => {
+        const update = programUpdates.get(session.id)
+        return update ? [[session.id, programSession(update)]] : []
+      }))
       const revisions = new Map<string, number>()
       const sessions = state.sessions.map((session) => {
         const update = updates.get(session.id)
@@ -152,10 +179,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       set({
         sessions, collections: state.collections, activeSessionId: state.activeSessionId,
         sidebarVisible: state.sidebarVisible, sidebarWidth: state.sidebarWidth, loaded: true,
-        agentStates: Object.fromEntries(activities), agentRevisions: Object.fromEntries(revisions), agentRevisionFloor: snapshot.revision
+        agentStates: Object.fromEntries(activities), agentRevisions: Object.fromEntries(revisions), agentRevisionFloor: snapshot.revision,
+        programStates, programRevisionFloor: programSnapshot.revision
       })
       stateReady = true
       pendingUpdates.clear()
+      pendingPrograms.clear()
       return state
     } catch (err) {
       if (!cancelled) {
@@ -215,12 +244,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       delete agentStates[id]
       const agentRevisions = { ...state.agentRevisions }
       delete agentRevisions[id]
+      const programStates = { ...state.programStates }
+      delete programStates[id]
 
       return {
         sessions: filtered,
         activeSessionId: newActiveId,
         agentStates,
-        agentRevisions
+        agentRevisions,
+        programStates
       }
     })
     markDirty()
@@ -435,11 +467,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     })
   },
 
+  applyProgramBatch: batch => {
+    set(state => {
+      const programStates = { ...state.programStates }
+      const sessions = new Set(state.sessions.map(session => session.id))
+      let changed = false
+      for (const update of batch.programs) {
+        if (!sessions.has(update.paneId)
+          || update.revision <= state.programRevisionFloor || update.revision <= (programStates[update.paneId]?.revision ?? 0)) continue
+        programStates[update.paneId] = programSession(update, programStates[update.paneId])
+        changed = true
+      }
+      return changed ? { programStates } : state
+    })
+  },
+
   markAgentRead: (id: string) => {
     set((state) => {
       const activity = state.agentStates[id]
-      if (!activity?.unread) return state
-      return { agentStates: { ...state.agentStates, [id]: { ...activity, unread: false } } }
+      if (activity) return activity.unread ? { agentStates: { ...state.agentStates, [id]: { ...activity, unread: false } } } : state
+      const program = state.programStates[id]
+      if (!program?.activity?.unread || !program.program) return state
+      return { programStates: { ...state.programStates, [id]: { ...program, readThrough: Math.max(program.readThrough, program.program.revision), activity: { ...program.activity, unread: false } } } }
     })
   }
 }))

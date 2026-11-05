@@ -9,6 +9,7 @@ import { AGENT_STATUS_LABELS, sessionContext, sessionLocation } from '../../util
 import { useSessionPreview } from './SessionPreview'
 import { ContributionGrid } from '../ContributionGrid/ContributionGrid'
 import styles from './Sidebar.module.css'
+import { effectiveActivity } from '../../../shared/programTypes'
 
 interface SessionItemProps {
   session: TerminalSession
@@ -28,9 +29,11 @@ export const SessionItem = memo(function SessionItem({
   const preview = useSessionPreview()
   const draggingSessionId = useSessionStore(state => state.draggingSessionId)
   const renameSession = useSessionStore((s) => s.renameSession)
-  const activity = useSessionStore(
+  const agent = useSessionStore(
     (s) => s.agentStates[session.id]
   )
+  const program = useSessionStore(state => state.programStates[session.id])
+  const activity = effectiveActivity(agent, program)
   const attentionType = activity?.status === 'waiting_approval' || activity?.status === 'waiting_input'
     ? 'permission' : activity?.status === 'complete' || activity?.status === 'error' ? activity.status : null
   const [isEditing, setIsEditing] = useState(false)
@@ -191,8 +194,9 @@ export const SessionItem = memo(function SessionItem({
       aria-level={depth + 1}
       aria-keyshortcuts="F2 Delete"
       data-tree-id={`session:${session.id}`}
-      data-agent-status={activity?.status}
-      data-agent-unread={activity?.unread}
+      data-agent-status={agent?.status}
+      data-agent-unread={agent?.unread}
+      data-program-state={program?.program?.state}
       onClick={() => { preview.dismiss(); onSelect(session.id) }}
       onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
@@ -204,7 +208,7 @@ export const SessionItem = memo(function SessionItem({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      {session.aiType && activity?.status === 'working' && <ContributionGrid aiType={session.aiType} />}
+      {session.aiType && agent?.status === 'working' && <ContributionGrid aiType={session.aiType} />}
       <div className={styles.itemContent}>
         {session.aiType ? (
           <span

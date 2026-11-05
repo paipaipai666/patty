@@ -22,7 +22,7 @@ beforeEach(() => {
     collectionId: id === 'server' || id === 'sibling' ? 'api' : null
   }))
   useSessionStore.setState({
-    sessions, agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, activeSessionId: 'scratch', loaded: true,
+    sessions, agentStates: {}, agentRevisions: {}, agentRevisionFloor: 0, programStates: {}, programRevisionFloor: 0, activeSessionId: 'scratch', loaded: true,
     collections: [{ id: 'api', name: 'API', parentId: null, collapsed: true, createdAt: 1 }]
   })
   useWorkspaceStore.setState({
@@ -62,6 +62,18 @@ function render() {
 
 describe('session notifications', () => {
   function entries() { return Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).filter(button => button.querySelector('strong')) }
+  it('navigates to a program report through the existing bell and retains Hook priority', async () => {
+    useSessionStore.getState().applyProgramBatch({ revision: 3, programs: [{ paneId: 'server', revision: 3, runId: '1', recordCount: 1, program: { id: '', revision: 1, state: 'blocked', kind: 'permission' } }] })
+    const button = render()
+    expect(button.getAttribute('aria-description')).toBe('1 new or waiting sessions')
+    act(() => button.click())
+    expect(entries()[0].textContent).toContain('Waiting for approval')
+    await act(async () => entries()[0].click())
+    expect(getFocusedSessionId()).toBe('server')
+    expect(useSessionStore.getState().programStates.server?.activity?.unread).toBe(false)
+    act(() => useSessionStore.getState().applyAgentUpdate(agentUpdate({ paneId: 'server', agent: { aiType: 'codex', status: 'idle' } })))
+    expect(button.getAttribute('aria-description')).toBe('0 new or waiting sessions')
+  })
   it('keeps the default sidebar quiet and returns keyboard focus after dismissal', () => {
     const button = render()
     expect(button.getAttribute('aria-description')).toBe('0 new or waiting sessions')
