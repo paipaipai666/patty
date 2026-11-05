@@ -15,6 +15,7 @@ mod output_wake;
 mod desktop_notifications;
 mod command_state;
 mod program_status;
+mod program_state;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -352,6 +353,9 @@ pub fn run() {
                 .build()?;
 
             pty::init_resource_dir(app.handle());
+            if let Err(error)=program_state::initialize(app.handle().clone()) {
+                eprintln!("[main] program status publisher failed to start: {error}");
+            }
             if let Err(error) = desktop_notifications::start(app.handle()) {
                 eprintln!("[main] notification callback failed to start: {error}");
             }
@@ -392,6 +396,7 @@ pub fn run() {
             hook_server_status,
             agent_state_snapshot,
             command_state::command_state_snapshot,
+            program_state::program_state_snapshot,
             desktop_notifications::notify_attention,
             desktop_notifications::dismiss_desktop_notification,
             desktop_notifications::test_desktop_notification,

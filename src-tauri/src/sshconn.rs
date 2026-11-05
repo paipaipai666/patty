@@ -22,12 +22,14 @@ pub struct SshSession {
     tx: UnboundedSender<WriterMsg>,
     handle: Handle<PattyHandler>,
     metrics_task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    program:Arc<crate::program_state::Run>,
 }
 
 enum WriterMsg {
     Data(Bytes),
     Resize(u32, u32),
     Close,
+    ProgramReply(crate::program_state::Reply),
 }
 
 #[derive(Default)]
@@ -392,6 +394,10 @@ async fn run_writer(session: Arc<SshSession>, mut rx: UnboundedReceiver<WriterMs
                 let _ = session.writer.window_change(cols, rows, 0, 0).await;
             }
             WriterMsg::Close => break,
+            WriterMsg::ProgramReply(reply)=>{
+                let _=session.writer.data_bytes(Bytes::from_static(reply.bytes())).await;
+                drop(reply);
+            }
         }
     }
     let _ = session.writer.close().await;
@@ -402,6 +408,7 @@ async fn run_writer(session: Arc<SshSession>, mut rx: UnboundedReceiver<WriterMs
 }
 
 pub fn kill(id: &str) {
+    crate::program_state::forget(id);
     *KILL_EPOCH.lock().unwrap().entry(id.to_string()).or_insert(0) += 1;
     if let Some(abort) = CREATING.lock().unwrap().remove(id) {
         abort.abort();
@@ -557,6 +564,7 @@ async fn create_inner(
         tx,
         handle,
         metrics_task: Mutex::new(None),
+        program:crate::program_state::start(id),
     });
     tauri::async_runtime::spawn(run_writer(session.clone(), rx));
 
@@ -595,13 +603,8 @@ async fn create_inner(
                 },
             };
             match msg {
-                ChannelMsg::Data { data } => {
-                    let text = crate::pty::decode(&mut carry, &data);
-                    if !text.is_empty() {
-                        emit(&loop_app, &format!("pty:data:{loop_id}"), text);
-                    }
-                }
-                ChannelMsg::ExtendedData { data, ext: 1 } => {
+                ChannelMsg::Data { data } | ChannelMsg::ExtendedData { data, ext:1 } => {
+                    if let Some(reply)=loop_session.program.feed(&data){let _=loop_session.tx.send(WriterMsg::ProgramReply(reply));}
                     let text = crate::pty::decode(&mut carry, &data);
                     if !text.is_empty() {
                         emit(&loop_app, &format!("pty:data:{loop_id}"), text);
@@ -617,6 +620,7 @@ async fn create_inner(
                 _ => {}
             }
         }
+        loop_session.program.eof();
         let _ = loop_session.tx.send(WriterMsg::Close);
         let still_registered = {
             let mut map = SESSIONS.write().unwrap();
@@ -939,7 +943,15 @@ mod tests {
             session: &mut ServerSession,
         ) -> Result<(), Self::Error> {
 
-            session.data(channel, data.to_vec())?;
+            if let Some(data)=data.strip_prefix(b"program-status-stderr:") {
+                session.extended_data(channel,1,data.to_vec())?;
+            } else if data==b"program-status-exit" {
+                session.exit_status_request(channel,0)?;
+                session.eof(channel)?;
+                session.close(channel)?;
+            } else {
+                session.data(channel, data.to_vec())?;
+            }
             Ok(())
         }
     }
@@ -1024,6 +1036,53 @@ mod tests {
         wait_event("ssh:auth").await;
 
         auth_respond(id, secret.map(str::to_string));
+    }
+
+    async fn wait_program(id:&str,state:&str)->crate::program_state::Update {
+        for _ in 0..150 {
+            if let Some(update)=crate::program_state::update(id) {
+                if serde_json::to_value(&update).unwrap()["program"]["state"]==state{return update;}
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        panic!("SSH program status did not reach {state}");
+    }
+
+    #[tokio::test]
+    async fn ssh_program_reports_and_capability_replies_use_the_real_channel() {
+        let env=setup("program-status").await;
+        let id=env.id.clone();
+        let target=env.target();
+        let task=tokio::spawn(async move{create(None,&id,target,80,24).await});
+        wait_event("ssh:hostkey").await;
+        hostkey_respond(&env.id,true);
+        answer_auth(&env.id,Some("secret")).await;
+        assert_eq!(task.await.unwrap()["success"],true);
+        write(&env.id,"\x1b]7501;state=blocked:kind=question:app=deploy\x1b");
+        write(&env.id,"\\");
+        let blocked=wait_program(&env.id,"blocked").await;
+        write(&env.id,"\x1b]7501;?\x07");
+        let expected=std::str::from_utf8(crate::program_status::CAPABILITY_REPLY).unwrap();
+        let mut received=String::new();
+        for _ in 0..100 {
+            received=TEST_EVENTS.lock().unwrap().iter().filter(|(event,_)|event==&format!("pty:data:{}",env.id)).map(|(_,data)|serde_json::from_str::<String>(data).unwrap()).collect();
+            if received.contains(expected){break;}
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(received.matches(expected).count(),1);
+        write(&env.id,"program-status-stderr:\x1b]7501;state=done:app=deploy\x07");
+        let done=wait_program(&env.id,"done").await;
+        assert_eq!(done.run_id,blocked.run_id);
+        assert!(!TEST_EVENTS.lock().unwrap().iter().any(|(_,data)|data.contains("program-status-stderr:")));
+        write(&env.id,"\x1b]7501;state=working:id=tail\x07");
+        wait_program(&env.id,"working").await;
+        write(&env.id,"program-status-exit");
+        for _ in 0..100 {if !exists(&env.id){break;} tokio::time::sleep(Duration::from_millis(20)).await;}
+        assert!(!exists(&env.id));
+        let completed=wait_program(&env.id,"done").await;
+        assert_eq!(completed.record_count,1);
+        kill(&env.id);
+        assert!(crate::program_state::update(&env.id).is_none());
     }
 
     #[tokio::test]

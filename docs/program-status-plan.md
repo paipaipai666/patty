@@ -43,4 +43,10 @@ The user explicitly approved this route under AGENTS.md's architectural-decision
 
 The bounded parser and record lifecycle are implemented. Nine Rust behavior tests cover validation, read boundaries, replacement, hierarchical clearing, inherited application names, urgency, terminal resets, prompt and process cleanup, fixed capability responses, and 256-record eviction. Shared fixtures also pass seven byte-at-a-time cases against actual xterm, preserving terminal text, cursor position, and generated-input behavior. Type checking passes.
 
-The core is not yet connected to local or SSH output. Per-run ownership, coalesced updates, frontend state and details, and Hook-first attention/notification integration remain to implement. Parser validation and the shared fixture corpus form the first independently verifiable commit of the approved protocol work.
+Local ConPTY and SSH output are connected to a separate tracker for each running instance. Reattaching retains that instance; replacing it resets state. Old readers cannot publish over or retire a replacement. Snapshots carry run identities and monotonic revisions. One blocked publisher coalesces pending updates by pane and emits batches at most every 50 milliseconds; ordinary output and identical reports do not generate status events.
+
+Capability replies contain only the fixed protocol capability string. Each run holds at most one queued or writing response, released after its writer consumes it; repeated queries share that pending response. This avoids allocating an unbounded input queue when a program writes queries without reading responses.
+
+Real ConPTY verification covers reports, reattachment, completed results after process exit, and explicit removal. A local reader test preserves output byte-for-byte while 2,000 queries queue only one reply. A real localhost SSH connection verifies split reports, standard error, capability replies without a reply loop, and volatile-state cleanup on channel close. The full backend run passed 299 tests, with one opt-in notification-history test ignored and the five previously known color-baseline failures excluded.
+
+Frontend state and details, plus Hook-first attention and Windows notification integration, remain to implement. The parser corpus and the transport/ownership tests are independently rerunnable verification units.

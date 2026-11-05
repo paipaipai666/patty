@@ -20,6 +20,7 @@ pub fn resource_dir() -> PathBuf {
 
 struct Shared {
     command: Arc<Mutex<crate::command_state::Tracker>>,
+    program: Arc<crate::program_state::Run>,
     output: Output,
     app: Option<AppHandle>,
 
@@ -34,11 +35,16 @@ pub struct Session {
     hook_root: Option<crate::hook_identity::ProcessKey>,
     cwd: Option<String>,
     shell: Option<String>,
-    writer: mpsc::Sender<Vec<u8>>,
+    writer: mpsc::Sender<Input>,
     master: Mutex<Box<dyn MasterPty + Send>>,
     child: Arc<Mutex<Box<dyn Child + Send + Sync>>>,
     shared: Arc<Shared>,
     activated: AtomicBool,
+}
+
+enum Input {
+    Data(Vec<u8>),
+    ProgramReply(crate::program_state::Reply),
 }
 
 impl Session {
@@ -499,21 +505,22 @@ pub fn take_image_rows(id: &str) -> Option<(u32, bool)> {
 
 fn writer_loop(
     mut writer: Box<dyn Write + Send>,
-    receiver: mpsc::Receiver<Vec<u8>>,
+    receiver: mpsc::Receiver<Input>,
     #[cfg(feature = "e2e")] output: Output,
 ) {
-    for data in receiver {
+    for input in receiver {
+        let data=match &input {Input::Data(data)=>data.as_slice(),Input::ProgramReply(reply)=>reply.bytes()};
         #[cfg(feature = "e2e")]
-        output.trace_input(crate::benchmark::InputStage::WriteStarted, &data);
-        if writer.write_all(&data).and_then(|_| writer.flush()).is_err() {
+        output.trace_input(crate::benchmark::InputStage::WriteStarted, data);
+        if writer.write_all(data).and_then(|_| writer.flush()).is_err() {
             break;
         }
         #[cfg(feature = "e2e")]
-        output.trace_input(crate::benchmark::InputStage::Written, &data);
+        output.trace_input(crate::benchmark::InputStage::Written, data);
     }
 }
 
-fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Vec<u8>>, mut reader: Box<dyn Read + Send>) {
+fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Input>, mut reader: Box<dyn Read + Send>) {
     let mut carry: Vec<u8> = Vec::new();
     let mut dsr = DsrState::Pending(String::new());
     let mut image_tracker = ImageRowTracker::default();
@@ -522,6 +529,7 @@ fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Vec<u8>>, mut reader: B
         match reader.read(&mut buf) {
             Ok(0) => break,
             Ok(n) => {
+                if let Some(reply)=shared.program.feed(&buf[..n]) {let _=writer.send(Input::ProgramReply(reply));}
                 #[cfg(feature = "e2e")]
                 shared.output.trace_read(&buf[..n]);
                 let text = decode(&mut carry, &buf[..n]);
@@ -536,7 +544,7 @@ fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Vec<u8>>, mut reader: B
                 shared.image_pending.store(image_tracker.is_pending(), Ordering::Relaxed);
                 let (forward, reply) = dsr_filter(&mut dsr, &text);
                 if reply {
-                    let _ = writer.send(DSR_REPLY.to_vec());
+                    let _ = writer.send(Input::Data(DSR_REPLY.to_vec()));
                 }
                 let Some(text) = forward else { continue };
                 if text.is_empty() {
@@ -555,6 +563,7 @@ fn reader_loop(shared: Arc<Shared>, writer: mpsc::Sender<Vec<u8>>, mut reader: B
         shared.output.push(String::from_utf8_lossy(&carry).into_owned());
     }
     shared.command.lock().unwrap().eof(crate::command_state::now_ms());
+    shared.program.eof();
     shared.output.eof();
 }
 
@@ -703,6 +712,7 @@ fn spawn_inner(
     }
     let shared = Arc::new(Shared {
         command: crate::command_state::start(id),
+        program: crate::program_state::start(id),
         output,
         app: app.cloned(),
         image_rows: AtomicU32::new(0),
@@ -868,7 +878,7 @@ pub fn write(id: &str, data: &str) {
     if let Some(session) = session {
         #[cfg(feature = "e2e")]
         session.shared.output.trace_input(crate::benchmark::InputStage::Queued, data.as_bytes());
-        let _ = session.writer.send(data.as_bytes().to_vec());
+        let _ = session.writer.send(Input::Data(data.as_bytes().to_vec()));
     }
 }
 
@@ -884,6 +894,7 @@ pub fn resize(id: &str, cols: u16, rows: u16) -> Result<(), String> {
 
 pub fn kill(id: &str) -> Value {
     crate::command_state::forget(id);
+    crate::program_state::forget(id);
     let victim = SESSIONS.write().unwrap().remove(id);
     if let Some(session) = victim {
         if let Some(root) = session.hook_root { crate::hooks::remove_pane(session.shared.app.as_ref(), id, root); }
@@ -893,6 +904,7 @@ pub fn kill(id: &str) -> Value {
 }
 
 fn terminate(session: &Session) {
+    session.shared.program.retire();
     session.shared.output.close();
     let alive = matches!(session.child.lock().unwrap().try_wait(), Ok(None));
     if alive {
@@ -1273,6 +1285,61 @@ mod tests {
             kill(&self.id);
             let _ = std::fs::remove_file(&self.marker);
         }
+    }
+
+    #[test]
+    fn conpty_program_status_survives_reattachment_and_process_exit() {
+        let session=EnsureTestSession::new("program-status");
+        let first=create(None,&session.id,session.cwd.to_str(),Some("cmd"),Some(100),Some(30));
+        assert_eq!(first["success"],true);
+        write(&session.id,"powershell.exe -NoLogo -NoProfile -Command \"$e=[char]27; [Console]::Write($e+']7501;state=blocked:kind=permission:app=deploy'+[char]7); Start-Sleep -Milliseconds 800; [Console]::Write($e+']7501;state=done:app=deploy'+[char]7)\"\r");
+        let wait=|state:&str|{
+            for _ in 0..200 {
+                if let Some(update)=crate::program_state::update(&session.id) {
+                    let value=serde_json::to_value(&update).unwrap();
+                    if value["program"]["state"]==state{return update;}
+                }
+                thread::sleep(Duration::from_millis(25));
+            }
+            panic!("program status did not reach {state}");
+        };
+        let blocked=wait("blocked");
+        let again=create(None,&session.id,None,Some("cmd"),Some(120),Some(40));
+        assert_eq!(again["pid"],first["pid"]);
+        assert_eq!(crate::program_state::update(&session.id).unwrap().run_id,blocked.run_id);
+        let done=wait("done");
+        assert_eq!(done.run_id,blocked.run_id);
+        write(&session.id,"exit /b 0\r");
+        for _ in 0..200 {
+            if !session_exists(&session.id){break;}
+            thread::sleep(Duration::from_millis(25));
+        }
+        assert!(!session_exists(&session.id));
+        assert_eq!(serde_json::to_value(crate::program_state::update(&session.id)).unwrap()["program"]["state"],"done");
+        kill(&session.id);
+        assert!(crate::program_state::update(&session.id).is_none());
+    }
+
+    #[test]
+    fn local_program_queries_preserve_output_and_queue_only_one_fixed_response() {
+        let id=format!("program-query-{}",std::process::id());
+        let registry=Arc::new(crate::program_state::Registry::default());
+        let run=registry.start(&id);
+        let shared=Arc::new(Shared {
+            command:crate::command_state::start(&id),program:run.clone(),output:Output::new(),app:None,
+            image_rows:AtomicU32::new(0),image_pending:AtomicBool::new(false),
+        });
+        let queries="\x1b]7501;?\x07".repeat(2000);
+        let (tx,rx)=mpsc::channel();
+        reader_loop(shared.clone(),tx,Box::new(std::io::Cursor::new(queries.as_bytes().to_vec())));
+        let Input::ProgramReply(reply)=rx.recv_timeout(Duration::from_millis(100)).unwrap() else {panic!("Expected a program capability response")};
+        assert_eq!(reply.bytes(),b"\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\");
+        assert!(rx.try_recv().is_err());
+        assert_eq!(shared.output.history(),queries);
+        drop(reply);
+        assert!(run.feed(b"\x1b]7501;?\x07").is_some());
+        shared.output.close();
+        crate::command_state::forget(&id);
     }
 
     #[test]
