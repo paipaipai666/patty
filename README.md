@@ -23,6 +23,8 @@ Patty keeps sessions in a searchable sidebar and displays them in split workspac
 - **Terminal display.** Choose system fonts, cursor shape, blinking, opacity, and scrollback size. Terminal output supports Unicode and inline image previews.
 - **Themes.** Choose Dark, Light, Dracula, Nord, Tokyo Night, or Solarized Light. Create custom themes with color pickers or JSON, and import or export them.
 - **AI attention indicators.** Quiet sidebar markers identify waiting, failed, or unread sessions. Open Notifications for full states and jump to the matching workspace and terminal.
+- **Windows notifications.** Background approval requests, input requests, and errors can notify you through Windows. Clicking returns to the matching workspace and terminal, including after application startup.
+- **Program and command status.** Cooperating local and SSH programs can report OSC 7501 status and progress. Session details show command state, exit code, and duration for Windows PowerShell 5.1 and PowerShell 7.
 - **Local metrics.** Open the Metrics dashboard for CPU, memory, GPU, and process information. Local metrics are sampled while the dashboard is open.
 
 ## Screenshots
@@ -55,6 +57,10 @@ Click the sidebar search button or press `Ctrl+Shift+P` to find sessions and com
 Open the bell button for **Notifications**. Its default view includes waiting and failed sessions plus unread completions. The **Needs you** view includes waiting and failed sessions even after reading them. **Completed** includes all current completed turns. Selecting a notification opens the owning workspace and focuses the exact terminal.
 
 The terminal has no permanent title or status bar. The sidebar selection identifies the focused session; remote rows retain their connection target. Find **Show session details**, **Show performance metrics**, or **Show SSH monitor** in unified search. The SSH command input is also opened on request; Escape hides it and returns focus to the terminal without discarding its draft.
+
+Programs that emit OSC 7501 can report running, waiting, finished, and failed work. Their reports use the existing attention and navigation controls. Details and previews show the program, task, message, and progress. Authenticated Agent Hook state takes priority, including idle and unavailable states. Program reports cannot identify an Agent or execute commands. See [program status](docs/terminal-program-status.md).
+
+For Windows PowerShell 5.1 and PowerShell 7, **Show session details** also displays the current or most recent command's state, exit code, and elapsed time. Other shells show **Not reported** without verified command markers. See [command status](docs/terminal-command-semantics.md).
 
 Patty saves session definitions, collections, workspace layouts, and settings automatically. Restarting Patty opens new shell processes; it does not resume running commands or restore terminal scrollback.
 
@@ -106,6 +112,8 @@ Find **Next session needing attention** in unified search to cycle through waiti
 
 Use **Settings → Notifications** to enable or disable each adapter. Enabling an adapter installs Patty's integration in that tool's configuration; disabling it removes Patty's integration. Restart an already-running AI tool after changing its hook configuration. Available events depend on the tool's hooks.
 
+The independent Windows notifications switch controls desktop delivery for Agent and program attention. Its test button checks native delivery. Notifications are suppressed while Patty is in the foreground, limited to one per session every 30 seconds and five per minute across the application. Initial snapshots and completed work do not create desktop notifications. See [Windows notifications](docs/windows-notifications.md).
+
 Patty checks that hook events belong to the current local terminal and CLI process. Events from an earlier run or conversation cannot replace the current state. Closing a layout pane keeps its session and status in the sidebar. Closing the session, exiting the tool, or disabling its adapter clears the status. Process exit detection can take up to one watchdog interval of five seconds.
 
 OpenCode and Oh My Pi send periodic heartbeats. If a heartbeat expires while the process remains alive, **Status unavailable** replaces its last reported state until a fresh state event arrives. Claude Code, Codex, Qwen Code, and Copilot CLI use event callbacks; silence alone does not count as exit. Reloading the window reads the backend's current states. Runtime states are not restored after an application restart.
@@ -120,7 +128,7 @@ The sidebar toolbar contains New terminal (+), its creation menu, Notifications,
 | Terminal | Default shell, cursor shape and blinking, opacity from 40% to 100%, scrollback of 1,000, 2,000, 5,000, or 10,000 lines |
 | Shortcuts | Remap application shortcuts by recording a key combination |
 | Layout | Place the sidebar on the left or right |
-| Notifications | Enable or disable individual AI adapters |
+| Notifications | Windows desktop delivery and test button; individual AI adapters |
 | SSH | Create and edit connection profiles, select identity files, import SSH config |
 
 In **Settings → Appearance**, compare theme thumbnails grouped into dark, light and custom themes. The selected theme is marked **Current**. Click a thumbnail or use the arrow keys to select a theme; Tab moves to the next control. Hovering leaves your theme unchanged. Custom themes still support editing, import and export.
