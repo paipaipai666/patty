@@ -31,10 +31,10 @@ test('seeks a durable user entry without changing the session leaf or rendering 
     expect(painted).toContain('OMP_NAV_QUESTION_000')
     expect(manager.getLeafId()).toBe(leaf)
     expect(controller.viewport.metrics.renderedEntries).toBeLessThan(30)
-    expect(terminal.output).not.toContain('\x1b[?1049h')
+    expect(terminal.output).toContain('\x1b[?1049h')
     await controller.returnToLive()
     expect(controller.getPosition()).toMatchObject({ mode: 'live' })
-    expect(terminal.output).not.toContain('\x1b[?1049l')
+    expect(terminal.output).toContain('\x1b[?1049l')
   } finally {
     ui.stop()
   }

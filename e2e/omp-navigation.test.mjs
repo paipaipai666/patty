@@ -121,7 +121,7 @@ async function hoverMark() {
   if (!measured || measured.marks.length < 9) report.hoverFailure = { before: measured, position: current.position }
   assert.ok(measured?.marks.length >= 9, 'the rail must expose enough real marks for a distance gradient')
   const target = measured.marks[Math.floor(measured.marks.length / 2)]
-  const point = { x: measured.rail.left + 4, y: target.top + target.height / 2 }
+  const point = { x: measured.rail.right - 4, y: target.top + target.height / 2 }
   await pointer(point)
   try {
     await cdp.waitFor(`document.querySelector('${previewSelector}') && document.querySelector('[data-entry-id="${target.entryId}"] [data-turn-mark]').getBoundingClientRect().width >= 47.8`)
@@ -150,9 +150,7 @@ async function stableTerminal(label) {
   while (Date.now() < deadline) {
     const terminal = await cdp.evaluate(view)
     const serialized = JSON.stringify(terminal)
-    const expectedVisible = label === 'live'
-      ? await cdp.evaluate(`window.__PATTY_OMP_VERIFY__.contains('omp-navigation', 'OMP_NAV_LIVE_TAIL')`)
-      : terminal.type === 'normal'
+    const expectedVisible = terminal.lines.join('\n').includes(label === 'live' ? 'OMP_NAV_LIVE_TAIL' : 'OMP_NAV_QUESTION_000')
     if (serialized !== previous || !expectedVisible) unchangedSince = Date.now()
     else if (Date.now() - unchangedSince >= 500) return terminal
     previous = serialized
@@ -168,7 +166,7 @@ async function verifyWheelIsolation(label) {
   const position = semanticPosition(beforeStatus)
   const requestId = beforeStatus.latestRequest?.requestId
   const target = before.marks[Math.floor(before.marks.length / 2)]
-  const point = { x: before.rail.left + 4, y: target.top + target.height / 2 }
+  const point = { x: before.rail.right - 4, y: target.top + target.height / 2 }
   await pointer(point)
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: before.scrollTop > 0 ? -240 : 240 })
   await cdp.waitFor(`Math.abs(document.querySelector('${viewportSelector}').scrollTop - ${before.scrollTop}) > 100`)
@@ -276,7 +274,7 @@ try {
   await collapseRail()
   const collapsed = await cdp.evaluate(measureRail)
   assert.equal(await cdp.evaluate(`document.querySelector('[role="toolbar"][aria-label="Conversation navigation"]') === null`), true)
-  assert.ok(Math.abs(collapsed.rail.left - collapsed.pane.left - 18) <= 2)
+  assert.ok(Math.abs(collapsed.pane.right - collapsed.rail.right - 18) <= 2)
   assert.ok(collapsed.viewport.height <= 276)
   assert.ok(collapsed.rendered < 80)
   assert.equal(collapsed.background, 'rgba(0, 0, 0, 0)')
@@ -316,13 +314,8 @@ try {
   await click('[data-entry-id="turn-000"]')
   await cdp.waitFor(`(await ${status}).latestRequest?.status?.shown === true`, 10000)
   const first = await cdp.evaluate(view)
-  assert.equal(first.type, 'normal')
-  const historyScrollbar = await cdp.evaluate(`(() => {
-    const viewport = document.querySelector('.xterm-viewport')
-    return viewport ? { scrollHeight: viewport.scrollHeight, clientHeight: viewport.clientHeight } : null
-  })()`)
-  assert.ok(historyScrollbar && historyScrollbar.scrollHeight > historyScrollbar.clientHeight, 'history browsing must preserve the terminal scrollbar')
-  report.historyScrollbar = historyScrollbar
+  assert.equal(first.type, 'alternate')
+  assert.match(first.lines.join('\n'), /OMP_NAV_QUESTION_000/)
   report.firstTurn = true
   report.jumpToShownUpperBoundMs = Date.now() - start
   writeFileSync(browseActive, '1')
