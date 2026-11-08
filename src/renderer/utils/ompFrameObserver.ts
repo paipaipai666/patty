@@ -17,7 +17,10 @@ export function registerOmpFrameObserver(term: Terminal, options: {
     handle = null
     if (disposed || !pending || !options.visible()) return
     const buffer = term.buffer.active
-    if (buffer.type !== (pending.mode === 'browsing' ? 'alternate' : 'normal') || buffer.viewportY !== buffer.baseY) return
+    const validType = pending.mode === 'browsing'
+      ? buffer.type === 'alternate' || buffer.type === 'normal'
+      : buffer.type === 'normal'
+    if (!validType || buffer.viewportY !== buffer.baseY) return
     if (pending.frameId === observedFrame) return
     observedFrame = pending.frameId
     options.observe(pending)

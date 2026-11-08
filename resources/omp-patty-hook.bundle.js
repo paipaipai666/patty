@@ -840,7 +840,7 @@ class TranscriptNavigationController {
     this.#operation++;
     this.viewport.seek(target.entryId, scalarToCodeUnit(part.source, offset), partIndex);
     this.#viewScope++;
-    this.#overlay ??= this.host.ui.showOverlay(this.viewport, { fullscreen: true, mouseTracking: false, width: "100%", maxHeight: "100%", row: 0, col: 0 });
+    this.#overlay ??= this.host.ui.showOverlay(this.viewport, { fullscreen: false, mouseTracking: false, width: "100%", maxHeight: "100%", anchor: "top-left", row: 0, col: 0 });
     this.#render();
     return this.getPosition();
   }
@@ -900,7 +900,7 @@ class TranscriptNavigationController {
       this.refresh();
       if (this.#modalDepth === 0 && position.mode === "browsing" && position.sessionId === this.#sessionId && position.branchEpoch === this.#branchEpoch) {
         this.#viewScope++;
-        this.#overlay = this.host.ui.showOverlay(this.viewport, { fullscreen: true, mouseTracking: false, width: "100%", maxHeight: "100%", row: 0, col: 0 });
+        this.#overlay = this.host.ui.showOverlay(this.viewport, { fullscreen: false, mouseTracking: false, width: "100%", maxHeight: "100%", anchor: "top-left", row: 0, col: 0 });
         this.#render();
       } else if (!this.#modalDepth)
         this.#render();

@@ -129,7 +129,7 @@ export function TurnNavigation({ open, onOpenChange, blocked }: { open: boolean;
     const card = flyout.current.getBoundingClientRect()
     const desired = rect.top + Math.max(0, activeIndex * ROW_HEIGHT - scrollTop) - 40
     const top = Math.max(12, Math.min(desired, window.innerHeight - card.height - 12))
-    const left = Math.max(8, Math.min(rect.left - card.width, window.innerWidth - card.width - 8))
+    const left = Math.max(8, Math.min(rect.right + 8, window.innerWidth - card.width - 8))
     setFlyoutPosition(previous => previous.top === top && previous.left === left ? previous : { top, left })
   }, [activeIndex, scrollTop])
 
