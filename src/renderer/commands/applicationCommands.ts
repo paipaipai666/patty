@@ -1,7 +1,7 @@
 import type { ShortcutMap } from '../../shared/settingsTypes'
-import { SHORTCUT_DEFINITIONS } from './shortcuts'
+import { APPLICATION_SHORTCUT_DEFINITIONS } from './shortcuts'
 
-export type CommandFocus = 'terminal' | 'previous' | 'dialog'
+export type CommandFocus = 'terminal' | 'focused-terminal' | 'previous' | 'dialog'
 
 export interface AppCommand {
   id: string
@@ -15,10 +15,10 @@ export interface AppCommand {
   run: (origin: Element | null) => CommandFocus | Promise<CommandFocus>
 }
 
-type ShortcutActions = Record<keyof ShortcutMap, () => void>
+type ShortcutActions = Record<(typeof APPLICATION_SHORTCUT_DEFINITIONS)[number]['key'], () => void>
 
 export function createShortcutCommands(shortcuts: ShortcutMap, actions: ShortcutActions): AppCommand[] {
-  return SHORTCUT_DEFINITIONS.map(({ key, label }) => {
+  return APPLICATION_SHORTCUT_DEFINITIONS.map(({ key, label }) => {
     return {
       id: key, label, group: 'Actions', description: key === 'newTerminal' ? 'New workspace'
         : key === 'nextTab' || key === 'prevTab' ? 'All sessions'

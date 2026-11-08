@@ -92,13 +92,13 @@ pub fn omp_hook_source() -> PathBuf {
     let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("resources")
-        .join("omp-patty-hook.ts");
+        .join("omp-patty-hook.bundle.js");
     if dev.exists() {
         return dev;
     }
     crate::pty::resource_dir()
         .join("resources")
-        .join("omp-patty-hook.ts")
+        .join("omp-patty-hook.bundle.js")
 }
 
 pub fn installed_hook_path() -> PathBuf {

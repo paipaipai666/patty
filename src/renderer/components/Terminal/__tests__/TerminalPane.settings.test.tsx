@@ -48,6 +48,7 @@ vi.mock('../../../store/sessionStore', () => {
 })
 vi.mock('../../../styles/themes', () => ({ getThemeColors: () => ({ terminal: {} }) }))
 vi.mock('../../../utils/osc7Handler', () => ({ registerOsc7Handler: () => ({ dispose() {} }) }))
+vi.mock('../../../utils/ompFrameObserver', () => ({ registerOmpFrameObserver: () => ({ refresh() {}, dispose() {} }) }))
 vi.mock('../../../utils/shellReadiness', () => ({ markTerminalOpen: () => {} }))
 
 import { TerminalPane } from '../TerminalPane'

@@ -44,6 +44,10 @@ pub fn default_settings() -> Value {
         "sidebarPosition": "left",
         "shortcuts": {
             "commandPalette": "Ctrl+Shift+P",
+            "turnDirectory": "Ctrl+Shift+J",
+            "previousTurn": "Ctrl+Shift+PageUp",
+            "nextTurn": "Ctrl+Shift+PageDown",
+            "returnToLive": "Ctrl+Shift+End",
             "newTerminal": "Ctrl+T",
             "closeTerminal": "Ctrl+W",
             "nextTab": "Ctrl+]",

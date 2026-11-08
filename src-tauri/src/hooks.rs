@@ -50,6 +50,7 @@ fn now_ms() -> u64 {
 }
 
 pub(crate) fn remove_pane(app: Option<&AppHandle>, pane_id: &str, root: ProcessKey) {
+    crate::omp_navigation::remove_pane(pane_id, root);
     let mut registry = REGISTRY.lock().unwrap();
     if let Some(update) = registry.retire(pane_id, root) {
         if let Some(app) = app {
@@ -64,6 +65,24 @@ pub fn agent_snapshot() -> Value {
 
 pub(crate) fn agent_update(pane_id: &str) -> Option<crate::hook_state::AgentUpdate> {
     REGISTRY.lock().unwrap().current_update(pane_id)
+}
+
+pub(crate) fn current_omp_binding(
+    pane_id: &str,
+    origin: &HookOrigin,
+) -> Option<(ProcessKey, ProcessKey)> {
+    if !source_enabled(&crate::store::load_settings(), "omp") {
+        return None;
+    }
+    crate::pty::with_hook_session(pane_id, |root| {
+        let actor = REGISTRY.lock().unwrap().verified_omp_actor(pane_id, root, origin)?;
+        if hook_identity::process_key(root.pid) != Some(root)
+            || hook_identity::process_key(actor.pid) != Some(actor)
+        {
+            return None;
+        }
+        Some((root, actor))
+    })?
 }
 
 pub fn start_heartbeat_watchdog(app: AppHandle) {
@@ -202,6 +221,7 @@ pub fn start_hook_server(app: AppHandle) -> Result<u16, String> {
         .ok_or("failed to get hook server port")?;
     HOOK_PORT.store(port, Ordering::Relaxed);
     let _ = HOOK_APP.set(app.clone());
+    crate::omp_navigation::initialize(app.clone());
     eprintln!("[hook-server] listening on 127.0.0.1:{port}");
 
     for _ in 0..4 {
@@ -210,6 +230,10 @@ pub fn start_hook_server(app: AppHandle) -> Result<u16, String> {
         let secret = secret.clone();
         thread::spawn(move || {
             for mut request in server.incoming_requests() {
+                if request.url().starts_with("/omp/") {
+                    crate::omp_navigation::handle_http(request, &secret);
+                    continue;
+                }
                 let response = handle_request(&app, &mut request, &secret);
                 let _ = request.respond(response);
             }

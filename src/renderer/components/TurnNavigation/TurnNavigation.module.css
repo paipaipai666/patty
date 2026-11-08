@@ -1,0 +1,174 @@
+.rail {
+  position: absolute;
+  z-index: var(--z-session-preview);
+  top: 50%;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  width: 24px;
+  max-height: calc(100% - 48px);
+  transform: translateY(-50%);
+  color: var(--text-primary);
+  font: 12px/18px var(--font-ui);
+}
+.rail[data-expanded='true'] { width: 64px; }
+.viewport {
+  flex: 0 1 auto;
+  min-height: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  outline: none;
+}
+.viewport::-webkit-scrollbar { display: none; }
+.viewport:focus-visible {
+  outline: 1px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.marks { position: relative; width: 100%; }
+.markTarget {
+  position: absolute;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+  height: 12px;
+  cursor: pointer;
+}
+.mark {
+  flex: 0 0 48px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--text-secondary);
+  transform-origin: right center;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease-out, background-color 180ms ease-out;
+  pointer-events: none;
+}
+.markTarget[aria-current='true'] .mark,
+.rail[data-expanded='true'] .markTarget[aria-selected='true'] .mark {
+  background: var(--accent);
+  height: 3px;
+}
+.toggle {
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 24px;
+  padding: 0;
+  margin-top: 6px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  opacity: 0.35;
+  cursor: pointer;
+  transition: opacity 160ms ease-out;
+}
+.rail[data-expanded='true'] .toggle,
+.toggle:focus-visible { opacity: 1; }
+.toggle:hover { background: var(--bg-item-hover); }
+.toggle:focus-visible,
+.card button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.flyout {
+  position: fixed;
+  z-index: var(--z-session-preview);
+  width: min(300px, calc(100vw - 112px));
+  padding-right: 12px;
+  box-sizing: content-box;
+  color: var(--text-primary);
+  font: 12px/18px var(--font-ui);
+}
+.card {
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-context-menu);
+  box-shadow: 0 4px 18px rgb(0 0 0 / 15%);
+  animation: reveal 140ms ease-out;
+}
+.heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  padding: 8px 12px 0;
+  font-size: 11px;
+  font-weight: 600;
+}
+.headingEnd { display: flex; align-items: center; gap: 4px; }
+.heading time { color: var(--text-secondary); font-size: 10px; font-weight: 400; }
+.card button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+.card button:hover:not(:disabled) { background: var(--bg-item-hover); }
+.card button:disabled { opacity: 0.4; cursor: default; }
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 12px 0;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-medium);
+  color: var(--text-secondary);
+}
+.search:focus-within { border-color: var(--accent); }
+.search input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+}
+.search input::placeholder { color: var(--text-secondary); opacity: 1; }
+.prompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  margin: 10px 12px;
+  font-size: 13px;
+  line-height: 20px;
+}
+.meta { padding: 0 12px 10px; color: var(--text-secondary); font-size: 10px; line-height: 16px; }
+.actions { display: flex; align-items: center; gap: 2px; padding: 5px 7px 5px 12px; border-top: 1px solid var(--border-subtle); }
+.hint { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-secondary); font-size: 10px; }
+.live { margin-left: 2px; }
+.empty { padding: 8px 12px 12px; color: var(--text-secondary); }
+.empty p { margin: 4px 0 8px; }
+.empty button { border: 1px solid var(--border-medium); }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@keyframes reveal {
+  from { opacity: 0; transform: translateX(3px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mark, .toggle { transition: none; }
+  .card { animation: none; }
+}
+@media (forced-colors: active) {
+  .mark { background: CanvasText; forced-color-adjust: none; }
+  .markTarget[aria-current='true'] .mark,
+  .markTarget[aria-selected='true'] .mark { background: Highlight; }
+  .card { border-color: CanvasText; }
+}

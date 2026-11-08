@@ -21,7 +21,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
     settings: 'Ctrl+,',
     splitHorizontal: 'Ctrl+Shift+D',
     splitVertical: 'Ctrl+Shift+E',
-    closePane: 'Ctrl+Shift+W'
+    closePane: 'Ctrl+Shift+W',
+    turnDirectory: 'Ctrl+Shift+J',
+    previousTurn: 'Ctrl+Shift+PageUp',
+    nextTurn: 'Ctrl+Shift+PageDown',
+    returnToLive: 'Ctrl+Shift+End'
   },
   customThemes: [],
   desktopNotifications: true,

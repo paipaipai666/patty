@@ -84,6 +84,25 @@ impl AgentRegistry {
             .then_some(lease.actor)
     }
 
+    pub(crate) fn verified_omp_actor(
+        &self,
+        pane_id: &str,
+        root: ProcessKey,
+        origin: &HookOrigin,
+    ) -> Option<ProcessKey> {
+        let lease = self.panes.get(pane_id)?;
+        (lease.root == root
+            && lease.source == "omp"
+            && lease.status.is_some()
+            && origin.process_id == lease.actor.pid
+            && origin.instance_id.as_ref().is_some_and(|id| !id.is_empty())
+            && origin.instance_id == lease.instance_id
+            && origin.conversation_id.as_ref().is_some_and(|id| !id.is_empty())
+            && origin.conversation_id == lease.conversation_id
+            && origin.parent_conversation_id.is_none())
+            .then_some(lease.actor)
+    }
+
     fn publish(&mut self, pane_id: &str) -> AgentUpdate {
         self.revision += 1;
         let lease = self.panes.get_mut(pane_id).unwrap();
@@ -306,6 +325,49 @@ mod tests {
             now: origin.sequence * 100,
             nested: false,
         }
+    }
+
+    #[test]
+    fn navigation_requires_the_current_live_omp_conversation_and_instance() {
+        let mut registry = AgentRegistry::default();
+        let current = origin(1);
+        let mut start = event("session_created", &current);
+        start.source = "omp";
+        let root = start.root;
+        registry.apply(start).unwrap();
+        assert_eq!(registry.verified_omp_actor("p1", root, &current), Some(ProcessKey { pid: 20, created: 200 }));
+        let mut stale = current.clone();
+        stale.conversation_id = Some("other-chat".into());
+        assert_eq!(registry.verified_omp_actor("p1", root, &stale), None);
+        stale = current.clone();
+        stale.instance_id = Some("other-instance".into());
+        assert_eq!(registry.verified_omp_actor("p1", root, &stale), None);
+        stale = current.clone();
+        stale.process_id = 21;
+        assert_eq!(registry.verified_omp_actor("p1", root, &stale), None);
+        assert_eq!(registry.verified_omp_actor("p1", ProcessKey { created: 999, ..root }, &current), None);
+        let ended = origin(2);
+        let mut end = event("session_deleted", &ended);
+        end.source = "omp";
+        registry.apply(end).unwrap();
+        assert_eq!(registry.verified_omp_actor("p1", root, &ended), None);
+    }
+
+    #[test]
+    fn a_different_agent_or_missing_conversation_cannot_register_navigation() {
+        let mut registry = AgentRegistry::default();
+        let current = origin(1);
+        let start = event("session_created", &current);
+        let root = start.root;
+        registry.apply(start).unwrap();
+        assert_eq!(registry.verified_omp_actor("p1", root, &current), None);
+        registry.retire("p1", root);
+        let mut missing = current.clone();
+        missing.conversation_id = None;
+        let mut start = event("session_created", &missing);
+        start.source = "omp";
+        registry.apply(start).unwrap();
+        assert_eq!(registry.verified_omp_actor("p1", root, &missing), None);
     }
 
     #[test]

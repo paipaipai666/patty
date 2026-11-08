@@ -18,5 +18,20 @@
       "@/*": ["src/renderer/*"]
     }
   },
-  "include": ["src/renderer/**/*", "src/shared/**/*", "src/shared/__fixtures__/*.json", "src/renderer/themes/*.json", "resources/**/*.ts", "e2e/visual/**/*.tsx"]
+  "include": [
+    "src/renderer/**/*",
+    "src/shared/**/*",
+    "src/shared/__fixtures__/*.json",
+    "src/renderer/themes/*.json",
+    "resources/**/*.ts",
+    "e2e/visual/**/*.tsx",
+    "integrations/omp/standard-navigation.ts",
+    "integrations/omp/native-navigation.ts",
+    "integrations/omp/canonical-renderer.ts",
+    "integrations/omp/progressive-highlight.ts",
+    "integrations/omp/progressive-highlight-lite.ts",
+    "integrations/omp/navigation-api.ts",
+    "integrations/omp/markdown-range.ts",
+    "integrations/omp/markdown-source-map.ts"
+  ]
 }

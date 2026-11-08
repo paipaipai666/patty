@@ -71,11 +71,16 @@ describe('PattyNotifier (omp extension)', () => {
     PattyNotifier(pi)
     expect([...handlers.keys()].sort()).toEqual([
       'auto_retry_start',
+      'message_end',
+      'session_branch',
+      'session_compact',
       'session_shutdown',
       'session_start',
       'session_stop',
+      'session_switch',
       'tool_approval_requested',
-      'tool_call'
+      'tool_call',
+      'turn_end'
     ])
   })
 
@@ -96,6 +101,93 @@ describe('PattyNotifier (omp extension)', () => {
     posted.length = 0
     intervalCallbacks[0].fn()
     await vi.waitFor(() => expect(posted.map((p) => p.event)).toEqual(['alive']))
+  })
+
+  it('session_start without a transcript does not throw and opens no transcript bridge when the UI returns no TUI', async () => {
+    const registered: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.endsWith('/omp/register')) registered.push(url)
+      return new Response('{}')
+    }))
+    const setWidget = vi.fn((_key: string, _factory: unknown) => {})
+    const standardCtx = {
+      ...ctx,
+      hasUI: true,
+      cwd: 'D:/standard',
+      ui: { setWidget },
+      sessionManager: {
+        getSessionId: () => 'standard-session',
+        getLeafId: () => null,
+        getBranchView: () => []
+      }
+    }
+    PattyNotifier(pi)
+    await handlers.get('session_start')?.({}, standardCtx)
+    expect(setWidget.mock.calls.map(call => call[0])).toEqual(['patty-navigation', 'patty-navigation'])
+    expect(setWidget.mock.calls[1]?.[1]).toBeUndefined()
+    expect(registered).toEqual([])
+  })
+
+  it('announces a changed conversation before registering it and keeps reconnects as heartbeats', async () => {
+    let sessionId = 'session-a'
+    const position = () => ({ mode: 'live' as const, sessionId, branchEpoch: 1, displayEpoch: 1, viewRevision: 1, frameId: `frame-${sessionId}` })
+    let positionListener: (value: ReturnType<typeof position>) => void = () => {}
+    let polls = 0
+    let revoked = false
+    const hooks: Array<{ event: string | undefined; conversationId: string | undefined }> = []
+    const registered: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: { body: string; signal: AbortSignal }) => {
+      const body: { event?: string; origin?: { conversationId?: string } } = JSON.parse(init.body)
+      if (url.endsWith('/hook')) {
+        hooks.push({ event: body.event, conversationId: body.origin?.conversationId })
+        return new Response('{}')
+      }
+      if (url.endsWith('/omp/register')) {
+        const id = body.origin?.conversationId
+        if (!id) throw new Error('Missing registration conversation')
+        expect(hooks.some(hook => hook.event === 'session_created' && hook.conversationId === id)).toBe(true)
+        registered.push(id)
+        return new Response(JSON.stringify({ leaseToken: `lease-${id}` }))
+      }
+      if (url.endsWith('/omp/poll')) {
+        polls++
+        if (polls === 1) throw new Error('Temporary connection failure')
+        return await new Promise<Response>((_, reject) => {
+          init.signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+        })
+      }
+      if (url.endsWith('/omp/revoke')) revoked = true
+      return new Response('{}')
+    }))
+    const navigationCtx = {
+      ...ctx,
+      ui: { transcript: {
+        getCapabilities: () => ({ transcriptNavigation: 1, catalogSnapshot: 1, nativeHistoryViewport: 1, frameObservation: 1 }),
+        getPosition: position,
+        getCatalog: () => ({ sessionId, branchEpoch: 1, catalogRevision: 1, turns: [] }),
+        seek: async () => position(), returnToLive: async () => position(),
+        onPosition: (listener: typeof positionListener) => { positionListener = listener; return () => { positionListener = () => {} } },
+        onCatalog: () => () => {}
+      } }
+    }
+    PattyNotifier(pi)
+    try {
+      await handlers.get('session_start')?.({}, navigationCtx)
+      await vi.waitFor(() => expect(registered).toEqual(['session-a', 'session-a']), { timeout: 3000 })
+      expect(hooks).toEqual([
+        { event: 'session_created', conversationId: 'session-a' },
+        { event: 'alive', conversationId: 'session-a' },
+        { event: 'alive', conversationId: 'session-a' }
+      ])
+      sessionId = 'session-b'
+      positionListener(position())
+      await vi.waitFor(() => expect(registered).toEqual(['session-a', 'session-a', 'session-b']), { timeout: 3000 })
+      expect(hooks.at(-1)).toEqual({ event: 'session_created', conversationId: 'session-b' })
+      expect(hooks.filter(hook => hook.event === 'session_created')).toHaveLength(2)
+    } finally {
+      await handlers.get('session_shutdown')?.({}, navigationCtx)
+      await vi.waitFor(() => expect(revoked).toBe(true))
+    }
   })
 
   it('session_stop → idle', async () => {

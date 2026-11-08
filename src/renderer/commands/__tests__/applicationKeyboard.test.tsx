@@ -13,7 +13,7 @@ let root: ReturnType<typeof createRoot>
 let container: HTMLDivElement
 const created = vi.fn()
 
-function Harness({ blocked = false, shortcut = 'Ctrl+T' }: { blocked?: boolean; shortcut?: string }) {
+function Harness({ blocked = false, shortcut = 'Ctrl+T', unavailable = false }: { blocked?: boolean; shortcut?: string; unavailable?: boolean }) {
   const execute = useCommandExecution()
   const commands = createShortcutCommands({ ...DEFAULT_SETTINGS.shortcuts, newTerminal: shortcut }, {
     commandPalette: () => {},
@@ -21,6 +21,7 @@ function Harness({ blocked = false, shortcut = 'Ctrl+T' }: { blocked?: boolean; 
     prevTab: () => useSessionStore.getState().navigatePrev(), toggleSidebar: () => {}, settings: () => {},
     splitHorizontal: () => {}, splitVertical: () => {}, closePane: () => {}
   })
+  if (unavailable) commands[0].disabledReason = () => 'Navigation unavailable'
   useApplicationKeyboard({ commands, blocked, execute, navigateToIndex: index => useSessionStore.getState().navigateToIndex(index) })
   return <><div className="xterm" data-pane-id="pane-a"><textarea className="xterm-helper-textarea" /></div><div className="xterm" data-pane-id="pane-b"><textarea className="xterm-helper-textarea" /></div><input aria-label="Search" /><button>Trigger</button></>
 }
@@ -121,6 +122,16 @@ describe('application keyboard', () => {
     expect(created).not.toHaveBeenCalled()
     await press('Y', { shiftKey: true })
     expect(created).toHaveBeenCalledOnce()
+  })
+
+  it('preserves terminal input when the matching application command is unavailable', async () => {
+    act(() => root.render(<Harness unavailable />))
+    element('textarea').focus()
+    const terminal = vi.fn()
+    element('textarea').addEventListener('keydown', terminal)
+    expect((await press('t')).defaultPrevented).toBe(false)
+    expect(terminal).toHaveBeenCalledOnce()
+    expect(created).not.toHaveBeenCalled()
   })
 
   it('focuses the new-terminal action when the last layout pane is gone', () => {

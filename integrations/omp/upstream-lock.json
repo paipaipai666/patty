@@ -1,0 +1,49 @@
+{
+  "version": "18.13.3",
+  "sources": [
+    {
+      "file": "pi-coding-agent/src/cli.ts",
+      "sha256": "c5fe32b1f2275939e16917b264ec011398e4b43c25ad8a237c8ab5748edbe970"
+    },
+    {
+      "file": "pi-coding-agent/src/extensibility/extensions/types.ts",
+      "sha256": "ab05f29e8e20d7d250a78e7cce5eb7d87cf26312cdb6c5e555f0c6653095ffde"
+    },
+    {
+      "file": "pi-coding-agent/src/modes/controllers/extension-ui-controller.ts",
+      "sha256": "f894ce2a5530ff836e77811f9b8a441549da260e74087221a4169684cadc85b8"
+    },
+    {
+      "file": "pi-tui/src/tui.ts",
+      "sha256": "6ef3fcf647a4d89265e7025c1f35c244d10ca4b29d254732934dc904797dfbcf"
+    },
+    {
+      "file": "pi-tui/src/chrome/transcript-container.ts",
+      "sha256": "01a915d0269f672b20c66f63aac8688497fd77cb8a4c116a5518c4fab901b14b"
+    },
+    {
+      "file": "pi-tui/src/components/markdown.ts",
+      "sha256": "c598a4a3a4f8ea6cd07d25e856d3a4220c4fbdd05d5db42f19a274fef03d6389"
+    },
+    {
+      "file": "pi-coding-agent/dist/types/extensibility/extensions/types.d.ts",
+      "sha256": "7eed7f0e0b22f5bdf0b8077543a0ba861e96d38bbb3ba88265518767b1036016"
+    },
+    {
+      "file": "pi-tui/dist/types/components/markdown.d.ts",
+      "sha256": "f04f0361169ab0843c3ad2793d6f447c1f58ca8e25ef0cb8775cc706f24b7c61"
+    },
+    {
+      "file": "pi-coding-agent/src/session/session-manager.ts",
+      "sha256": "4f471884b4a5510d22aa33915a507fd630c79f7e57f3c87570aa74d58feb2f09"
+    },
+    {
+      "file": "pi-tui/src/chat/chat-transcript-builder.ts",
+      "sha256": "66c7e46ae7fc9536202070864f2f6653a8db4da7b62b1190be9cba5f4f4a76ab"
+    },
+    {
+      "file": "pi-coding-agent/src/modes/interactive-mode.ts",
+      "sha256": "c172927795b26cc6d7918233b25abc4a2b1bad42a6e75ffde16df197b6a4d281"
+    }
+  ]
+}

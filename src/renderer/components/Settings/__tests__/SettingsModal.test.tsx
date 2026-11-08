@@ -26,7 +26,11 @@ const { mockUpdateSetting, mockCloseSettings, settingsState } = vi.hoisted(() =>
         settings: 'Ctrl+,',
         splitHorizontal: 'Ctrl+Shift+D',
         splitVertical: 'Ctrl+Shift+E',
-        closePane: 'Ctrl+Shift+W'
+        closePane: 'Ctrl+Shift+W',
+        turnDirectory: 'Ctrl+Shift+J',
+        previousTurn: 'Ctrl+Shift+PageUp',
+        nextTurn: 'Ctrl+Shift+PageDown',
+        returnToLive: 'Ctrl+Shift+End'
       },
 
       customThemes: [] as Array<{ id: string; name: string; ui: Record<string, string>; terminal: Record<string, string> }>,

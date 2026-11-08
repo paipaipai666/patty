@@ -34,6 +34,8 @@ import { usePaletteCommands } from './commands/usePaletteCommands'
 import { CommandPalette } from './components/CommandPalette/CommandPalette'
 import { useWindowMaterial } from './hooks/useWindowMaterial'
 import { useDesktopNotifications } from './hooks/useDesktopNotifications'
+import { TurnNavigation } from './components/TurnNavigation/TurnNavigation'
+import { createTurnNavigationCommands } from './commands/turnNavigationCommands'
 
 interface ContextMenuState {
   x: number
@@ -80,12 +82,14 @@ export default function App() {
   const [metricsOpen, setMetricsOpen] = useState(false)
   const [sshMonitorOpen, setSshMonitorOpen] = useState(false)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [turnDirectoryOpen, setTurnDirectoryOpen] = useState(false)
   const [sessionInfoId, setSessionInfoId] = useState<string | null>(null)
   const closeSessionInfo = useCallback(() => setSessionInfoId(null), [])
   const [commandBarOpen, setCommandBarOpen] = useState(false)
   const activateNotification = useCallback(() => {
     useSettingsStore.getState().closeSettings()
     setCommandPaletteOpen(false)
+    setTurnDirectoryOpen(false)
     setSessionInfoId(null)
     setContextMenu(null)
     setCollectionContextMenu(null)
@@ -283,6 +287,7 @@ export default function App() {
   })
   const executeCommand = useCommandExecution()
   const workbenchCommands: AppCommand[] = [
+    ...createTurnNavigationCommands(shortcuts, () => { setTurnDirectoryOpen(!turnDirectoryOpen); return turnDirectoryOpen ? 'focused-terminal' : 'dialog' }),
     { id: 'session-info', label: 'Show session details', group: 'Actions', description: 'Current session · Folder, shell and process', keywords: '会话 详情 路径 进程 PID', disabledReason: () => useSessionStore.getState().sessions.some(item => item.id === useSessionStore.getState().activeSessionId) ? undefined : 'No active session', run: () => { setSessionInfoId(useSessionStore.getState().activeSessionId); return 'dialog' } },
     { id: 'metrics', label: 'Show performance metrics', group: 'Actions', description: 'Application diagnostics', keywords: '性能 监控', run: () => { setMetricsOpen(true); return 'dialog' } },
     { id: 'ssh-monitor', label: 'Show SSH monitor', group: 'Actions', description: 'Current remote session', keywords: '远程 监控', disabledReason: () => useSessionStore.getState().sessions.find(item => item.id === useSessionStore.getState().activeSessionId)?.shell === 'ssh' ? undefined : 'Select an SSH session first', run: () => { setSshMonitorOpen(true); return 'dialog' } },
@@ -293,6 +298,7 @@ export default function App() {
   const modalOpen = externalModalOpen || sessionInfoId !== null
   useEffect(() => { if (externalModalOpen) setSessionInfoId(null) }, [externalModalOpen])
   useEffect(() => { if (modalOpen) setCommandPaletteOpen(false) }, [modalOpen])
+  useEffect(() => { if (modalOpen || commandPaletteOpen) setTurnDirectoryOpen(false) }, [modalOpen, commandPaletteOpen])
   useApplicationKeyboard({
     commands: [...paletteCommands, ...shortcutCommands.filter(command => command.id === 'commandPalette')],
     blocked: commandPaletteOpen || settingsOpen || Boolean(promptOptions || contextMenu || collectionContextMenu || sshAuthQueue.length || sshHostkeyQueue.length),
@@ -410,6 +416,7 @@ export default function App() {
           const activeId = useSessionStore.getState().activeSessionId
           if (activeId) handleContextMenu(e, activeId)
         }}>
+          <TurnNavigation open={turnDirectoryOpen} onOpenChange={setTurnDirectoryOpen} blocked={modalOpen || commandPaletteOpen || Boolean(contextMenu || collectionContextMenu)} />
           <TerminalArea onNewTerminal={handleNewTerminal} />
           <div hidden={!commandBarOpen}><CommandBar onClose={() => { setCommandBarOpen(false); focusActiveTerminal() }} /></div>
           <MetricsDashboard open={metricsOpen} onClose={() => setMetricsOpen(false)} />

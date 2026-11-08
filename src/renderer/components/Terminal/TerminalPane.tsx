@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState, type RefObject } from 'react'
 import { Terminal, type ITerminalOptions } from '@xterm/xterm'
+import { invoke } from '@tauri-apps/api/core'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { WebglAddon } from '@xterm/addon-webgl'
@@ -27,6 +28,7 @@ import {
 } from './iipAnchor'
 import { IipOverlay } from './IipOverlay'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
+import { registerOmpFrameObserver } from '../../utils/ompFrameObserver'
 import { PaneProbe, panes as benchmarkPanes } from '../../benchmark/probe'
 import type { PtyResult } from '../../api'
 import { markTerminalOpen } from '../../utils/shellReadiness'
@@ -101,6 +103,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
   const outputLaneRef = useRef<ReturnType<typeof terminalOutputScheduler.open> | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
+  const navigationObserverRef = useRef<ReturnType<typeof registerOmpFrameObserver> | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const ptyResizeRef = useRef<ReturnType<typeof createPtyResizeQueue> | null>(null)
   const webglAddonRef = useRef<WebglAddon | null>(null)
@@ -635,6 +638,18 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       updateCwd(id, cwd)
 
     })
+    const navigationObserver = registerOmpFrameObserver(term, {
+      visible: () => visibleRef.current && !document.hidden && container.getClientRects().length > 0,
+      observe: position => { void invoke('omp_navigation_observe', { paneId: session.id, position }).catch(() => {}) }
+    })
+    navigationObserverRef.current = navigationObserver
+    let detachNavigationVerification: (() => void) | undefined
+    let navigationVerificationDisposed = false
+    if (import.meta.env.MODE === 'integration') {
+      void import('../../verification/omp').then(({ attachNavigationTerminal }) => {
+        if (!navigationVerificationDisposed) detachNavigationVerification = attachNavigationTerminal(session.id, term)
+      })
+    }
 
 
     term.onData((data) => {
@@ -763,6 +778,10 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
       container.removeEventListener('webglcontextrestored', onContextRestored, true)
       container.removeEventListener('paste', onPaste, true)
       osc7Disposable.dispose()
+      navigationObserver.dispose()
+      navigationVerificationDisposed = true
+      detachNavigationVerification?.()
+      navigationObserverRef.current = null
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current)
         retryTimerRef.current = null
@@ -838,6 +857,7 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
 
   useEffect(() => {
     if (visible) {
+      navigationObserverRef.current?.refresh()
 
       setTimeout(() => fitTerminal(!ptyCreatedRef.current), 10)
     }

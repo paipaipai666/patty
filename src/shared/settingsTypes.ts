@@ -67,6 +67,10 @@ export interface ShortcutMap {
   splitHorizontal: string
   splitVertical: string
   closePane: string
+  turnDirectory: string
+  previousTurn: string
+  nextTurn: string
+  returnToLive: string
 }
 
 export interface XtermTheme {

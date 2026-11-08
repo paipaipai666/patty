@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+integrations/omp/node_modules/
 
 # Build output
 out/
@@ -51,6 +52,7 @@ tmp/
 temp/
 *.tmp
 *.temp
+.audit/
 
 /designs/
 /coverage/

@@ -4,6 +4,6 @@
   "mainBinaryName": "patty-integration-test",
   "build": {
     "frontendDist": "../out/integration",
-    "beforeBuildCommand": "node scripts/prepare-conpty.mjs && npx vite build --mode integration --outDir ../../out/integration"
+    "beforeBuildCommand": "node scripts/build-omp-hook.mjs && node scripts/prepare-conpty.mjs && npx vite build --mode integration --outDir ../../out/integration"
   }
 }

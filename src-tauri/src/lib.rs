@@ -16,6 +16,8 @@ mod desktop_notifications;
 mod command_state;
 mod program_status;
 mod program_state;
+mod omp_navigation;
+mod omp_navigation_state;
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -395,6 +397,12 @@ pub fn run() {
             get_fonts,
             hook_server_status,
             agent_state_snapshot,
+            omp_navigation::omp_navigation_snapshot,
+            omp_navigation::omp_navigation_status,
+            omp_navigation::omp_navigation_catalog_page,
+            omp_navigation::omp_navigation_request,
+            omp_navigation::omp_navigation_observe,
+            omp_navigation::omp_navigation_release,
             command_state::command_state_snapshot,
             program_state::program_state_snapshot,
             desktop_notifications::notify_attention,
@@ -417,7 +425,7 @@ pub fn run() {
         .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
-            if matches!(event, tauri::RunEvent::Exit) { desktop_notifications::stop(app); }
+            if matches!(event, tauri::RunEvent::Exit) { omp_navigation::stop(); desktop_notifications::stop(app); }
         });
 }
 

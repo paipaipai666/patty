@@ -75,6 +75,7 @@ export function useApplicationKeyboard({ commands, blocked = false, navigateToIn
       const index = !editable && event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && /^[1-9]$/.test(event.key) ? Number(event.key) - 1 : null
       const command = index === null ? commands.find(item => item.shortcut && normalizeShortcut(item.shortcut) === combo && (!editable || item.allowInEditable)) : undefined
       if (!command && index === null) return
+      if (command?.disabledReason?.()) return
       event.preventDefault()
       event.stopImmediatePropagation()
       if (event.repeat) return
