@@ -13,6 +13,12 @@ function install() {
   return handlers
 }
 
+function clearInstallEnvironment(): void {
+  delete process.env.PATTY_PORT
+  delete process.env.PATTY_PANE_ID
+  delete process.env.PATTY_HOOK_SECRET
+}
+
 test('standard branch builds a live bridge and registers, without a transcript', async () => {
   const manager = SessionManager.inMemory('D:/hook-standard')
   manager.appendMessage({ role: 'user', content: 'HOOK_STANDARD_QUESTION', timestamp: 1 })
@@ -20,12 +26,13 @@ test('standard branch builds a live bridge and registers, without a transcript',
   const ui = new TUI(terminal)
   ui.start()
   const paths: string[] = []
+  const pollResolvers: Array<() => void> = []
   const originalFetch = globalThis.fetch
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = String(input)
     paths.push(url)
     if (url.endsWith('/omp/register')) return new Response(JSON.stringify({ leaseToken: 'lease-1' }))
-    if (url.endsWith('/omp/poll')) return new Response('{"command":null}')
+    if (url.endsWith('/omp/poll')) return await new Promise<Response>(resolve => { pollResolvers.push(() => resolve(new Response('{"command":null}'))) })
     return new Response('{}')
   }) as typeof fetch
   const setWidget = (_key: string, factory: ((tui: TUI) => unknown) | undefined) => {
@@ -33,15 +40,18 @@ test('standard branch builds a live bridge and registers, without a transcript',
   }
   const handlers = install()
   const ctx = { setInterval() {}, hasUI: true, cwd: 'D:/hook-standard', ui: { setWidget }, sessionManager: manager }
+  const leaf = manager.getLeafId()
   try {
     await handlers.get('session_start')?.({}, ctx)
-    for (let i = 0; i < 200 && !paths.some(p => p.endsWith('/omp/register')); i++) await Bun.sleep(5)
-    expect(paths.some(p => p.endsWith('/omp/register'))).toBe(true)
-    expect(manager.getLeafId()).toBe(manager.getLeafId())
-    await handlers.get('session_shutdown')?.({}, ctx)
+    for (let index = 0; index < 200 && !paths.some(path => path.endsWith('/omp/register')); index++) await Bun.sleep(5)
+    expect(paths.some(path => path.endsWith('/omp/register'))).toBe(true)
+    expect(manager.getLeafId()).toBe(leaf)
   } finally {
+    await handlers.get('session_shutdown')?.({}, ctx)
+    for (const resolve of pollResolvers.splice(0)) resolve()
     globalThis.fetch = originalFetch
     ui.stop()
+    clearInstallEnvironment()
   }
 })
 
@@ -65,5 +75,6 @@ test('no transcript and no TUI does not throw and never registers', async () => 
     expect(registered).toBe(false)
   } finally {
     globalThis.fetch = originalFetch
+    clearInstallEnvironment()
   }
 })
