@@ -28,7 +28,7 @@
 
 - 前端全量回归 911 项通过，包含 17 项悬浮导航组件测试和标准宿主适配器契约测试。原始基线为 873 项。
 - Rust 全量回归 271 项通过、1 项忽略。原始基线为 239 项通过、1 项忽略。
-- OMP companion 40 项测试通过，覆盖原始 SessionManager、TUI、renderer、native worker、源映射和 10,000 轮缓存路径。
+- OMP 模块测试 45 项通过，覆盖 SessionManager、TUI、renderer、native worker、源映射、标准宿主适配器和 10,000 轮缓存路径。
 - `verify.mjs` 核对 11 个全局上游源码指纹、14 个补丁文件及 7 个运行模块。全局 OMP 未改动。
 - 真实 CLI smoke 通过，包含 seek、返回实时、已提交中文一次性交付、单调帧版本及 `/new`。浏览前后 leaf 未改变。
 - 真实 xterm parser 验证首轮离开 1,000 行滚动缓存后仍能定位，返回时保留实时尾部和浏览期间新增内容。
@@ -45,7 +45,7 @@
 - 标准 OMP 扩展通过 `ctx.ui.setWidget` 取得真实 TUI，通过 `ctx.sessionManager.getBranchView()` 读取当前分支；`TranscriptNavigationController`、`CanonicalBranchIndex` 和 `ChatTranscriptBuilder` 复用。
 - 单文件构建产物为 `resources/omp-patty-hook.bundle.js`，构建检查 `node scripts/build-omp-hook.mjs --check` 通过，包内无相对导入、无 `new Worker(`。
 - 桌面验收 `npm run test:e2e:omp` 通过，使用普通 `omp.exe` 18.17.0 和临时 `USERPROFILE` 下的正常扩展发现路径。覆盖首轮离开滚动缓存后的跳转、返回实时、浏览期间追加、已提交中文一次交付、`/new` 重绑和 650 轮目录。报告在 `output/omp-navigation/desktop/report.json`。
-- 前后端回归：`npx vitest run` 911 项通过；`npm run typecheck` 通过；OMP 模块单测通过 40 项，`progressive-highlight` 的 worker 用例在沙箱中受 `spawn EPERM` 限制，未作为本次通过证据。
+- 前后端回归：`npx vitest run` 911 项通过；`npm run typecheck` 通过；OMP 模块测试 45 项通过。
 
 ## 适用范围与剩余边界
 
