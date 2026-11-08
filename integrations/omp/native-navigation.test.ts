@@ -191,3 +191,72 @@ test('renders a long unmarked component instead of trimming its window to zero r
   expect(controller.viewport.metrics.renderedEntries).toBeGreaterThan(0)
   controller.dispose()
 })
+
+test('scrolling down past the end of the last turn returns to live', async () => {
+  const manager = SessionManager.inMemory('D:/gate0-fixture')
+  const entryId = manager.appendMessage({ role: 'user', content: 'hello', timestamp: 1 })
+  const terminal = new FixtureTerminal()
+  const ui = new TUI(terminal)
+  ui.addChild(new Container())
+  ui.start()
+  let resumed = 0
+  const controller = new TranscriptNavigationController({ ui, entries: () => entriesFromBranch(manager.getBranch()), resumeLive: () => { resumed++ } })
+  try {
+    await controller.seek({ entryId })
+    expect(controller.getPosition()).toMatchObject({ mode: 'browsing', entryId })
+    ui.injectDebugInput('\x1b[B')
+    await Promise.resolve()
+    expect(controller.getPosition().mode).toBe('live')
+    expect(resumed).toBe(1)
+  } finally {
+    controller.dispose()
+    ui.stop()
+  }
+})
+
+test('scrolling down inside a long final part without reaching its end stays browsing', async () => {
+  const manager = SessionManager.inMemory('D:/gate0-fixture')
+  const source = Array.from({ length: 300 }, (_, index) => `line ${index}`).join('\n')
+  const entryId = manager.appendMessage({ role: 'user', content: source, timestamp: 1 })
+  const terminal = new FixtureTerminal()
+  const ui = new TUI(terminal)
+  ui.addChild(new Container())
+  ui.start()
+  let resumed = 0
+  const controller = new TranscriptNavigationController({ ui, entries: () => entriesFromBranch(manager.getBranch()), resumeLive: () => { resumed++ } })
+  try {
+    await controller.seek({ entryId })
+    expect(controller.getPosition()).toMatchObject({ mode: 'browsing', entryId })
+    ui.injectDebugInput('\x1b[B')
+    await Promise.resolve()
+    expect(controller.getPosition()).toMatchObject({ mode: 'browsing', entryId })
+    expect(resumed).toBe(0)
+  } finally {
+    controller.dispose()
+    ui.stop()
+  }
+})
+
+test('scrolling down past a trailing custom message returns to live', async () => {
+  const manager = SessionManager.inMemory('D:/gate0-fixture')
+  const entryId = manager.appendMessage({ role: 'user', content: 'latest question', timestamp: 1 })
+  manager.appendCustomMessageEntry('patty-navigation-fixture', 'OMP_NAV_GENERATED_WHILE_BROWSING', true, undefined, 'agent', 2)
+  const terminal = new FixtureTerminal()
+  const ui = new TUI(terminal)
+  ui.addChild(new Container())
+  ui.start()
+  let resumed = 0
+  const controller = new TranscriptNavigationController({ ui, entries: () => entriesFromBranch(manager.getBranch()), resumeLive: () => { resumed++ } })
+  try {
+    await controller.seek({ entryId })
+    for (let index = 0; index < 8; index++) {
+      ui.injectDebugInput('\x1b[B')
+      await Promise.resolve()
+    }
+    expect(controller.getPosition().mode).toBe('live')
+    expect(resumed).toBe(1)
+  } finally {
+    controller.dispose()
+    ui.stop()
+  }
+})

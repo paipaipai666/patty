@@ -352,6 +352,20 @@ try {
   await cdp.waitFor(`(await ${status}).position.mode === 'live' && (await ${status}).latestRequest?.status?.shown === true`)
   assert.equal((await cdp.evaluate(view)).lines.join('\n').split('中文草稿').length - 1, 1)
   report.draftPreservedAcrossNavigation = true
+  await searchTurn('OMP_NAV_LIVE_TAIL')
+  await cdp.waitFor(`document.querySelector('[data-entry-id="turn-live"]')`)
+  await click('[data-entry-id="turn-live"]')
+  await cdp.waitFor(`(await ${status}).position.entryId === 'turn-live' && (await ${status}).latestRequest?.status?.shown === true`)
+  await cdp.evaluate(`document.querySelector('.xterm-helper-textarea').focus()`)
+  for (let index = 0; index < 40; index++) {
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40, modifiers: 0 })
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40, modifiers: 0 })
+  }
+  await cdp.waitFor(`(await ${status}).position.mode === 'live' && (await ${status}).latestRequest?.status?.shown === true`, 10000)
+  const scrolledLive = await cdp.evaluate(view)
+  assert.equal(scrolledLive.type, 'normal')
+  assert.match(scrolledLive.lines.join('\n'), /no-model/)
+  report.scrollToLive = true
   await screenshot('live')
   await cdp.evaluate(`document.querySelector('.xterm-helper-textarea').focus(); window.terminalAPI.write('omp-navigation','\\u0015/new\\r')`)
   await cdp.waitFor(`(await ${status}).kind === 'ready' && (await ${status}).sessionId !== 'desktop-navigation-fixture' && (await ${status}).turnCount === 0`, 15000)
