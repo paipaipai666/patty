@@ -90,7 +90,7 @@ export class TranscriptViewport implements Component {
     return { mode: 'browsing', ...this.#anchor, sourceOffset: point }
   }
 
-  scroll(rows: number): void {
+  scroll(rows: number): boolean {
     this.#logicalPoint = undefined
     const entries = this.host.entries()
     let remaining = Math.trunc(rows)
@@ -156,6 +156,15 @@ export class TranscriptViewport implements Component {
     this.#logicalPoint = this.#sourceRow()?.start ?? this.#anchor.sourceOffset
     this.host.ui.requestRender()
     this.changed()
+    if (rows <= 0) return false
+    const finalIndex = this.host.indexOf?.(this.#anchor.entryId) ?? entries.findIndex(entry => entry.id === this.#anchor.entryId)
+    const finalEntry = entries[finalIndex]
+    const finalPart = finalEntry?.parts[this.#anchor.partIndex]
+    const atLastRow = this.#anchor.rowOffset >= Math.max(0, this.#currentRows.length - 1)
+    return finalIndex === entries.length - 1
+      && this.#anchor.partIndex === (finalEntry?.parts.length ?? 0) - 1
+      && atLastRow
+      && (finalPart?.source.length ?? 0) <= this.#endOffset
   }
 
   #sourceRow(): SourceRow | undefined {
@@ -170,11 +179,12 @@ export class TranscriptViewport implements Component {
     return undefined
   }
 
-  handleInput(data: string): void {
-    if (data === '\x1b[A') this.scroll(-1)
-    else if (data === '\x1b[B') this.scroll(1)
-    else if (data === '\x1b[5~') this.scroll(-Math.max(1, this.host.ui.terminal.rows - 4))
-    else if (data === '\x1b[6~') this.scroll(Math.max(1, this.host.ui.terminal.rows - 4))
+  handleInput(data: string): boolean {
+    if (data === '\x1b[A') { this.scroll(-1); return false }
+    if (data === '\x1b[B') return this.scroll(1)
+    if (data === '\x1b[5~') { this.scroll(-Math.max(1, this.host.ui.terminal.rows - 4)); return false }
+    if (data === '\x1b[6~') return this.scroll(Math.max(1, this.host.ui.terminal.rows - 4))
+    return false
   }
 
   render(width: number): readonly string[] {
@@ -519,7 +529,7 @@ export class TranscriptNavigationController implements TranscriptNavigationApi {
     if (this.#overlay && !this.#inputPending) {
       if (data === '\x1b') { void this.returnToLive(); return { consume: true } }
       if (['\x1b[A', '\x1b[B', '\x1b[5~', '\x1b[6~'].includes(data)) {
-        this.viewport.handleInput(data)
+        if (this.viewport.handleInput(data)) void this.returnToLive()
         return { consume: true }
       }
     }

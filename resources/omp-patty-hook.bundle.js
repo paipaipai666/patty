@@ -556,6 +556,13 @@ class TranscriptViewport {
     this.#logicalPoint = this.#sourceRow()?.start ?? this.#anchor.sourceOffset;
     this.host.ui.requestRender();
     this.changed();
+    if (rows <= 0)
+      return false;
+    const finalIndex = this.host.indexOf?.(this.#anchor.entryId) ?? entries.findIndex((entry) => entry.id === this.#anchor.entryId);
+    const finalEntry = entries[finalIndex];
+    const finalPart = finalEntry?.parts[this.#anchor.partIndex];
+    const atLastRow = this.#anchor.rowOffset >= Math.max(0, this.#currentRows.length - 1);
+    return finalIndex === entries.length - 1 && this.#anchor.partIndex === (finalEntry?.parts.length ?? 0) - 1 && atLastRow && (finalPart?.source.length ?? 0) <= this.#endOffset;
   }
   #sourceRow() {
     for (let index = this.#anchor.rowOffset;index < this.#rowSources.length; index++) {
@@ -571,14 +578,19 @@ class TranscriptViewport {
     return;
   }
   handleInput(data) {
-    if (data === "\x1B[A")
+    if (data === "\x1B[A") {
       this.scroll(-1);
-    else if (data === "\x1B[B")
-      this.scroll(1);
-    else if (data === "\x1B[5~")
+      return false;
+    }
+    if (data === "\x1B[B")
+      return this.scroll(1);
+    if (data === "\x1B[5~") {
       this.scroll(-Math.max(1, this.host.ui.terminal.rows - 4));
-    else if (data === "\x1B[6~")
-      this.scroll(Math.max(1, this.host.ui.terminal.rows - 4));
+      return false;
+    }
+    if (data === "\x1B[6~")
+      return this.scroll(Math.max(1, this.host.ui.terminal.rows - 4));
+    return false;
   }
   render(width) {
     const height = Math.max(3, this.host.ui.terminal.rows);
@@ -980,7 +992,8 @@ class TranscriptNavigationController {
         return { consume: true };
       }
       if (["\x1B[A", "\x1B[B", "\x1B[5~", "\x1B[6~"].includes(data)) {
-        this.viewport.handleInput(data);
+        if (this.viewport.handleInput(data))
+          this.returnToLive();
         return { consume: true };
       }
     }
