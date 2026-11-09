@@ -316,6 +316,13 @@ try {
   const first = await cdp.evaluate(view)
   assert.equal(first.type, 'alternate')
   assert.match(first.lines.join('\n'), /OMP_NAV_QUESTION_000/)
+  const historyScrollbar = await cdp.evaluate(`(() => {
+    const bar = document.querySelector('[data-omp-history-scrollbar]')
+    const thumb = bar?.querySelector('[class*="historyScrollbarThumb"]')
+    return bar && thumb ? { width: bar.getBoundingClientRect().width, height: bar.getBoundingClientRect().height, thumbHeight: thumb.getBoundingClientRect().height, thumbTop: thumb.style.top } : null
+  })()`)
+  assert.ok(historyScrollbar && historyScrollbar.height > 0 && historyScrollbar.thumbHeight > 0, 'history browsing must expose the terminal scrollbar')
+  report.historyScrollbar = historyScrollbar
   report.firstTurn = true
   report.jumpToShownUpperBoundMs = Date.now() - start
   writeFileSync(browseActive, '1')
