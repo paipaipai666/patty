@@ -1,6 +1,6 @@
 use serde_json::{json, Value};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const HOOK_MATCHER: &str = "permission_prompt|idle_prompt|elicitation_dialog";
 const STOP_FAILURE_MATCHER: &str = "rate_limit|overloaded|authentication_failed|oauth_org_not_allowed|billing_error|invalid_request|model_not_found|server_error|max_output_tokens|unknown";
@@ -479,6 +479,26 @@ pub fn sync_notification_tools(settings: &Value) {
     if on("copilotCli") { ensure_copilot_hook() } else { remove_copilot_hook() }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum HookSync {
+    Written(u64),
+    Unchanged(u64),
+}
+
+fn sync_hook_file(source: &Path, dest: &Path) -> std::io::Result<HookSync> {
+    let incoming = fs::read(source)?;
+    if fs::read(dest).is_ok_and(|current| current == incoming) {
+        return Ok(HookSync::Unchanged(incoming.len() as u64));
+    }
+    let staged = dest.with_extension("ts.tmp");
+    fs::write(&staged, &incoming)?;
+    if let Err(e) = fs::rename(&staged, dest) {
+        let _ = fs::remove_file(&staged);
+        return Err(e);
+    }
+    Ok(HookSync::Written(incoming.len() as u64))
+}
+
 pub fn ensure_opencode_plugin() {
     let Some(home) = home_dir() else {
         eprintln!("[installer] no home directory (USERPROFILE/HOME unset) — skipping opencode plugin install");
@@ -514,8 +534,14 @@ pub fn ensure_omp_hook() {
         return;
     }
     if source.exists() {
-        if let Err(e) = fs::copy(&source, &dest) {
-            eprintln!("[installer] omp hook copy: {e}");
+        match sync_hook_file(&source, &dest) {
+            Ok(HookSync::Written(bytes)) => {
+                eprintln!("[installer] omp hook installed: {bytes} bytes -> {}", dest.display())
+            }
+            Ok(HookSync::Unchanged(bytes)) => {
+                eprintln!("[installer] omp hook unchanged: {bytes} bytes")
+            }
+            Err(e) => eprintln!("[installer] omp hook copy: {e}"),
         }
     } else {
         eprintln!("[installer] omp hook source not found: {}", source.display());
@@ -894,5 +920,65 @@ mod tests {
             let qwen = json!({ "hooks": { "Notification": "str" } });
             apply_qwen_hooks(&mut qwen.clone(), hook_script);
         }
+    }
+
+    fn hook_sync_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("patty-hook-sync-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn hook_sync_writes_missing_destination() {
+        let dir = hook_sync_dir("create");
+        let source = dir.join("source.ts");
+        let dest = dir.join("patty-notifier.ts");
+        fs::write(&source, "export const version = 2;\n").unwrap();
+
+        assert_eq!(sync_hook_file(&source, &dest).unwrap(), HookSync::Written(26));
+        assert_eq!(fs::read_to_string(&dest).unwrap(), "export const version = 2;\n");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hook_sync_leaves_identical_copy_untouched() {
+        let dir = hook_sync_dir("same");
+        let source = dir.join("source.ts");
+        let dest = dir.join("patty-notifier.ts");
+        fs::write(&source, "export const version = 2;\n").unwrap();
+        fs::write(&dest, "export const version = 2;\n").unwrap();
+        let before = fs::metadata(&dest).unwrap().modified().unwrap();
+
+        assert_eq!(sync_hook_file(&source, &dest).unwrap(), HookSync::Unchanged(26));
+        assert_eq!(fs::metadata(&dest).unwrap().modified().unwrap(), before);
+        assert!(!dir.join("patty-notifier.ts.tmp").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hook_sync_replaces_stale_copy() {
+        let dir = hook_sync_dir("stale");
+        let source = dir.join("source.ts");
+        let dest = dir.join("patty-notifier.ts");
+        fs::write(&source, "export const version = 2;\n").unwrap();
+        fs::write(&dest, "export const version = 1;\n").unwrap();
+
+        assert_eq!(sync_hook_file(&source, &dest).unwrap(), HookSync::Written(26));
+        assert_eq!(fs::read_to_string(&dest).unwrap(), "export const version = 2;\n");
+        assert!(!dir.join("patty-notifier.ts.tmp").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hook_sync_reports_missing_source() {
+        let dir = hook_sync_dir("missing");
+        let source = dir.join("absent.ts");
+        let dest = dir.join("patty-notifier.ts");
+
+        let error = sync_hook_file(&source, &dest).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
+        assert!(!dest.exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 }

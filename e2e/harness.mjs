@@ -48,7 +48,7 @@ async function freePort() {
 
 
    
-export async function launchApp({ state, settings, connectDebugger = true, benchmarkSessions } = {}) {
+export async function launchApp({ state, settings, connectDebugger = true, benchmarkSessions, prepareAppData } = {}) {
   if (connectDebugger && !existsSync(resolve('out/renderer/index.html'))) {
     throw new Error('out/renderer missing — run `npm run build` first')
   }
@@ -59,6 +59,7 @@ export async function launchApp({ state, settings, connectDebugger = true, bench
   if (state) writeFileSync(join(dataDirectory, 'state.json'), JSON.stringify(state))
   if (settings) writeFileSync(join(dataDirectory, 'settings.json'), JSON.stringify(settings))
   if (benchmarkSessions !== undefined) writeFileSync(join(dataDirectory, 'benchmark-request'), String(benchmarkSessions))
+  prepareAppData?.(appData)
   const debugPort = connectDebugger ? await freePort() : undefined
   const startedAt = Date.now()
 

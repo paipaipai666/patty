@@ -17,6 +17,7 @@
     "build:integration": "tauri build --no-bundle --features e2e --config src-tauri/tauri.integration.conf.json",
     "test:e2e:notifications": "node e2e/notification-activation.test.mjs",
     "test:e2e:omp": "node e2e/omp-navigation.test.mjs",
+    "test:e2e:omp-hook": "node e2e/omp-hook-install.test.mjs",
     "omp:bundle": "node scripts/build-omp-hook.mjs",
     "omp:legacy:prepare": "node integrations/omp/prepare.mjs && node integrations/omp/runtime.mjs && node integrations/omp/apply.mjs",
     "omp:legacy:start": "node integrations/omp/start.mjs",
