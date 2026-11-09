@@ -47,6 +47,13 @@
 - 桌面验收 `npm run test:e2e:omp` 通过，使用普通 `omp.exe` 18.17.0 和临时 `USERPROFILE` 下的正常扩展发现路径。覆盖首轮离开滚动缓存后的跳转、返回实时、浏览期间追加、已提交中文一次交付、`/new` 重绑和 650 轮目录。报告在 `output/omp-navigation/desktop/report.json`。
 - 前后端回归：`npx vitest run` 911 项通过；`npm run typecheck` 通过；OMP 模块测试 45 项通过。
 
+## 2026-11-09 安装链路复核
+
+- 现场证据：`%USERPROFILE%\.omp\agent\extensions\patty-notifier.ts` 为 17528 字节、2026-11-08 19:23，与 `resources/omp-patty-hook.ts` 一致，而不是 56308 字节的 bundle。该源文件版扩展从扩展目录动态导入 `../integrations/omp/standard-navigation`，在 `C:\Users\29218\.omp\agent\extensions` 下必然失败，普通 `omp` 因此拿不到导航。
+- 原因：`ensure_omp_hook()` 只做 `fs::copy` 且从不比对内容；更早的二进制只认识 `resources/omp-patty-hook.ts`，升级后也不会重写已有文件。任何早于 `7e8a9cd`（2026-11-08 20:01）构建的后端都会把旧源文件留在原地。
+- 修复：`sync_hook_file()` 先按字节比较，不同才写临时文件再 `rename` 覆盖，并输出 `omp hook installed: N bytes` 或 `omp hook unchanged: N bytes`。新增 `npm run test:e2e:omp-hook` 用隔离 `PATTY_E2E_INTEGRATION_HOME` 预置一份过期扩展，确认应用启动后替换为当前 bundle。
+- 报告：`output/omp-hook-install/report.json`，`bundleBytes` 与 `installedBytes` 均为 56308，`replacedStaleCopy: true`、`loggedInstall: true`。
+
 ## 适用范围与剩余边界
 
 - 仅支持固定指纹的 OMP 18.13.3 companion 的限制已解除。当前产品路径是本机普通 `omp` 18.17.0 加载 `%USERPROFILE%\.omp\agent\extensions\patty-notifier.ts`，该文件由 `resources/omp-patty-hook.bundle.js` 安装而来。
@@ -65,6 +72,7 @@ rtk npx vitest run
 rtk node scripts/build-omp-hook.mjs --check
 rtk node integrations/omp/standard-probe.mjs
 rtk npm run test:e2e:omp
+rtk npm run test:e2e:omp-hook
 ```
 
 标准 OMP 探针报告为 `output/omp-standard/report.json`。桌面报告为 `output/omp-navigation/desktop/report.json`，另有 `directory.png`、`first-turn.png` 和 `live.png`。桌面测试的构建与 `PATTY_EXE` 配置见使用指南。
