@@ -37,7 +37,7 @@ function ready(turnCount = 3): PaneNavigationState {
 			position, latestRequest: null, catalogSnapshotId: 'catalog', turnCount, pageSize: 256
 		},
 		turns: Array.from({ length: turnCount }, (_, index) => ({ entryId: `entry-${index + 1}`, ordinal: index + 1, preview: index === 1 ? '修复 中文 输入' : 'Repeated prompt', createdAt: 1_700_000_000_000 + index })),
-		error: null, navigating: false, shownPosition: position
+		error: null, navigating: false, pendingTarget: null, shownPosition: position
 	}
 }
 
@@ -120,7 +120,7 @@ describe('current-terminal turn navigation', () => {
 	})
 
 	it('hides the floating navigation in unsupported terminals unless explicitly opened', () => {
-		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': { status: 'unavailable', snapshot: null, turns: [], error: null, navigating: false, shownPosition: null } } })
+		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': { status: 'unavailable', snapshot: null, turns: [], error: null, navigating: false, shownPosition: null, pendingTarget: null } } })
 		act(() => root.render(<TurnNavigation open={false} onOpenChange={close} blocked={false} />))
 		expect(document.querySelector('[data-turn-rail]')).toBeNull()
 		act(() => root.render(<TurnNavigation open onOpenChange={close} blocked={false} />))
@@ -219,12 +219,37 @@ describe('current-terminal turn navigation', () => {
 	})
 
 	it('explains missing OMP capability and keeps unsupported navigation disabled', () => {
-		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': { status: 'unavailable', snapshot: null, turns: [], error: null, navigating: false, shownPosition: null } } })
+		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': { status: 'unavailable', snapshot: null, turns: [], error: null, navigating: false, shownPosition: null, pendingTarget: null } } })
 		act(() => root.render(<TurnNavigation open onOpenChange={close} blocked={false} />))
 		expect(document.body.textContent).toContain('compatible OMP')
 		expect(document.querySelector('[role="option"]')).toBeNull()
 		expect(document.querySelector('[aria-label="Return to live terminal"]')).toBeNull()
 		expect(navigate).not.toHaveBeenCalled()
+	})
+
+	it('centers the turn rail on a pending target before the terminal frame is shown', () => {
+		const state = ready(122)
+		const snapshot = state.snapshot
+		if (!snapshot) throw new Error('Missing fixture snapshot')
+		const target: NavigationPosition = { ...snapshot.position, mode: 'browsing', entryId: 'entry-122', anchor: { partId: 'part', scalarOffset: 0 }, viewRevision: 2, frameId: 'target-frame' }
+		snapshot.position = target
+		snapshot.latestRequest = { requestId: 'request', status: { kind: 'applied', position: target, shown: false }, observationTimedOut: false }
+		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': state } })
+		act(() => root.render(<TurnNavigation open={false} onOpenChange={close} blocked={false} />))
+		const list = element<HTMLElement>('[data-turn-viewport]')
+		expect(list.scrollTop).toBeGreaterThan(0)
+		expect(document.querySelector('[data-entry-id="entry-122"]')).not.toBeNull()
+	})
+
+	it('anchors the rail on a selected turn before the native request settles', () => {
+		const state = ready(122)
+		state.pendingTarget = { kind: 'turn', entryId: 'entry-122' }
+		state.navigating = true
+		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': state } })
+		act(() => root.render(<TurnNavigation open={false} onOpenChange={close} blocked={false} />))
+		const list = element<HTMLElement>('[data-turn-viewport]')
+		expect(list.scrollTop).toBeGreaterThan(0)
+		expect(document.querySelector('[data-entry-id="entry-122"]')).not.toBeNull()
 	})
 
 	it('does not highlight an applied target before its terminal frame is shown', () => {
@@ -246,7 +271,7 @@ describe('current-terminal turn navigation', () => {
 	})
 
 	it('retries a failed catalog connection in the focused terminal on explicit request', () => {
-		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': { status: 'error', snapshot: null, turns: [], error: 'connection_failed', navigating: false, shownPosition: null } } })
+		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': { status: 'error', snapshot: null, turns: [], error: 'connection_failed', navigating: false, shownPosition: null, pendingTarget: null } } })
 		act(() => root.render(<TurnNavigation open onOpenChange={close} blocked={false} />))
 		const start = useOmpNavigationStore.getState().start
 		expect(start).toHaveBeenCalledTimes(1)

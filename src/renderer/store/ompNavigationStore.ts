@@ -18,6 +18,7 @@ export interface PaneNavigationState {
   error: string | null
   navigating: boolean
   shownPosition: NavigationPosition | null
+  pendingTarget: NavigationTarget | null
 }
 
 interface NavigationIntent {
@@ -74,8 +75,27 @@ function samePosition(a: NavigationPosition, b: NavigationPosition): boolean {
     && a.viewRevision === b.viewRevision && a.frameId === b.frameId
 }
 
+export interface NavigationAnchor {
+  mode: 'live' | 'browsing'
+  entryId: string | null
+}
+
+export function navigationAnchor(state: PaneNavigationState | undefined): NavigationAnchor {
+  const snapshot = state?.snapshot
+  const status = snapshot?.latestRequest?.status
+  if (status?.kind === 'applied' && !status.shown && snapshot && samePosition(status.position, snapshot.position)) {
+    return status.position.mode === 'browsing'
+      ? { mode: 'browsing', entryId: status.position.entryId }
+      : { mode: 'live', entryId: null }
+  }
+  if (state?.pendingTarget?.kind === 'turn') return { mode: 'browsing', entryId: state.pendingTarget.entryId }
+  if (state?.pendingTarget?.kind === 'live') return { mode: 'live', entryId: null }
+  const shown = state?.shownPosition
+  return shown?.mode === 'browsing' ? { mode: 'browsing', entryId: shown.entryId } : { mode: 'live', entryId: null }
+}
+
 function emptyPane(status: PaneNavigationState['status']): PaneNavigationState {
-  return { status, snapshot: null, turns: [], error: null, navigating: false, shownPosition: null }
+  return { status, snapshot: null, turns: [], error: null, navigating: false, shownPosition: null, pendingTarget: null }
 }
 
 function message(error: unknown): string {
@@ -151,7 +171,11 @@ export function createOmpNavigationStore(api: NavigationTransport = transport) {
       const waiting = navigating || (request?.status.kind === 'applied' && !request.status.shown && samePosition(request.status.position, snapshot.position))
       const previousShown = sameRun && previous?.shownPosition?.branchEpoch === snapshot.branchEpoch
         && previous.shownPosition.displayEpoch === snapshot.displayEpoch ? previous.shownPosition : null
-      update(subscription, { status: 'ready', snapshot, turns, error: null, navigating, shownPosition: waiting ? previousShown : snapshot.position })
+      update(subscription, {
+        status: 'ready', snapshot, turns, error: null, navigating,
+        shownPosition: waiting ? previousShown : snapshot.position,
+        pendingTarget: subscription.desiredTarget
+      })
     }
 
     function refresh(subscription: Subscription): Promise<void> {
@@ -169,7 +193,7 @@ export function createOmpNavigationStore(api: NavigationTransport = transport) {
             }
             if (failure !== null && isCurrent(subscription)) {
               const previous = get().byPane[subscription.paneId] ?? emptyPane('error')
-              update(subscription, { ...previous, status: 'error', error: message(failure), navigating: false })
+              update(subscription, { ...previous, status: 'error', error: message(failure), navigating: false, pendingTarget: null })
             }
           }
         } catch (error) {
@@ -229,7 +253,7 @@ export function createOmpNavigationStore(api: NavigationTransport = transport) {
         subscription.pendingRequestId = requestId
         subscription.latestIntentId = requestId
         subscription.desiredTarget = target
-        update(subscription, { ...state, error: null, navigating: true })
+        update(subscription, { ...state, error: null, navigating: true, pendingTarget: target })
         try {
           const response = await api.request(paneId, subscription.clientId, { requestId, scope, target })
           if (!isCurrent(subscription) || subscription.pendingRequestId !== requestId) return
@@ -242,7 +266,7 @@ export function createOmpNavigationStore(api: NavigationTransport = transport) {
           await refresh(subscription)
           if (!isCurrent(subscription) || subscription.latestIntentId !== requestId) return
           const current = get().byPane[paneId]
-          if (current) update(subscription, { ...current, error: message(error), navigating: false })
+          if (current) update(subscription, { ...current, error: message(error), navigating: false, pendingTarget: null })
         }
       },
       relative: async (paneId, direction) => {

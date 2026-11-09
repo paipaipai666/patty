@@ -1,14 +1,14 @@
 import { useRef, type PointerEvent, type ReactElement } from 'react'
-import { useOmpNavigationStore } from '../../store/ompNavigationStore'
+import { navigationAnchor, useOmpNavigationStore } from '../../store/ompNavigationStore'
 import styles from './Terminal.module.css'
 
 export function OmpHistoryScrollbar({ sessionId }: { sessionId: string }): ReactElement | null {
   const state = useOmpNavigationStore(store => store.byPane[sessionId])
   const track = useRef<HTMLDivElement>(null)
-  const position = state?.shownPosition
+  const anchor = navigationAnchor(state)
   const turns = state?.turns
-  if (position?.mode !== 'browsing' || !turns?.length) return null
-  const current = Math.max(0, turns.findIndex(turn => turn.entryId === position.entryId))
+  if (anchor.mode !== 'browsing' || !anchor.entryId || !turns?.length) return null
+  const current = Math.max(0, turns.findIndex(turn => turn.entryId === anchor.entryId))
   const ratio = turns.length === 1 ? 1 : current / (turns.length - 1)
   const navigateAt = (clientY: number): void => {
     const element = track.current

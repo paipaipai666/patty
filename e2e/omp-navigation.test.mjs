@@ -329,6 +329,32 @@ try {
   const firstImage = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
   writeFileSync(join(output, 'first-turn.png'), Buffer.from(firstImage.data, 'base64'))
   report.wheelHistory = await verifyWheelIsolation('history')
+  const deepTarget = 'turn-121'
+  await hoverMark()
+  await cdp.evaluate(`(() => {
+    const viewport = document.querySelector('${viewportSelector}')
+    viewport.scrollTop = 121 * 12 - 138
+    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
+  })()`)
+  await cdp.waitFor(`document.querySelector('[data-entry-id="${deepTarget}"]')`)
+  const previousDeepRequest = (await cdp.evaluate(status)).latestRequest.requestId
+  await click(`[data-entry-id="${deepTarget}"]`)
+  await cdp.waitFor(`(await ${status}).latestRequest?.requestId !== ${JSON.stringify(previousDeepRequest)} && (await ${status}).latestRequest?.status?.shown === true`)
+  const deep = await cdp.evaluate(`(() => {
+    const viewport = document.querySelector('${viewportSelector}')
+    const thumb = document.querySelector('[data-omp-history-scrollbar] [class*="historyScrollbarThumb"]')
+    const current = document.querySelector('[data-entry-id][aria-current="true"]')
+    const marks = viewport ? [...viewport.querySelectorAll('[data-entry-id]')].map(element => element.dataset.entryId) : []
+    return { scrollTop: viewport ? viewport.scrollTop : null, current: current?.dataset.entryId ?? null,
+      first: marks[0] ?? null, last: marks[marks.length - 1] ?? null, thumbTop: thumb?.style.top ?? null }
+  })()`)
+  assert.equal(deep.current, deepTarget, 'the rail must follow the turn selected from a scrolled list')
+  assert.ok(deep.scrollTop > 0, 'the rail must not snap back to the first turn after a deep selection')
+  assert.ok(deep.first !== 'turn-000', 'the rail must stay anchored near the selected turn')
+  const deepView = await cdp.evaluate(view)
+  assert.match(deepView.lines.join('\n'), /Question 121/)
+  report.deepTurn = { ...deep, content: true }
+  await screenshot('deep-turn')
   const backgroundDeadline = Date.now() + 5000
   while (!existsSync(backgroundReady) && Date.now() < backgroundDeadline) await new Promise(resolve => setTimeout(resolve, 25))
   assert.equal(existsSync(backgroundReady), true, 'the fixture must append its update while history is visible')

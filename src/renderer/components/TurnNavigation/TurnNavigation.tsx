@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { ArrowDown16Regular, ArrowUp16Regular, ArrowUndo16Regular, Dismiss16Regular, Search16Regular } from '@fluentui/react-icons'
 import { focusActiveTerminal } from '../../commands/useApplicationKeyboard'
 import { isComposingKey } from '../../commands/shortcuts'
-import { useOmpNavigationStore } from '../../store/ompNavigationStore'
+import { navigationAnchor, useOmpNavigationStore } from '../../store/ompNavigationStore'
 import { getFocusedSessionId, useWorkspaceStore } from '../../store/workspaceStore'
 import styles from './TurnNavigation.module.css'
 
@@ -38,8 +38,10 @@ export function TurnNavigation({ open, onOpenChange, blocked }: { open: boolean;
   }, [turns, query])
   const position = state?.shownPosition
   const currentId = position?.mode === 'browsing' ? position.entryId : null
+  const anchor = navigationAnchor(state)
+  const anchorId = anchor.mode === 'browsing' ? anchor.entryId : null
   const current = turns?.find(turn => turn.entryId === currentId)
-  const active = results.find(turn => turn.entryId === activeId) ?? results.find(turn => turn.entryId === currentId) ?? results.at(-1)
+  const active = results.find(turn => turn.entryId === activeId) ?? results.find(turn => turn.entryId === anchorId) ?? results.at(-1)
   const activeIndex = active ? results.indexOf(active) : -1
   const engaged = open || inside || focused
   const request = snapshot?.latestRequest
@@ -93,11 +95,11 @@ export function TurnNavigation({ open, onOpenChange, blocked }: { open: boolean;
   useLayoutEffect(() => {
     const element = viewport.current
     if (!element) return
-    const index = query ? 0 : Math.max(0, results.findIndex(turn => turn.entryId === currentId))
-    const target = query || currentId ? index : Math.max(0, results.length - 1)
+    const index = query ? 0 : Math.max(0, results.findIndex(turn => turn.entryId === anchorId))
+    const target = query || anchorId ? index : Math.max(0, results.length - 1)
     element.scrollTop = Math.max(0, target * ROW_HEIGHT - (element.clientHeight || MAX_HEIGHT) / 2)
     setScrollTop(element.scrollTop)
-  }, [sessionId, snapshot?.runId, Boolean(turns?.length), currentId, query, open, blocked])
+  }, [sessionId, snapshot?.runId, Boolean(turns?.length), anchorId, query, open, blocked])
 
   useEffect(() => {
     const element = viewport.current
@@ -219,12 +221,12 @@ export function TurnNavigation({ open, onOpenChange, blocked }: { open: boolean;
       <div className={styles.marks} style={{ height: results.length * ROW_HEIGHT }}>
         {visible.map(({ turn, index }) => {
           const distance = engaged ? Math.abs(index - activeIndex) : 5
-          const length = engaged ? LINE_LENGTHS[Math.min(distance, LINE_LENGTHS.length - 1)] : turn.entryId === currentId ? 14 : 8
+          const length = engaged ? LINE_LENGTHS[Math.min(distance, LINE_LENGTHS.length - 1)] : turn.entryId === anchorId ? 14 : 8
           return <div key={turn.entryId} id={`${id}-${turn.entryId}`} role="option" aria-label={`Turn ${turn.ordinal}: ${turn.preview || 'Attachment prompt'}`}
             aria-selected={engaged && turn.entryId === active?.entryId} aria-current={turn.entryId === currentId ? 'true' : undefined}
             aria-posinset={index + 1} aria-setsize={results.length} data-entry-id={turn.entryId} className={styles.markTarget} style={{ top: index * ROW_HEIGHT }}
             onPointerEnter={() => { setInside(true); setActiveId(turn.entryId) }} onMouseDown={event => event.preventDefault()} onClick={() => navigate(turn.entryId)}>
-            <span data-turn-mark className={styles.mark} data-distance={distance} style={{ transform: `scaleX(${length / 48})`, opacity: engaged ? Math.max(0.3, 1 - distance * 0.16) : turn.entryId === currentId ? 1 : 0.5 }} />
+            <span data-turn-mark className={styles.mark} data-distance={distance} style={{ transform: `scaleX(${length / 48})`, opacity: engaged ? Math.max(0.3, 1 - distance * 0.16) : turn.entryId === anchorId ? 1 : 0.5 }} />
           </div>
         })}
       </div>

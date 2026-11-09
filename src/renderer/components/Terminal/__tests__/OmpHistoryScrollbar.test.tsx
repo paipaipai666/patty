@@ -18,6 +18,7 @@ function state(entryId: string): PaneNavigationState {
     ],
     error: null,
     navigating: false,
+    pendingTarget: null,
     shownPosition: { mode: 'browsing', sessionId: 'session-1', branchEpoch: 1, displayEpoch: 1, viewRevision: 1, frameId: 'frame', entryId, anchor: { partId: `${entryId}:user`, scalarOffset: 0 } },
   }
 }
@@ -42,6 +43,36 @@ describe('OmpHistoryScrollbar', () => {
     const thumb = bar?.querySelector('[class*="historyScrollbarThumb"]') as HTMLElement | null
     expect(bar).not.toBeNull()
     expect(thumb?.style.top).toBe('48%')
+  })
+
+  it('follows the pending target while the terminal frame is still being confirmed', () => {
+    const target = {
+      mode: 'browsing' as const, sessionId: 'session-1', branchEpoch: 1, displayEpoch: 1, viewRevision: 2, frameId: 'target-frame',
+      entryId: 'entry-3', anchor: { partId: 'entry-3:user', scalarOffset: 0 }
+    }
+    useOmpNavigationStore.setState({
+      byPane: {
+        'session-1': {
+          ...state('entry-1'),
+          snapshot: {
+            kind: 'ready', paneId: 'session-1', runId: 'run', instanceId: 'instance', sessionId: 'session-1', revision: 2,
+            scope: { scopeId: 'scope', controlEpoch: 1 }, branchEpoch: 1, displayEpoch: 1, catalogRevision: 1,
+            position: target, latestRequest: { requestId: 'request', status: { kind: 'applied', position: target, shown: false }, observationTimedOut: false },
+            catalogSnapshotId: 'catalog', turnCount: 3, pageSize: 256
+          }
+        }
+      }
+    })
+    act(() => root.render(<OmpHistoryScrollbar sessionId="session-1" />))
+    const thumb = container.querySelector('[data-omp-history-scrollbar] [class*="historyScrollbarThumb"]') as HTMLElement | null
+    expect(thumb?.style.top).toBe('92%')
+  })
+
+  it('moves the thumb to a freshly selected turn before the frame is confirmed', () => {
+    useOmpNavigationStore.setState({ byPane: { 'session-1': { ...state('entry-1'), pendingTarget: { kind: 'turn', entryId: 'entry-3' }, navigating: true } } })
+    act(() => root.render(<OmpHistoryScrollbar sessionId="session-1" />))
+    const thumb = container.querySelector('[data-omp-history-scrollbar] [class*="historyScrollbarThumb"]') as HTMLElement | null
+    expect(thumb?.style.top).toBe('92%')
   })
 
   it('renders nothing while live', () => {
