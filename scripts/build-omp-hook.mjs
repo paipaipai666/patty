@@ -74,7 +74,7 @@ assertBundleClean(content)
 
 if (checkMode) {
   const committed = existsSync(outFile) ? readFileSync(outFile, 'utf8') : ''
-  if (committed !== content) {
+  if (committed.replace(/\r\n/g, '\n') !== content.replace(/\r\n/g, '\n')) {
     console.error('resources/omp-patty-hook.bundle.js is out of date. Run: node scripts/build-omp-hook.mjs')
     process.exit(1)
   }
