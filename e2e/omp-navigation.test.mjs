@@ -204,19 +204,24 @@ async function verifyHistoryScrollbar() {
     const pane = document.querySelector('[data-pane-id="navigation-pane"]')
     const thumb = element.firstElementChild
     return { width: rect.width, right: rect.right, paneRight: pane ? pane.getBoundingClientRect().right : null, top: rect.top, height: rect.height,
-      thumb: thumb ? { top: thumb.style.top, height: thumb.getBoundingClientRect().height } : null }
+      source: element.dataset.scrollSource ?? null,
+      thumb: thumb ? { top: thumb.style.top, height: thumb.style.height, heightPx: thumb.getBoundingClientRect().height } : null }
   })()`)
   assert.ok(bar, 'browsing history must expose the terminal scrollbar')
   assert.ok(Math.abs(bar.width - 4) < 0.5, 'the history scrollbar must keep the terminal scrollbar width')
   assert.ok(Math.abs(bar.paneRight - bar.right) < 1, 'the history scrollbar must sit in the terminal scrollbar lane')
+  assert.equal(bar.source, 'content', 'the history scrollbar must follow measured content instead of the turn index')
   const point = { x: bar.right - 2, y: bar.top + bar.height / 2 }
   await pointer(point)
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: 240 })
   await cdp.waitFor(`(await ${status}).position.displayEpoch !== ${before.position.displayEpoch}`, 5000)
+  await cdp.waitFor(`document.querySelector('[data-omp-history-scrollbar] > div')?.style.top !== '${bar.thumb?.top}'`, 5000)
   const after = await cdp.evaluate(status)
+  const moved = await cdp.evaluate("document.querySelector('[data-omp-history-scrollbar] > div')?.style.top ?? null")
   assert.notEqual(after.position.displayEpoch, before.position.displayEpoch, 'wheel over the history scrollbar did not scroll the terminal')
   assert.equal(after.latestRequest?.requestId, before.latestRequest?.requestId, 'wheel over the history scrollbar issued a navigation request')
-  return { width: bar.width, thumb: bar.thumb, lane: Math.abs(bar.paneRight - bar.right) < 1 }
+  assert.notEqual(moved, bar.thumb?.top, 'the history scrollbar thumb ignored the scrolled content')
+  return { width: bar.width, source: bar.source, thumb: { ...bar.thumb, top: moved }, lane: Math.abs(bar.paneRight - bar.right) < 1 }
 }
 
 async function returnLive() {

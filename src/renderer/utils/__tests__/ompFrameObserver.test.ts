@@ -32,4 +32,22 @@ describe('OMP terminal frame observation', () => {
       expect(observed).toHaveLength(1)
     } finally { observer.dispose(); terminal.dispose() }
   })
+
+  it('forwards transcript scroll metrics and rejects impossible ones', async () => {
+    const terminal = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    const metrics: unknown[] = []
+    const observer = registerOmpFrameObserver(terminal, {
+      visible: () => true, observe: () => {}, onScrollMetrics: value => metrics.push(value),
+      schedule: () => 0, cancel: () => {}
+    })
+    const record = { sessionId: 'session-1', branchEpoch: 1, frameId: 'frame-1', entryId: 'turn-1', before: 750, total: 1000, visible: 100 }
+    const marker = (value: unknown) => `\x1b]777;patty-nav-scroll-v1;${Buffer.from(JSON.stringify(value)).toString('base64url')}\x07`
+    try {
+      await new Promise<void>(resolve => terminal.write(marker(record), resolve))
+      expect(metrics).toEqual([record])
+      await new Promise<void>(resolve => terminal.write(marker({ ...record, before: 1001 }), resolve))
+      await new Promise<void>(resolve => terminal.write(marker({ ...record, total: 0 }), resolve))
+      expect(metrics).toHaveLength(1)
+    } finally { observer.dispose(); terminal.dispose() }
+  })
 })

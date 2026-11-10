@@ -1,6 +1,9 @@
 import { useEffect, useRef, type PointerEvent, type ReactElement } from 'react'
 import { navigationAnchor, useOmpNavigationStore } from '../../store/ompNavigationStore'
+import { useOmpHistoryMetricsStore } from '../../store/ompHistoryMetricsStore'
 import styles from './Terminal.module.css'
+
+const FALLBACK_THUMB_PERCENT = 12
 
 function forwardWheelToTerminal(element: HTMLElement, event: WheelEvent): void {
   const terminal = element.parentElement?.querySelector<HTMLElement>('.xterm')
@@ -14,6 +17,7 @@ function forwardWheelToTerminal(element: HTMLElement, event: WheelEvent): void {
 
 export function OmpHistoryScrollbar({ sessionId }: { sessionId: string }): ReactElement | null {
   const state = useOmpNavigationStore(store => store.byPane[sessionId])
+  const metrics = useOmpHistoryMetricsStore(store => store.byPane[sessionId])
   const track = useRef<HTMLDivElement>(null)
   const anchor = navigationAnchor(state)
   const turns = state?.turns
@@ -30,8 +34,11 @@ export function OmpHistoryScrollbar({ sessionId }: { sessionId: string }): React
     return () => element.removeEventListener('wheel', wheel)
   }, [anchor.mode, anchor.entryId])
   if (anchor.mode !== 'browsing' || !anchor.entryId || !turns?.length) return null
+  const measured = metrics && metrics.total > 0 ? metrics : undefined
   const current = Math.max(0, turns.findIndex(turn => turn.entryId === anchor.entryId))
-  const ratio = turns.length === 1 ? 1 : current / (turns.length - 1)
+  const turnRatio = turns.length === 1 ? 1 : current / (turns.length - 1)
+  const ratio = measured ? Math.min(1, Math.max(0, measured.before / measured.total)) : turnRatio
+  const height = measured ? Math.min(25, Math.max(1.5, (measured.visible / measured.total) * 100)) : FALLBACK_THUMB_PERCENT
   const navigateAt = (clientY: number): void => {
     const element = track.current
     if (!element) return
@@ -51,7 +58,8 @@ export function OmpHistoryScrollbar({ sessionId }: { sessionId: string }): React
     if (event.currentTarget.hasPointerCapture(event.pointerId)) navigateAt(event.clientY)
   }
   return <div ref={track} className={styles.historyScrollbar} data-omp-history-scrollbar
+    data-scroll-source={measured ? 'content' : 'turns'}
     onPointerDown={pointerDown} onPointerMove={pointerMove}>
-    <div className={styles.historyScrollbarThumb} style={{ top: `${4 + ratio * 88}%` }} />
+    <div className={styles.historyScrollbarThumb} style={{ top: `${4 + height / 2 + ratio * (92 - height)}%`, height: `${height}%` }} />
   </div>
 }

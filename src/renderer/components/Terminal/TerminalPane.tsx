@@ -9,6 +9,7 @@ import { ImageAddon } from '@xterm/addon-image'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import '@xterm/xterm/css/xterm.css'
 import { useSessionStore, type TerminalSession } from '../../store/sessionStore'
+import { useOmpHistoryMetricsStore } from '../../store/ompHistoryMetricsStore'
 import { toast } from '../../store/toastStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import { getThemeColors } from '../../styles/themes'
@@ -641,7 +642,8 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
     })
     const navigationObserver = registerOmpFrameObserver(term, {
       visible: () => visibleRef.current && !document.hidden && container.getClientRects().length > 0,
-      observe: position => { void invoke('omp_navigation_observe', { paneId: session.id, position }).catch(() => {}) }
+      observe: position => { void invoke('omp_navigation_observe', { paneId: session.id, position }).catch(() => {}) },
+      onScrollMetrics: metrics => useOmpHistoryMetricsStore.getState().record(session.id, metrics)
     })
     navigationObserverRef.current = navigationObserver
     let detachNavigationVerification: (() => void) | undefined

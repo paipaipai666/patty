@@ -1,9 +1,17 @@
 import type { Terminal } from '@xterm/xterm'
-import { parseNavigationPosition, type NavigationPosition } from '../../shared/ompNavigationTypes'
+import { parseHistoryScrollMetrics, parseNavigationPosition, type HistoryScrollMetrics, type NavigationPosition } from '../../shared/ompNavigationTypes'
+
+function decodePayload(encoded: string): unknown {
+  if (encoded.length > 8192 || !/^[A-Za-z0-9_-]+$/.test(encoded)) return undefined
+  const binary = atob(encoded.replace(/-/g, '+').replace(/_/g, '/'))
+  const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
+  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
+}
 
 export function registerOmpFrameObserver(term: Terminal, options: {
   visible(): boolean
   observe(position: NavigationPosition): void
+  onScrollMetrics?(metrics: HistoryScrollMetrics): void
   schedule?: (callback: () => void) => number
   cancel?: (handle: number) => void
 }) {
@@ -27,13 +35,16 @@ export function registerOmpFrameObserver(term: Terminal, options: {
     handle = schedule(() => { handle = schedule(inspect) })
   }
   const parser = term.parser.registerOscHandler(777, data => {
+    if (data.startsWith('patty-nav-scroll-v1;')) {
+      try {
+        const metrics = parseHistoryScrollMetrics(decodePayload(data.slice('patty-nav-scroll-v1;'.length)))
+        if (metrics) options.onScrollMetrics?.(metrics)
+      } catch {}
+      return true
+    }
     if (!data.startsWith('patty-nav-v1;')) return false
-    const encoded = data.slice('patty-nav-v1;'.length)
-    if (encoded.length > 8192 || !/^[A-Za-z0-9_-]+$/.test(encoded)) return true
     try {
-      const binary = atob(encoded.replace(/-/g, '+').replace(/_/g, '/'))
-      const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
-      const position = parseNavigationPosition(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)))
+      const position = parseNavigationPosition(decodePayload(data.slice('patty-nav-v1;'.length)))
       if (position && position.frameId) pending = position
     } catch {}
     return true

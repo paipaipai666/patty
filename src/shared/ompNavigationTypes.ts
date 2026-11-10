@@ -70,6 +70,25 @@ function isCounter(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
+export interface HistoryScrollMetrics {
+  sessionId: string
+  branchEpoch: number
+  frameId: string
+  entryId: string
+  before: number
+  total: number
+  visible: number
+}
+
+export function parseHistoryScrollMetrics(value: unknown): HistoryScrollMetrics | null {
+  if (!isRecord(value)) return null
+  const { sessionId, branchEpoch, frameId, entryId, before, total, visible } = value
+  if (!isId(sessionId, false, 512) || !isCounter(branchEpoch) || !isId(frameId) || !isId(entryId)) return null
+  if (!isCounter(before) || !isCounter(total) || !isCounter(visible)) return null
+  if (total < 1 || before > total) return null
+  return { sessionId, branchEpoch, frameId, entryId, before, total, visible }
+}
+
 export function parseNavigationPosition(value: unknown): NavigationPosition | null {
   if (!isRecord(value)) return null
   const { sessionId, branchEpoch, displayEpoch, viewRevision, frameId } = value

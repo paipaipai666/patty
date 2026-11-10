@@ -192,6 +192,36 @@ test('renders a long unmarked component instead of trimming its window to zero r
   controller.dispose()
 })
 
+test('publishes content-weighted scroll metrics for every browsing frame', async () => {
+  const manager = SessionManager.inMemory('D:/gate0-fixture')
+  const first = manager.appendMessage({ role: 'user', content: 'first turn', timestamp: 1 })
+  const second = manager.appendMessage({ role: 'user', content: 'x'.repeat(600), timestamp: 2 })
+  const terminal = new FixtureTerminal()
+  const ui = new TUI(terminal)
+  const controller = new TranscriptNavigationController({ ui, entries: () => entriesFromBranch(manager.getBranch()), resumeLive: () => {} })
+  const published = () => {
+    const matches = [...terminal.output.matchAll(/patty-nav-scroll-v1;([A-Za-z0-9_-]+)\x07/g)]
+    const last = matches.at(-1)
+    return last ? JSON.parse(Buffer.from(last[1] ?? '', 'base64url').toString('utf8')) : undefined
+  }
+  ui.start()
+  try {
+    controller.viewport.seek(first)
+    controller.viewport.render(100)
+    const start = controller.viewport.scrollMetrics()
+    expect(start.before).toBe(0)
+    expect(start.total).toBeGreaterThan(0)
+    expect(start.visible).toBeGreaterThan(0)
+    expect(start.visible).toBeLessThanOrEqual(start.total)
+    await controller.seek({ entryId: second })
+    const middle = controller.viewport.scrollMetrics()
+    expect(middle.total).toBe(start.total)
+    expect(middle.before).toBeGreaterThan(0)
+    expect(middle.before).toBeLessThan(middle.total)
+    expect(published()).toMatchObject({ entryId: second, before: middle.before, total: middle.total })
+  } finally { controller.dispose(); ui.stop() }
+})
+
 test('scrolling down past the end of the last turn returns to live', async () => {
   const manager = SessionManager.inMemory('D:/gate0-fixture')
   const entryId = manager.appendMessage({ role: 'user', content: 'hello', timestamp: 1 })

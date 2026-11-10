@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OmpHistoryScrollbar } from '../OmpHistoryScrollbar'
 import { useOmpNavigationStore, type PaneNavigationState } from '../../../store/ompNavigationStore'
+import { useOmpHistoryMetricsStore } from '../../../store/ompHistoryMetricsStore'
 
 let root: ReturnType<typeof createRoot>
 let container: HTMLDivElement
@@ -26,6 +27,7 @@ function state(entryId: string): PaneNavigationState {
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   useOmpNavigationStore.setState({ byPane: { 'session-1': state('entry-2') } })
+  useOmpHistoryMetricsStore.setState({ byPane: {} })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -42,7 +44,27 @@ describe('OmpHistoryScrollbar', () => {
     const bar = container.querySelector('[data-omp-history-scrollbar]')
     const thumb = bar?.querySelector('[class*="historyScrollbarThumb"]') as HTMLElement | null
     expect(bar).not.toBeNull()
-    expect(thumb?.style.top).toBe('48%')
+    expect(bar?.getAttribute('data-scroll-source')).toBe('turns')
+    expect(thumb?.style.top).toBe('50%')
+    expect(thumb?.style.height).toBe('12%')
+  })
+
+  it('measures the thumb against the whole transcript instead of the turn index', () => {
+    useOmpHistoryMetricsStore.getState().record('session-1', { sessionId: 'omp-session', branchEpoch: 1, frameId: 'frame-metrics', entryId: 'entry-2', before: 750, total: 1000, visible: 100 })
+    act(() => root.render(<OmpHistoryScrollbar sessionId="session-1" />))
+    const bar = container.querySelector('[data-omp-history-scrollbar]')
+    const thumb = bar?.querySelector('[class*="historyScrollbarThumb"]') as HTMLElement | null
+    expect(bar?.getAttribute('data-scroll-source')).toBe('content')
+    expect(thumb?.style.height).toBe('10%')
+    expect(thumb?.style.top).toBe('70.5%')
+  })
+
+  it('keeps the thumb grabbable in a transcript far larger than one screen', () => {
+    useOmpHistoryMetricsStore.getState().record('session-1', { sessionId: 'omp-session', branchEpoch: 1, frameId: 'frame-huge', entryId: 'entry-2', before: 470000, total: 470000, visible: 6000 })
+    act(() => root.render(<OmpHistoryScrollbar sessionId="session-1" />))
+    const thumb = container.querySelector('[data-omp-history-scrollbar] [class*="historyScrollbarThumb"]') as HTMLElement | null
+    expect(thumb?.style.height).toBe('1.5%')
+    expect(thumb?.style.top).toBe('95.25%')
   })
 
   it('follows the pending target while the terminal frame is still being confirmed', () => {
@@ -65,14 +87,14 @@ describe('OmpHistoryScrollbar', () => {
     })
     act(() => root.render(<OmpHistoryScrollbar sessionId="session-1" />))
     const thumb = container.querySelector('[data-omp-history-scrollbar] [class*="historyScrollbarThumb"]') as HTMLElement | null
-    expect(thumb?.style.top).toBe('92%')
+    expect(thumb?.style.top).toBe('90%')
   })
 
   it('moves the thumb to a freshly selected turn before the frame is confirmed', () => {
     useOmpNavigationStore.setState({ byPane: { 'session-1': { ...state('entry-1'), pendingTarget: { kind: 'turn', entryId: 'entry-3' }, navigating: true } } })
     act(() => root.render(<OmpHistoryScrollbar sessionId="session-1" />))
     const thumb = container.querySelector('[data-omp-history-scrollbar] [class*="historyScrollbarThumb"]') as HTMLElement | null
-    expect(thumb?.style.top).toBe('92%')
+    expect(thumb?.style.top).toBe('90%')
   })
 
   it('passes wheel input to the terminal instead of swallowing it', () => {

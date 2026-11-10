@@ -167,6 +167,27 @@ export class TranscriptViewport implements Component {
       && (finalPart?.source.length ?? 0) <= this.#endOffset
   }
 
+  scrollMetrics(): { before: number; total: number; visible: number } {
+    const entries = this.host.entries()
+    const index = this.host.indexOf?.(this.#anchor.entryId) ?? entries.findIndex(entry => entry.id === this.#anchor.entryId)
+    const anchorEntry = index >= 0 ? entries[index] : undefined
+    if (!anchorEntry) return { before: 0, total: entries.reduce((sum, entry) => sum + entry.parts.reduce((partSum, part) => partSum + part.source.length, 0), 0), visible: this.metrics.sourceUnits }
+    let total = 0
+    let before = 0
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex++) {
+      const entry = entries[entryIndex]
+      if (!entry) continue
+      for (let partIndex = 0; partIndex < entry.parts.length; partIndex++) {
+        const length = entry.parts[partIndex]?.source.length ?? 0
+        total += length
+        if (entryIndex < index || (entryIndex === index && partIndex < this.#anchor.partIndex)) before += length
+      }
+    }
+    const anchorPart = anchorEntry.parts[this.#anchor.partIndex]
+    before += Math.min(Math.max(0, this.#anchor.sourceOffset), anchorPart?.source.length ?? 0)
+    return { before: Math.min(before, total), total, visible: Math.min(this.metrics.sourceUnits, total) }
+  }
+
   #sourceRow(): SourceRow | undefined {
     for (let index = this.#anchor.rowOffset; index < this.#rowSources.length; index++) {
       const row = this.#rowSources[index]
@@ -515,6 +536,19 @@ export class TranscriptNavigationController implements TranscriptNavigationApi {
     const position = this.getPosition()
     const payload = Buffer.from(JSON.stringify(position)).toString('base64url')
     this.host.ui.terminal.write(`\x1b]777;patty-nav-v1;${payload}\x07`)
+    if (position.mode === 'browsing') {
+      const metrics = this.viewport.scrollMetrics()
+      const record = {
+        sessionId: this.#sessionId,
+        branchEpoch: this.#branchEpoch,
+        frameId: this.#frameId,
+        entryId: position.entryId,
+        before: metrics.before,
+        total: metrics.total,
+        visible: metrics.visible
+      }
+      this.host.ui.terminal.write(`\x1b]777;patty-nav-scroll-v1;${Buffer.from(JSON.stringify(record)).toString('base64url')}\x07`)
+    }
     for (const listener of this.#positionListeners) listener(position)
   }
 
