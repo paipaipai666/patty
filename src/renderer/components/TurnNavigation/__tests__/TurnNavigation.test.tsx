@@ -91,31 +91,24 @@ describe('current-terminal turn navigation', () => {
 		expect(document.querySelector('[aria-label="Conversation turn preview"]')).toBeNull()
 	})
 
-	it('scrolls the virtual marks with the wheel and consumes wheel input at both ends', () => {
+	it('forwards wheel input over the rail to the terminal instead of scrolling the marks', () => {
 		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': ready(1000) } })
-		act(() => root.render(<TurnNavigation open={false} onOpenChange={close} blocked={false} />))
+		act(() => root.render(<><div data-pane-id="focused-pane" className="xterm"><textarea className="xterm-helper-textarea" /></div><TurnNavigation open={false} onOpenChange={close} blocked={false} /></>))
 		const list = element<HTMLElement>('[data-turn-viewport]')
 		Object.defineProperty(list, 'clientHeight', { value: 276 })
+		list.scrollTop = 600
+		const terminal = element<HTMLElement>('.xterm')
+		const terminalWheel = vi.fn()
+		terminal.addEventListener('wheel', terminalWheel)
 		const outerWheel = vi.fn()
 		container.addEventListener('wheel', outerWheel)
-		const scroll = (deltaY: number) => {
-			const event = new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
-			act(() => list.dispatchEvent(event))
-			expect(event.defaultPrevented).toBe(true)
-		}
-		scroll(600)
+		const event = new WheelEvent('wheel', { deltaY: 240, deltaMode: 0, bubbles: true, cancelable: true })
+		act(() => list.dispatchEvent(event))
+		expect(event.defaultPrevented).toBe(true)
+		expect(terminalWheel).toHaveBeenCalledTimes(1)
+		expect(terminalWheel.mock.calls[0][0].deltaY).toBe(240)
+		expect(outerWheel.mock.calls.every(call => call[0] !== event)).toBe(true)
 		expect(list.scrollTop).toBe(600)
-		expect(document.querySelector('[data-entry-id="entry-1"]')).toBeNull()
-		expect(document.querySelector('[data-entry-id="entry-51"]')).not.toBeNull()
-		scroll(-100000)
-		expect(list.scrollTop).toBe(0)
-		scroll(-100)
-		expect(list.scrollTop).toBe(0)
-		scroll(100000)
-		expect(list.scrollTop).toBe(11724)
-		scroll(100)
-		expect(list.scrollTop).toBe(11724)
-		expect(outerWheel).not.toHaveBeenCalled()
 		expect(navigate).not.toHaveBeenCalled()
 	})
 

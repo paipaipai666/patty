@@ -5,11 +5,14 @@ import { toast } from '../store/toastStore'
 import type { AppCommand, CommandFocus } from './applicationCommands'
 import { formatShortcut, isComposingKey, normalizeShortcut, TERMINAL_EDITING_SHORTCUTS } from './shortcuts'
 
-export function focusActiveTerminal(): boolean {
+export function focusedPaneElement(): HTMLElement | undefined {
   const state = useWorkspaceStore.getState()
   const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId) ?? state.workspaces[0]
-  const pane = Array.from(document.querySelectorAll<HTMLElement>('[data-pane-id]')).find(element => element.dataset.paneId === workspace?.focusedPaneId)
-  const input = pane?.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-pane-id]')).find(element => element.dataset.paneId === workspace?.focusedPaneId)
+}
+
+export function focusActiveTerminal(): boolean {
+  const input = focusedPaneElement()?.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
   const targets = [input, document.querySelector<HTMLElement>('[data-terminal-entry]'), document.querySelector<HTMLElement>('[aria-label="New terminal"]'), document.querySelector<HTMLElement>('[aria-label="Open command palette"]')]
   for (const target of targets) {
     target?.focus()

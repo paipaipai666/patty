@@ -27,7 +27,6 @@ import {
   type IipOverlayItem
 } from './iipAnchor'
 import { IipOverlay } from './IipOverlay'
-import { OmpHistoryScrollbar } from './OmpHistoryScrollbar'
 import { registerOsc7Handler } from '../../utils/osc7Handler'
 import { registerOmpFrameObserver } from '../../utils/ompFrameObserver'
 import { PaneProbe, panes as benchmarkPanes } from '../../benchmark/probe'
@@ -945,7 +944,6 @@ export function TerminalPane({ session, visible, onUsed }: TerminalPaneProps) {
         originX={0}
         originY={0}
       />
-      <OmpHistoryScrollbar sessionId={session.id} />
     </div>
   )
 }

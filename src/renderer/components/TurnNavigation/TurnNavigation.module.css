@@ -15,8 +15,7 @@
 .viewport {
   flex: 0 1 auto;
   min-height: 12px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
   scrollbar-width: none;
   outline: none;
 }

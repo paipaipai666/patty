@@ -159,43 +159,42 @@ async function stableTerminal(label) {
   throw new Error(`${label}: the terminal did not finish rendering its source output before wheel verification`)
 }
 
-async function verifyWheelIsolation(label) {
+async function verifyWheelForwarding(label) {
   const terminal = await stableTerminal(label)
   const before = await cdp.evaluate(measureRail)
   const beforeStatus = await cdp.evaluate(status)
-  const position = semanticPosition(beforeStatus)
   const requestId = beforeStatus.latestRequest?.requestId
   const target = before.marks[Math.floor(before.marks.length / 2)]
   const point = { x: before.rail.right - 4, y: target.top + target.height / 2 }
-  await pointer(point)
-  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: before.scrollTop > 0 ? -240 : 240 })
-  await cdp.waitFor(`Math.abs(document.querySelector('${viewportSelector}').scrollTop - ${before.scrollTop}) > 100`)
-  await new Promise(resolve => setTimeout(resolve, 200))
-  const after = await cdp.evaluate(measureRail)
-  assert.notDeepEqual(after.marks.map(mark => mark.entryId), before.marks.map(mark => mark.entryId))
-  assert.ok(after.rendered < 80, 'the real rail must virtualize the 651-turn fixture')
-  const afterPosition = await cdp.evaluate(status)
-  assert.deepEqual(semanticPosition(afterPosition), position, `${label}: wheel changed the OMP reading position`)
-  assert.equal(afterPosition.latestRequest?.requestId, requestId, `${label}: wheel issued a navigation request`)
-  assert.equal(afterPosition.position.displayEpoch, beforeStatus.position.displayEpoch, `${label}: wheel input reached the native terminal`)
-  const afterTerminal = await cdp.evaluate(view)
-  assert.equal(afterTerminal.viewportY, terminal.viewportY, `${label}: wheel reached xterm scrollback`)
-  assert.equal(afterTerminal.type, terminal.type)
-  assert.deepEqual(afterTerminal.lines, terminal.lines, `${label}: wheel changed the displayed terminal content`)
-  for (const boundary of ['top', 'bottom']) {
-    await cdp.evaluate(`(() => {const element=document.querySelector('${viewportSelector}');element.scrollTop=${boundary === 'top' ? '0' : 'element.scrollHeight-element.clientHeight'}})()`)
-    await cdp.waitFor(`(() => {const element=document.querySelector('${viewportSelector}');return Math.abs(element.scrollTop-(${boundary === 'top' ? '0' : 'element.scrollHeight-element.clientHeight'}))<1})()`)
-    const edge = (await cdp.evaluate(measureRail)).scrollTop
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: boundary === 'top' ? -240 : 240 })
-    await new Promise(resolve => setTimeout(resolve, 200))
-    assert.ok(Math.abs((await cdp.evaluate(measureRail)).scrollTop - edge) < 1)
-    assert.equal((await cdp.evaluate(view)).viewportY, terminal.viewportY, `${label}: a wheel event at the ${boundary} rail boundary leaked to xterm`)
-    const edgePosition = await cdp.evaluate(status)
-    assert.deepEqual(semanticPosition(edgePosition), position)
-    assert.equal(edgePosition.position.displayEpoch, beforeStatus.position.displayEpoch, `${label}: the ${boundary} edge forwarded wheel input to OMP`)
+  const overflow = await cdp.evaluate(`getComputedStyle(document.querySelector('${viewportSelector}')).overflowY`)
+  assert.equal(overflow, 'hidden', `${label}: the turn rail must not expose its own scroll container`)
+  await cdp.evaluate(`(() => {
+    window.__pattyWheel = []
+    const xterm = document.querySelector('.xterm')
+    if (!xterm) throw new Error('missing .xterm element')
+    xterm.addEventListener('wheel', event => window.__pattyWheel.push(event.deltaY), { capture: true })
+  })()`)
+  const wheel = async target => {
+    await pointer(target)
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...target, deltaX: 0, deltaY: label === 'live' ? -240 : 240 })
+    await cdp.waitFor(`window.__pattyWheel.length > 0`, 5000)
   }
-  await cdp.evaluate(`document.querySelector('${viewportSelector}').scrollTop = 0`)
-  return { rendered: after.rendered, scrollTopBefore: before.scrollTop, scrollTopAfter: after.scrollTop, boundaryContained: true, boundaries: ['top', 'bottom'] }
+  await wheel(point)
+  const forwarded = await cdp.evaluate('window.__pattyWheel')
+  if (label === 'history') await cdp.waitFor(`(await ${status}).position.displayEpoch !== ${beforeStatus.position.displayEpoch}`, 5000)
+  await new Promise(resolve => setTimeout(resolve, 200))
+  const afterStatus = await cdp.evaluate(status)
+  const afterTerminal = await cdp.evaluate(view)
+  assert.equal(afterStatus.latestRequest?.requestId, requestId, `${label}: wheel over the rail issued a navigation request`)
+  assert.ok(forwarded.length > 0, `${label}: wheel over the rail never reached the terminal`)
+  if (label === 'history') assert.notEqual(afterStatus.position.displayEpoch, beforeStatus.position.displayEpoch, `${label}: wheel over the rail did not scroll the native terminal`)
+  const after = await cdp.evaluate(measureRail)
+  assert.ok(Math.abs(after.scrollTop - before.scrollTop) < 1, `${label}: wheel over the rail scrolled the turn list instead of the terminal`)
+  await cdp.evaluate('window.__pattyWheel = []')
+  await wheel({ x: before.pane.left + before.pane.width / 2, y: before.pane.top + before.pane.height / 2 })
+  const reference = await cdp.evaluate('window.__pattyWheel')
+  assert.deepEqual(forwarded, reference, `${label}: wheel over the rail differs from wheel over the terminal`)
+  return { railScrollTop: before.scrollTop, railOverflow: overflow, forwarded, reference, issuedNavigation: false, bufferScrolled: afterTerminal.viewportY !== terminal.viewportY }
 }
 
 async function returnLive() {
@@ -297,7 +296,7 @@ try {
   assert.deepEqual(expanded.pane, collapsed.pane)
   await screenshot('rail-dark-hover')
   report.hoverGradient = { lengths: [48, 34, 22, 15, 10], previewEntryId: hoveredId, preservedTerminalFocus: true }
-  report.wheelLive = await verifyWheelIsolation('live')
+  report.wheelLive = await verifyWheelForwarding('live')
   await collapseRail()
   report.collapsedRail = { width: collapsed.rail.width, viewportHeight: collapsed.viewport.height, noToolbar: true }
   report.responsive = []
@@ -316,19 +315,15 @@ try {
   const first = await cdp.evaluate(view)
   assert.equal(first.type, 'alternate')
   assert.match(first.lines.join('\n'), /OMP_NAV_QUESTION_000/)
-  const historyScrollbar = await cdp.evaluate(`(() => {
-    const bar = document.querySelector('[data-omp-history-scrollbar]')
-    const thumb = bar?.querySelector('[class*="historyScrollbarThumb"]')
-    return bar && thumb ? { width: bar.getBoundingClientRect().width, height: bar.getBoundingClientRect().height, thumbHeight: thumb.getBoundingClientRect().height, thumbTop: thumb.style.top } : null
-  })()`)
-  assert.ok(historyScrollbar && historyScrollbar.height > 0 && historyScrollbar.thumbHeight > 0, 'history browsing must expose the terminal scrollbar')
-  report.historyScrollbar = historyScrollbar
+  const noTurnListScrollbar = await cdp.evaluate(`!document.querySelector('[data-omp-history-scrollbar]')`)
+  assert.ok(noTurnListScrollbar, 'history browsing must not expose a turn-list scrollbar')
+  report.turnListScrollbarAbsent = true
   report.firstTurn = true
   report.jumpToShownUpperBoundMs = Date.now() - start
   writeFileSync(browseActive, '1')
   const firstImage = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
   writeFileSync(join(output, 'first-turn.png'), Buffer.from(firstImage.data, 'base64'))
-  report.wheelHistory = await verifyWheelIsolation('history')
+  report.wheelHistory = await verifyWheelForwarding('history')
   const deepTarget = 'turn-121'
   await hoverMark()
   await cdp.evaluate(`(() => {
@@ -342,11 +337,10 @@ try {
   await cdp.waitFor(`(await ${status}).latestRequest?.requestId !== ${JSON.stringify(previousDeepRequest)} && (await ${status}).latestRequest?.status?.shown === true`)
   const deep = await cdp.evaluate(`(() => {
     const viewport = document.querySelector('${viewportSelector}')
-    const thumb = document.querySelector('[data-omp-history-scrollbar] [class*="historyScrollbarThumb"]')
     const current = document.querySelector('[data-entry-id][aria-current="true"]')
     const marks = viewport ? [...viewport.querySelectorAll('[data-entry-id]')].map(element => element.dataset.entryId) : []
     return { scrollTop: viewport ? viewport.scrollTop : null, current: current?.dataset.entryId ?? null,
-      first: marks[0] ?? null, last: marks[marks.length - 1] ?? null, thumbTop: thumb?.style.top ?? null }
+      first: marks[0] ?? null, last: marks[marks.length - 1] ?? null }
   })()`)
   assert.equal(deep.current, deepTarget, 'the rail must follow the turn selected from a scrolled list')
   assert.ok(deep.scrollTop > 0, 'the rail must not snap back to the first turn after a deep selection')

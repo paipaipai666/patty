@@ -60,31 +60,6 @@
   pointer-events: none;
 }
 
-.historyScrollbar {
-  position: absolute;
-  z-index: 6;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 4px;
-  cursor: pointer;
-  touch-action: none;
-}
-
-.historyScrollbarThumb {
-  position: absolute;
-  right: 0;
-  width: 4px;
-  height: 12%;
-  min-height: 8px;
-  border-radius: 2px;
-  background: var(--scrollbar-thumb);
-  transform: translateY(-50%);
-}
-
-.historyScrollbar:hover .historyScrollbarThumb {
-  background: var(--accent);
-}
 .bootShimmer {
   position: absolute;
   inset: 0;
