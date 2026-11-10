@@ -38,6 +38,7 @@ function assertBundleClean(content) {
 }
 
 const bun = locateBun()
+console.log(`bun ${execFileSync(bun, ['--version'], { encoding: 'utf8' }).trim()} (${bun})`)
 mkdirSync(scratch, { recursive: true })
 const outdir = checkMode ? join(scratch, 'check') : join(root, 'resources')
 mkdirSync(outdir, { recursive: true })
