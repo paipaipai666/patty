@@ -89,7 +89,7 @@ function canonical(entries: TranscriptEntryLike[], ui: TUI, range: { source: str
     })
     const update = (component: Component): void => {
       if (component instanceof Markdown) {
-        const themed: { setRenderTheme?(theme: MarkdownTheme): void; setSourceMapping?(enabled: boolean): void } = component
+        const themed: Markdown & { setRenderTheme?(theme: MarkdownTheme): void; setSourceMapping?(enabled: boolean): void } = component
         themed.setRenderTheme?.(renderTheme)
         themed.setSourceMapping?.(true)
       }

@@ -57,6 +57,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@oh-my-pi/pi-coding-agent": "18.17.0",
     "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^26.1.1",
     "@types/react": "^18.3.12",
