@@ -11,6 +11,7 @@ const KIND_BY_EXT = {
   ts: 'js', tsx: 'js', js: 'js', mjs: 'js', cjs: 'js',
   rs: 'rust', css: 'css', html: 'html', ps1: 'ps1',
 }
+const GENERATED = new Set(['resources/omp-patty-hook.bundle.js'])
 
 function lineOf(text, pos) {
   let n = 1
@@ -341,6 +342,7 @@ function main() {
     .map((f) => f.trim())
     .filter(Boolean)
     .filter((f) => KIND_BY_EXT[f.split('.').pop().toLowerCase()])
+    .filter((f) => !GENERATED.has(f))
   let failures = 0
   for (const rel of files) {
     const path = join(ROOT, rel)
