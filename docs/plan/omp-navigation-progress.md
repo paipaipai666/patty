@@ -60,7 +60,16 @@
 - 原因：`TurnNavigation` 在轮次列表 viewport 上注册了 `wheel` 监听并改自己的 `scrollTop`，而轮次列表是 `App` 级全局组件，事件不会到达 xterm；`OmpHistoryScrollbar` 复刻了终端滚动条的外观却没有 wheel 处理，于是同一块右侧区域既是「轮次列表的滚动条」又是滚轮死区。
 - 归属划分：轮次列表保留自己的滚轮，用来翻轮次（`overflow: hidden` 由代码驱动 `scrollTop`，`scrollbar-width: none` 且不占 gutter，因此不显示任何滚动条）；右侧 4px lane 归还终端，`OmpHistoryScrollbar` 只负责历史视图的终端滚动条，wheel 原样转发给同一 pane 的 `.xterm`，拖动/点击仍是按轮次 seek。
 - 证据：`npm run test:e2e:omp` 全绿，`wheelLive`/`wheelHistory` 的 `scrollbarWidth` 为 `none`、`listScrollTop` 变化、`forwardedToTerminal: 0`；`historyScrollbar` 宽度 4、`lane: true`、`thumbTop: 4%`，在它上面滚轮让 `position.displayEpoch` 变化且不产生导航请求；`deepTurn` 仍能跳到 `turn-121`。
-- 已知边界：历史滚动条的 thumb 高度固定 12%、位置按轮次序号映射，不是按物理行比例；要精确到行需要扩展导航协议上报行度量。
+- 已知边界：当时的 thumb 高度固定 12%、位置按轮次序号映射，不是按物理行比例；该边界已由下一节的内容度量取代。
+
+## 2026-11-10 历史滚动条内容度量
+
+- 目标：thumb 的高度和位置要跟着终端里的历史内容走，而不是只按轮次序号；轮次列表和终端滚动条仍各归各。
+- 通道：扩展在每帧位置之后追加一条私有 OSC `ESC ] 777 ; patty-nav-scroll-v1 ; BASE64URL(JSON)`，负载为 `{sessionId, branchEpoch, frameId, entryId, before, total, visible}`；渲染器侧由 `src/renderer/utils/ompFrameObserver.ts` 与位置帧共用同一个 777 handler 解析，写入 `useOmpHistoryMetricsStore`（按 Patty pane id 索引），不经过 Rust 位置协议，因此不影响 `Position` 的 `deny_unknown_fields` 和目标匹配语义。
+- 度量定义：`total` 是整个分支所有 part 的源码长度之和，`before` 是当前锚点之前的源码长度，`visible` 是当前这一屏实际消耗的源码长度（`TranscriptViewport.metrics.sourceUnits`）。单位是源码 code unit，不是终端物理行：精确行数需要对每个 part 做一次 Markdown 渲染，650 轮会话会带来数百毫秒到秒级的同步开销，因此按内容量加权，滚动/跳转时 `before` 连续变化。
+- 渲染：`OmpHistoryScrollbar` 优先用度量，`ratio = before / total`，thumb 高度 `clamp(visible / total, 1.5%, 25%)`（CSS `min-height: 8px` 保底），`top = 4 + 高度/2 + ratio * (92 - 高度)`；没有度量时回退轮次序号映射，并通过 `data-scroll-source="content" | "turns"` 暴露来源。
+- 证据：`bun test integrations/omp` 49 项、`npx vitest run` 97 文件 921 项、`npm run typecheck` 通过；`npm run test:e2e:omp` 在真实普通 `omp` 18.17.0 上全绿，`historyScrollbar` 为 `{width: 4, source: "content", thumb: {top: "4.84614%", height: "1.5%"}, lane: true}`，在滚动条上滚轮后 `position.displayEpoch` 变化、thumb 位置随之改变且不产生导航请求；`wheelLive`/`wheelHistory` 仍是 `scrollbarWidth: "none"` 且 `forwardedToTerminal: 0`，轮次列表滚轮只翻列表。
+- 已知边界：`visible` 是源码量近似，长代码块、表格和中文宽字符的屏占比与字符数不成正比；拖动/点击仍按轮次 seek，没有把滚动条位置换算成 part 级锚点。
 
 ## 适用范围与剩余边界
 
