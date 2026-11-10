@@ -428,6 +428,7 @@ impl NavigationState {
         Some(command)
     }
 
+    #[cfg(test)]
     pub fn request_status(&self, request_id: &str) -> Option<&RequestStatus> {
         self.requests.get(request_id).map(|request| &request.status)
     }
@@ -539,6 +540,7 @@ impl NavigationState {
         })
     }
 
+    #[cfg(test)]
     pub fn snapshot(&self) -> StateSnapshot {
         let mut snapshot = self.metadata();
         snapshot.turns = self.turns.clone();

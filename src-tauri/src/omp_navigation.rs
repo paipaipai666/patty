@@ -50,6 +50,7 @@ struct VerifiedRegistration {
 }
 
 impl VerifiedRegistration {
+    #[cfg(test)]
     fn session_id(&self) -> &str {
         &self.session_id
     }
