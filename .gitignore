@@ -22,8 +22,6 @@ Thumbs.db
 .agents/
 *.swp
 *.swo
-CLAUDE**.md
-AGENTS.md
 
 # Logs
 *.log
