@@ -56,11 +56,11 @@
 
 ## 2026-11-10 滚轮归属修正
 
-- 现场症状：点击轮次列表后，右侧滚轮滚动的是轮次列表本身，终端内容不动；会话历史里右侧唯一可见的滚动条也是轮次列表的，且在该条上滚动无响应。
-- 原因：`TurnNavigation` 在轮次列表 viewport 上注册了 `wheel` 监听，`preventDefault()` 后改自己的 `scrollTop`；轮次列表是 `App` 级全局组件，事件不会自然到达 xterm。`OmpHistoryScrollbar` 又只按轮次序号画固定 12% 高度 thumb，没有 wheel 处理。
-- 修复：轮次列表改为 `overflow: hidden`，不提供自己的滚动容器和滚动条；`rail` 上的 `wheel` 直接转发到聚焦 pane 的 `.xterm`，deltas 与修饰键原样传下去（保留 Ctrl 缩放）。删除 `OmpHistoryScrollbar` 及其样式与测试。
-- 证据：`npm run test:e2e:omp` 全绿，报告字段 `turnListScrollbarAbsent: true`，`wheelLive.forwarded` 与直接滚终端的 `reference` 一致，`wheelHistory` 让 `position.displayEpoch` 变化且 `railScrollTop` 不变，`deepTurn` 仍能跳到 `turn-121`。
-- 仍可用的定位方式：点击可见 mark、列表内方向键/PageUp/PageDown、搜索框输入后回车。滚轮不再用于滚动轮次列表。
+- 现场症状：点击轮次列表后，右侧滚轮滚动的是轮次列表本身，终端内容不动；会话历史里右侧 lane 上那根 4px 条被当成轮次列表的滚动条，且它是轮次序号定位、和内容对不上。
+- 原因：`TurnNavigation` 在轮次列表 viewport 上注册了 `wheel` 监听并改自己的 `scrollTop`，而轮次列表是 `App` 级全局组件，事件不会到达 xterm；`OmpHistoryScrollbar` 复刻了终端滚动条的外观却没有 wheel 处理，于是同一块右侧区域既是「轮次列表的滚动条」又是滚轮死区。
+- 归属划分：轮次列表保留自己的滚轮，用来翻轮次（`overflow: hidden` 由代码驱动 `scrollTop`，`scrollbar-width: none` 且不占 gutter，因此不显示任何滚动条）；右侧 4px lane 归还终端，`OmpHistoryScrollbar` 只负责历史视图的终端滚动条，wheel 原样转发给同一 pane 的 `.xterm`，拖动/点击仍是按轮次 seek。
+- 证据：`npm run test:e2e:omp` 全绿，`wheelLive`/`wheelHistory` 的 `scrollbarWidth` 为 `none`、`listScrollTop` 变化、`forwardedToTerminal: 0`；`historyScrollbar` 宽度 4、`lane: true`、`thumbTop: 4%`，在它上面滚轮让 `position.displayEpoch` 变化且不产生导航请求；`deepTurn` 仍能跳到 `turn-121`。
+- 已知边界：历史滚动条的 thumb 高度固定 12%、位置按轮次序号映射，不是按物理行比例；要精确到行需要扩展导航协议上报行度量。
 
 ## 适用范围与剩余边界
 

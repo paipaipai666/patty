@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowDown16Regular, ArrowUp16Regular, ArrowUndo16Regular, Dismiss16Regular, Search16Regular } from '@fluentui/react-icons'
-import { focusActiveTerminal, focusedPaneElement } from '../../commands/useApplicationKeyboard'
+import { focusActiveTerminal } from '../../commands/useApplicationKeyboard'
 import { isComposingKey } from '../../commands/shortcuts'
 import { navigationAnchor, useOmpNavigationStore } from '../../store/ompNavigationStore'
 import { getFocusedSessionId, useWorkspaceStore } from '../../store/workspaceStore'
@@ -11,17 +11,6 @@ const ROW_HEIGHT = 12
 const MAX_HEIGHT = 276
 const LINE_LENGTHS = [48, 34, 22, 15, 10]
 const timeFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-
-function forwardWheelToTerminal(event: WheelEvent) {
-  const pane = focusedPaneElement()
-  const terminal = pane?.matches('.xterm') ? pane : pane?.querySelector<HTMLElement>('.xterm')
-  terminal?.dispatchEvent(new WheelEvent('wheel', {
-    deltaX: event.deltaX, deltaY: event.deltaY, deltaMode: event.deltaMode,
-    clientX: event.clientX, clientY: event.clientY,
-    ctrlKey: event.ctrlKey, altKey: event.altKey, shiftKey: event.shiftKey, metaKey: event.metaKey,
-    bubbles: true, cancelable: true
-  }))
-}
 
 export function TurnNavigation({ open, onOpenChange, blocked }: { open: boolean; onOpenChange: (open: boolean) => void; blocked: boolean }) {
   const sessionId = useWorkspaceStore(() => getFocusedSessionId())
@@ -121,17 +110,20 @@ export function TurnNavigation({ open, onOpenChange, blocked }: { open: boolean;
   }, [Boolean(turns?.length), open, blocked])
 
   useEffect(() => {
-    const element = rail.current
+    const element = viewport.current
     if (!element) return
     const wheel = (event: WheelEvent) => {
       if (event.ctrlKey) return
       event.preventDefault()
       event.stopPropagation()
-      forwardWheelToTerminal(event)
+      const delta = event.deltaY * (event.deltaMode === 1 ? ROW_HEIGHT : event.deltaMode === 2 ? element.clientHeight : 1)
+      element.scrollTop = Math.max(0, Math.min(results.length * ROW_HEIGHT - element.clientHeight, element.scrollTop + delta))
+      setScrollTop(element.scrollTop)
+      if (pointerY.current !== null) setActiveId(results[Math.floor((element.scrollTop + pointerY.current) / ROW_HEIGHT)]?.entryId ?? null)
     }
     element.addEventListener('wheel', wheel, { passive: false })
     return () => element.removeEventListener('wheel', wheel)
-  }, [sessionId, Boolean(turns?.length), open, blocked])
+  }, [results, open, blocked])
 
   const placeFlyout = useCallback(() => {
     if (!rail.current || !flyout.current) return

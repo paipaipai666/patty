@@ -159,42 +159,64 @@ async function stableTerminal(label) {
   throw new Error(`${label}: the terminal did not finish rendering its source output before wheel verification`)
 }
 
-async function verifyWheelForwarding(label) {
+async function verifyWheelOwnership(label) {
   const terminal = await stableTerminal(label)
   const before = await cdp.evaluate(measureRail)
   const beforeStatus = await cdp.evaluate(status)
   const requestId = beforeStatus.latestRequest?.requestId
   const target = before.marks[Math.floor(before.marks.length / 2)]
   const point = { x: before.rail.right - 4, y: target.top + target.height / 2 }
-  const overflow = await cdp.evaluate(`getComputedStyle(document.querySelector('${viewportSelector}')).overflowY`)
-  assert.equal(overflow, 'hidden', `${label}: the turn rail must not expose its own scroll container`)
+  const list = await cdp.evaluate(`(() => {
+    const element = document.querySelector('${viewportSelector}')
+    const style = getComputedStyle(element)
+    return { overflowY: style.overflowY, scrollbarWidth: style.scrollbarWidth, gutter: element.offsetWidth - element.clientWidth }
+  })()`)
+  assert.equal(list.overflowY, 'hidden', `${label}: the turn rail must not expose its own scroll container`)
+  assert.equal(list.scrollbarWidth, 'none', `${label}: the turn rail must not show a scrollbar`)
+  assert.equal(list.gutter, 0, `${label}: the turn rail must not reserve a scrollbar gutter`)
   await cdp.evaluate(`(() => {
     window.__pattyWheel = []
     const xterm = document.querySelector('.xterm')
     if (!xterm) throw new Error('missing .xterm element')
     xterm.addEventListener('wheel', event => window.__pattyWheel.push(event.deltaY), { capture: true })
   })()`)
-  const wheel = async target => {
-    await pointer(target)
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...target, deltaX: 0, deltaY: label === 'live' ? -240 : 240 })
-    await cdp.waitFor(`window.__pattyWheel.length > 0`, 5000)
-  }
-  await wheel(point)
+  await pointer(point)
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: label === 'live' ? -240 : 240 })
+  await new Promise(resolve => setTimeout(resolve, 300))
   const forwarded = await cdp.evaluate('window.__pattyWheel')
-  if (label === 'history') await cdp.waitFor(`(await ${status}).position.displayEpoch !== ${beforeStatus.position.displayEpoch}`, 5000)
-  await new Promise(resolve => setTimeout(resolve, 200))
   const afterStatus = await cdp.evaluate(status)
-  const afterTerminal = await cdp.evaluate(view)
-  assert.equal(afterStatus.latestRequest?.requestId, requestId, `${label}: wheel over the rail issued a navigation request`)
-  assert.ok(forwarded.length > 0, `${label}: wheel over the rail never reached the terminal`)
-  if (label === 'history') assert.notEqual(afterStatus.position.displayEpoch, beforeStatus.position.displayEpoch, `${label}: wheel over the rail did not scroll the native terminal`)
   const after = await cdp.evaluate(measureRail)
-  assert.ok(Math.abs(after.scrollTop - before.scrollTop) < 1, `${label}: wheel over the rail scrolled the turn list instead of the terminal`)
-  await cdp.evaluate('window.__pattyWheel = []')
-  await wheel({ x: before.pane.left + before.pane.width / 2, y: before.pane.top + before.pane.height / 2 })
-  const reference = await cdp.evaluate('window.__pattyWheel')
-  assert.deepEqual(forwarded, reference, `${label}: wheel over the rail differs from wheel over the terminal`)
-  return { railScrollTop: before.scrollTop, railOverflow: overflow, forwarded, reference, issuedNavigation: false, bufferScrolled: afterTerminal.viewportY !== terminal.viewportY }
+  assert.equal(afterStatus.latestRequest?.requestId, requestId, `${label}: wheel over the rail issued a navigation request`)
+  assert.deepEqual(forwarded, [], `${label}: wheel over the rail reached the terminal instead of scrolling the turn list`)
+  assert.notEqual(Math.abs(after.scrollTop - before.scrollTop) < 1, true, `${label}: wheel over the rail did not scroll the turn list`)
+  if (label === 'history') assert.equal(afterStatus.position.displayEpoch, beforeStatus.position.displayEpoch, `${label}: wheel over the rail scrolled the terminal`)
+  const afterTerminal = await cdp.evaluate(view)
+  assert.equal(afterTerminal.viewportY, terminal.viewportY, `${label}: wheel over the rail scrolled the terminal buffer`)
+  return { overflowY: list.overflowY, scrollbarWidth: list.scrollbarWidth, listScrollTop: after.scrollTop, forwardedToTerminal: forwarded.length }
+}
+
+async function verifyHistoryScrollbar() {
+  const before = await cdp.evaluate(status)
+  const bar = await cdp.evaluate(`(() => {
+    const element = document.querySelector('[data-omp-history-scrollbar]')
+    if (!element) return null
+    const rect = element.getBoundingClientRect()
+    const pane = document.querySelector('[data-pane-id="navigation-pane"]')
+    const thumb = element.firstElementChild
+    return { width: rect.width, right: rect.right, paneRight: pane ? pane.getBoundingClientRect().right : null, top: rect.top, height: rect.height,
+      thumb: thumb ? { top: thumb.style.top, height: thumb.getBoundingClientRect().height } : null }
+  })()`)
+  assert.ok(bar, 'browsing history must expose the terminal scrollbar')
+  assert.ok(Math.abs(bar.width - 4) < 0.5, 'the history scrollbar must keep the terminal scrollbar width')
+  assert.ok(Math.abs(bar.paneRight - bar.right) < 1, 'the history scrollbar must sit in the terminal scrollbar lane')
+  const point = { x: bar.right - 2, y: bar.top + bar.height / 2 }
+  await pointer(point)
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', ...point, deltaX: 0, deltaY: 240 })
+  await cdp.waitFor(`(await ${status}).position.displayEpoch !== ${before.position.displayEpoch}`, 5000)
+  const after = await cdp.evaluate(status)
+  assert.notEqual(after.position.displayEpoch, before.position.displayEpoch, 'wheel over the history scrollbar did not scroll the terminal')
+  assert.equal(after.latestRequest?.requestId, before.latestRequest?.requestId, 'wheel over the history scrollbar issued a navigation request')
+  return { width: bar.width, thumb: bar.thumb, lane: Math.abs(bar.paneRight - bar.right) < 1 }
 }
 
 async function returnLive() {
@@ -296,7 +318,7 @@ try {
   assert.deepEqual(expanded.pane, collapsed.pane)
   await screenshot('rail-dark-hover')
   report.hoverGradient = { lengths: [48, 34, 22, 15, 10], previewEntryId: hoveredId, preservedTerminalFocus: true }
-  report.wheelLive = await verifyWheelForwarding('live')
+  report.wheelLive = await verifyWheelOwnership('live')
   await collapseRail()
   report.collapsedRail = { width: collapsed.rail.width, viewportHeight: collapsed.viewport.height, noToolbar: true }
   report.responsive = []
@@ -315,15 +337,14 @@ try {
   const first = await cdp.evaluate(view)
   assert.equal(first.type, 'alternate')
   assert.match(first.lines.join('\n'), /OMP_NAV_QUESTION_000/)
-  const noTurnListScrollbar = await cdp.evaluate(`!document.querySelector('[data-omp-history-scrollbar]')`)
-  assert.ok(noTurnListScrollbar, 'history browsing must not expose a turn-list scrollbar')
-  report.turnListScrollbarAbsent = true
   report.firstTurn = true
   report.jumpToShownUpperBoundMs = Date.now() - start
   writeFileSync(browseActive, '1')
   const firstImage = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
   writeFileSync(join(output, 'first-turn.png'), Buffer.from(firstImage.data, 'base64'))
-  report.wheelHistory = await verifyWheelForwarding('history')
+  report.wheelHistory = await verifyWheelOwnership('history')
+  report.turnListScrollbarAbsent = report.wheelHistory.scrollbarWidth === 'none'
+  report.historyScrollbar = await verifyHistoryScrollbar()
   const deepTarget = 'turn-121'
   await hoverMark()
   await cdp.evaluate(`(() => {

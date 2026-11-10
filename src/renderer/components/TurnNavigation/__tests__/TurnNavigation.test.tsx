@@ -91,7 +91,7 @@ describe('current-terminal turn navigation', () => {
 		expect(document.querySelector('[aria-label="Conversation turn preview"]')).toBeNull()
 	})
 
-	it('forwards wheel input over the rail to the terminal instead of scrolling the marks', () => {
+	it('scrolls the marks with wheel input over the rail and keeps it away from the terminal', () => {
 		useOmpNavigationStore.setState({ byPane: { 'focused-terminal': ready(1000) } })
 		act(() => root.render(<><div data-pane-id="focused-pane" className="xterm"><textarea className="xterm-helper-textarea" /></div><TurnNavigation open={false} onOpenChange={close} blocked={false} /></>))
 		const list = element<HTMLElement>('[data-turn-viewport]')
@@ -105,10 +105,9 @@ describe('current-terminal turn navigation', () => {
 		const event = new WheelEvent('wheel', { deltaY: 240, deltaMode: 0, bubbles: true, cancelable: true })
 		act(() => list.dispatchEvent(event))
 		expect(event.defaultPrevented).toBe(true)
-		expect(terminalWheel).toHaveBeenCalledTimes(1)
-		expect(terminalWheel.mock.calls[0][0].deltaY).toBe(240)
+		expect(terminalWheel).not.toHaveBeenCalled()
 		expect(outerWheel.mock.calls.every(call => call[0] !== event)).toBe(true)
-		expect(list.scrollTop).toBe(600)
+		expect(list.scrollTop).toBe(840)
 		expect(navigate).not.toHaveBeenCalled()
 	})
 
