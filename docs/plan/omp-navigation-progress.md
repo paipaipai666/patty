@@ -54,6 +54,14 @@
 - 修复：`sync_hook_file()` 先按字节比较，不同才写临时文件再 `rename` 覆盖，并输出 `omp hook installed: N bytes` 或 `omp hook unchanged: N bytes`。新增 `npm run test:e2e:omp-hook` 用隔离 `PATTY_E2E_INTEGRATION_HOME` 预置一份过期扩展，确认应用启动后替换为当前 bundle。
 - 报告：`output/omp-hook-install/report.json`，`bundleBytes` 与 `installedBytes` 均为 56308，`replacedStaleCopy: true`、`loggedInstall: true`。
 
+## 2026-11-10 滚轮归属修正
+
+- 现场症状：点击轮次列表后，右侧滚轮滚动的是轮次列表本身，终端内容不动；会话历史里右侧唯一可见的滚动条也是轮次列表的，且在该条上滚动无响应。
+- 原因：`TurnNavigation` 在轮次列表 viewport 上注册了 `wheel` 监听，`preventDefault()` 后改自己的 `scrollTop`；轮次列表是 `App` 级全局组件，事件不会自然到达 xterm。`OmpHistoryScrollbar` 又只按轮次序号画固定 12% 高度 thumb，没有 wheel 处理。
+- 修复：轮次列表改为 `overflow: hidden`，不提供自己的滚动容器和滚动条；`rail` 上的 `wheel` 直接转发到聚焦 pane 的 `.xterm`，deltas 与修饰键原样传下去（保留 Ctrl 缩放）。删除 `OmpHistoryScrollbar` 及其样式与测试。
+- 证据：`npm run test:e2e:omp` 全绿，报告字段 `turnListScrollbarAbsent: true`，`wheelLive.forwarded` 与直接滚终端的 `reference` 一致，`wheelHistory` 让 `position.displayEpoch` 变化且 `railScrollTop` 不变，`deepTurn` 仍能跳到 `turn-121`。
+- 仍可用的定位方式：点击可见 mark、列表内方向键/PageUp/PageDown、搜索框输入后回车。滚轮不再用于滚动轮次列表。
+
 ## 适用范围与剩余边界
 
 - 仅支持固定指纹的 OMP 18.13.3 companion 的限制已解除。当前产品路径是本机普通 `omp` 18.17.0 加载 `%USERPROFILE%\.omp\agent\extensions\patty-notifier.ts`，该文件由 `resources/omp-patty-hook.bundle.js` 安装而来。
